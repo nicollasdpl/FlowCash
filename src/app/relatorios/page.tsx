@@ -1,97 +1,191 @@
-export default function Relatorios() {
-  const months = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun"];
-  const income = [6200, 7100, 6800, 7400, 8200, 0];
-  const expense = [4800, 5200, 4600, 5800, 5352, 0];
-  const maxVal = Math.max(...income, ...expense);
+"use client";
+import { useMemo } from "react";
+import { useApp } from "@/context/AppContext";
+import { addMonths, currentMonth } from "@/engine/financialEngine";
 
-  function fmt(v: number) {
-    return v.toLocaleString("pt-BR", { minimumFractionDigits: 2 });
+function fmt(v: number) {
+  return v.toLocaleString("pt-BR", { minimumFractionDigits: 2 });
+}
+
+const MONTH_LABELS: Record<string, string> = {
+  "01": "Jan", "02": "Fev", "03": "Mar", "04": "Abr",
+  "05": "Mai", "06": "Jun", "07": "Jul", "08": "Ago",
+  "09": "Set", "10": "Out", "11": "Nov", "12": "Dez",
+};
+
+export default function Relatorios() {
+  const { state } = useApp();
+
+  // Últimos 6 meses
+  const months = useMemo(() => {
+    const cm = currentMonth();
+    return Array.from({ length: 6 }, (_, i) => addMonths(cm, i - 5));
+  }, []);
+
+  const monthData = useMemo(() =>
+    months.map(month => {
+      const txs = state.transactions.filter(t => t.competenceDate.startsWith(month));
+      const income = txs.filter(t => t.type === "income").reduce((s, t) => s + t.amount, 0);
+      const expense = txs.filter(t => t.type === "expense").reduce((s, t) => s + t.amount, 0);
+      return { month, income, expense, balance: income - expense };
+    }),
+    [months, state.transactions]
+  );
+
+  const maxVal = Math.max(...monthData.map(d => Math.max(d.income, d.expense)), 1);
+  const hasAnyData = monthData.some(d => d.income > 0 || d.expense > 0);
+
+  // Gastos por categoria (todos os meses)
+  const byCategory = useMemo(() => {
+    const map: Record<string, { amount: number; color: string; icon: string }> = {};
+    state.transactions
+      .filter(t => t.type === "expense" && months.some(m => t.competenceDate.startsWith(m)))
+      .forEach(t => {
+        const cat = state.categories.find(c => c.id === t.categoryId);
+        const name = cat?.name ?? "Outros";
+        if (!map[name]) map[name] = { amount: 0, color: cat?.color ?? "#6B7FA3", icon: cat?.icon ?? "📦" };
+        map[name].amount += t.amount;
+      });
+    return Object.entries(map).sort((a, b) => b[1].amount - a[1].amount);
+  }, [state.transactions, state.categories, months]);
+
+  const totalExpense = byCategory.reduce((s, [, v]) => s + v.amount, 0) || 1;
+
+  function monthLabel(yyyymm: string) {
+    const [, m] = yyyymm.split("-");
+    return MONTH_LABELS[m] ?? yyyymm;
   }
 
   return (
-    <div style={{ padding: "28px", maxWidth: "960px" }}>
-      <div className="fade-up-1" style={{ marginBottom: "28px" }}>
+    <div style={{ padding: "20px 16px", maxWidth: "860px", margin: "0 auto" }}>
+      <div className="fade-up-1" style={{ marginBottom: "24px" }}>
         <h1 style={{ fontSize: "22px", fontWeight: 700, color: "var(--text-1)", letterSpacing: "-0.03em" }}>Relatórios</h1>
-        <p style={{ fontSize: "13px", color: "var(--text-2)", marginTop: "3px" }}>Visão anual — 2026</p>
+        <p style={{ fontSize: "13px", color: "var(--text-2)", marginTop: "3px" }}>Últimos 6 meses</p>
       </div>
 
-      {/* Bar chart */}
-      <div className="card fade-up-2" style={{ padding: "24px", marginBottom: "20px" }}>
-        <h2 style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-1)", marginBottom: "24px" }}>Receitas vs Despesas</h2>
-        <div style={{ display: "flex", alignItems: "flex-end", gap: "20px", height: "160px" }}>
-          {months.map((month, i) => (
-            <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: "6px" }}>
-              <div style={{ display: "flex", gap: "4px", alignItems: "flex-end", width: "100%" }}>
-                <div style={{
-                  flex: 1, borderRadius: "6px 6px 0 0",
-                  height: `${(income[i] / maxVal) * 140}px`,
-                  background: income[i] > 0 ? "var(--green)" : "var(--border)",
-                  boxShadow: income[i] > 0 ? "0 0 10px rgba(34,212,122,0.3)" : "none",
-                  transition: "height 0.6s ease",
-                }} />
-                <div style={{
-                  flex: 1, borderRadius: "6px 6px 0 0",
-                  height: `${(expense[i] / maxVal) * 140}px`,
-                  background: expense[i] > 0 ? "var(--red)" : "var(--border)",
-                  boxShadow: expense[i] > 0 ? "0 0 10px rgba(255,77,106,0.3)" : "none",
-                  transition: "height 0.6s ease",
-                }} />
+      {!hasAnyData ? (
+        <div className="card" style={{ padding: "48px", textAlign: "center" }}>
+          <div style={{ fontSize: "48px", marginBottom: "16px" }}>📊</div>
+          <p style={{ color: "var(--text-2)", fontSize: "15px", fontWeight: 600 }}>Sem dados ainda</p>
+          <p style={{ color: "var(--text-3)", fontSize: "13px", marginTop: "6px" }}>
+            Adicione transações para ver seus relatórios aqui.
+          </p>
+        </div>
+      ) : (
+        <>
+          {/* Gráfico de barras */}
+          <div className="card fade-up-2" style={{ padding: "20px", marginBottom: "16px" }}>
+            <h2 style={{ fontSize: "13px", fontWeight: 700, color: "var(--text-3)", letterSpacing: "0.05em", textTransform: "uppercase", marginBottom: "20px" }}>
+              Receitas vs Despesas
+            </h2>
+            <div style={{ display: "flex", alignItems: "flex-end", gap: "10px", height: "140px" }}>
+              {monthData.map(({ month, income, expense }) => (
+                <div key={month} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: "6px" }}>
+                  <div style={{ display: "flex", gap: "3px", alignItems: "flex-end", width: "100%", height: "120px" }}>
+                    <div style={{
+                      flex: 1, borderRadius: "5px 5px 0 0",
+                      height: income > 0 ? `${(income / maxVal) * 120}px` : "3px",
+                      background: income > 0 ? "var(--green)" : "rgba(255,255,255,0.06)",
+                      transition: "height 0.6s ease",
+                      minHeight: "3px",
+                    }} />
+                    <div style={{
+                      flex: 1, borderRadius: "5px 5px 0 0",
+                      height: expense > 0 ? `${(expense / maxVal) * 120}px` : "3px",
+                      background: expense > 0 ? "var(--red)" : "rgba(255,255,255,0.06)",
+                      transition: "height 0.6s ease",
+                      minHeight: "3px",
+                    }} />
+                  </div>
+                  <span style={{ fontSize: "11px", color: "var(--text-3)", fontWeight: 600 }}>{monthLabel(month)}</span>
+                </div>
+              ))}
+            </div>
+            <div style={{ display: "flex", gap: "16px", marginTop: "14px", paddingTop: "14px", borderTop: "1px solid var(--border)" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                <div style={{ width: "10px", height: "10px", borderRadius: "2px", background: "var(--green)" }} />
+                <span style={{ fontSize: "12px", color: "var(--text-2)" }}>Receitas</span>
               </div>
-              <span style={{ fontSize: "11px", color: "var(--text-3)", fontWeight: 600 }}>{month}</span>
+              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                <div style={{ width: "10px", height: "10px", borderRadius: "2px", background: "var(--red)" }} />
+                <span style={{ fontSize: "12px", color: "var(--text-2)" }}>Despesas</span>
+              </div>
             </div>
-          ))}
-        </div>
-
-        <div style={{ display: "flex", gap: "20px", marginTop: "16px", paddingTop: "16px", borderTop: "1px solid var(--border)" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-            <div style={{ width: "10px", height: "10px", borderRadius: "2px", background: "var(--green)" }} />
-            <span style={{ fontSize: "12px", color: "var(--text-2)" }}>Receitas</span>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-            <div style={{ width: "10px", height: "10px", borderRadius: "2px", background: "var(--red)" }} />
-            <span style={{ fontSize: "12px", color: "var(--text-2)" }}>Despesas</span>
-          </div>
-        </div>
-      </div>
 
-      {/* Monthly summary */}
-      <div className="card fade-up-3" style={{ overflow: "hidden" }}>
-        <div style={{ padding: "16px 22px", borderBottom: "1px solid var(--border)" }}>
-          <h2 style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-1)" }}>Resumo Mensal</h2>
-        </div>
-        <div style={{
-          display: "grid", gridTemplateColumns: "80px 1fr 1fr 1fr",
-          padding: "10px 22px", fontSize: "10.5px", fontWeight: 700,
-          color: "var(--text-3)", letterSpacing: "0.07em", textTransform: "uppercase",
-          borderBottom: "1px solid var(--border)",
-        }}>
-          <span>Mês</span>
-          <span style={{ textAlign: "right" }}>Receitas</span>
-          <span style={{ textAlign: "right" }}>Despesas</span>
-          <span style={{ textAlign: "right" }}>Saldo</span>
-        </div>
-        {months.filter((_, i) => income[i] > 0).map((month, i) => {
-          const balance = income[i] - expense[i];
-          return (
-            <div key={i} style={{
-              display: "grid", gridTemplateColumns: "80px 1fr 1fr 1fr",
-              padding: "14px 22px", borderBottom: "1px solid var(--border)",
-              alignItems: "center",
+          {/* Resumo mensal */}
+          <div className="card fade-up-3" style={{ overflow: "hidden", marginBottom: "16px" }}>
+            <div style={{ padding: "14px 18px", borderBottom: "1px solid var(--border)" }}>
+              <h2 style={{ fontSize: "13px", fontWeight: 700, color: "var(--text-3)", letterSpacing: "0.05em", textTransform: "uppercase" }}>Resumo Mensal</h2>
+            </div>
+            <div style={{
+              display: "grid", gridTemplateColumns: "70px 1fr 1fr 1fr",
+              padding: "10px 18px", fontSize: "10px", fontWeight: 700,
+              color: "var(--text-3)", letterSpacing: "0.07em", textTransform: "uppercase",
+              borderBottom: "1px solid var(--border)",
             }}>
-              <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-2)" }}>{month}</span>
-              <span className="mono" style={{ fontSize: "13px", fontWeight: 700, color: "var(--green)", textAlign: "right" }}>
-                R$ {fmt(income[i])}
-              </span>
-              <span className="mono" style={{ fontSize: "13px", fontWeight: 700, color: "var(--red)", textAlign: "right" }}>
-                R$ {fmt(expense[i])}
-              </span>
-              <span className="mono" style={{ fontSize: "13px", fontWeight: 700, color: balance >= 0 ? "var(--accent)" : "var(--red)", textAlign: "right" }}>
-                {balance >= 0 ? "+" : ""}R$ {fmt(balance)}
-              </span>
+              <span>Mês</span>
+              <span style={{ textAlign: "right" }}>Receitas</span>
+              <span style={{ textAlign: "right" }}>Despesas</span>
+              <span style={{ textAlign: "right" }}>Saldo</span>
             </div>
-          );
-        })}
-      </div>
+            {monthData.filter(d => d.income > 0 || d.expense > 0).map(({ month, income, expense, balance }) => (
+              <div key={month} style={{
+                display: "grid", gridTemplateColumns: "70px 1fr 1fr 1fr",
+                padding: "13px 18px", borderBottom: "1px solid var(--border)",
+                alignItems: "center",
+              }}>
+                <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-2)" }}>{monthLabel(month)}</span>
+                <span className="mono" style={{ fontSize: "13px", fontWeight: 700, color: "var(--green)", textAlign: "right" }}>
+                  R$ {fmt(income)}
+                </span>
+                <span className="mono" style={{ fontSize: "13px", fontWeight: 700, color: "var(--red)", textAlign: "right" }}>
+                  R$ {fmt(expense)}
+                </span>
+                <span className="mono" style={{ fontSize: "13px", fontWeight: 700, color: balance >= 0 ? "var(--accent)" : "var(--red)", textAlign: "right" }}>
+                  {balance >= 0 ? "+" : ""}R$ {fmt(balance)}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          {/* Gastos por categoria */}
+          {byCategory.length > 0 && (
+            <div className="card fade-up-4" style={{ overflow: "hidden" }}>
+              <div style={{ padding: "14px 18px", borderBottom: "1px solid var(--border)" }}>
+                <h2 style={{ fontSize: "13px", fontWeight: 700, color: "var(--text-3)", letterSpacing: "0.05em", textTransform: "uppercase" }}>
+                  Gastos por categoria
+                </h2>
+              </div>
+              {byCategory.map(([name, { amount, color, icon }], i) => {
+                const pct = Math.round((amount / totalExpense) * 100);
+                return (
+                  <div key={name} style={{
+                    padding: "14px 18px",
+                    borderBottom: i < byCategory.length - 1 ? "1px solid var(--border)" : "none",
+                  }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                        <span style={{ fontSize: "16px" }}>{icon}</span>
+                        <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-1)" }}>{name}</span>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                        <span style={{ fontSize: "11.5px", color: "var(--text-3)" }}>{pct}%</span>
+                        <span className="mono" style={{ fontSize: "13px", fontWeight: 700, color: "var(--text-1)" }}>
+                          R$ {fmt(amount)}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="progress-bar-bg">
+                      <div className="progress-bar-fill" style={{ width: `${pct}%`, background: color }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }
