@@ -7,18 +7,19 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState("");
 
-  async function handleSignIn() {
-    setLoading(true);
+  function handleSignIn() {
     setError("");
-    try {
-      await signIn();
-    } catch (e: unknown) {
-      const code = (e as { code?: string })?.code ?? "";
-      const msg  = (e as { message?: string })?.message ?? "";
-      setError(`${code || msg || "erro desconhecido"}`);
-    } finally {
-      setLoading(false);
-    }
+    setLoading(true);
+    const promise = signIn();
+    promise
+      .then(() => setLoading(false))
+      .catch((e: { code?: string; message?: string }) => {
+        setLoading(false);
+        const code = e?.code ?? "";
+        if (!code.includes("closed") && !code.includes("cancelled")) {
+          setError("Erro ao entrar. Tente novamente.");
+        }
+      });
   }
 
   return (

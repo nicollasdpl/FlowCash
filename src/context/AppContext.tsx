@@ -5,7 +5,7 @@ import {
 } from "react";
 import type { User } from "firebase/auth";
 import {
-  onAuthStateChanged, signInWithRedirect, getRedirectResult,
+  onAuthStateChanged, signInWithPopup,
   GoogleAuthProvider, signOut as fbSignOut,
 } from "firebase/auth";
 import { doc, getDoc, setDoc } from "firebase/firestore";
@@ -196,47 +196,36 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [isReady, setIsReady]         = useState(false);
 
   // ── Auth listener + initial load ──────────────────────────────────────────
-  // Aguarda getRedirectResult ANTES de escutar onAuthStateChanged.
-  // Sem isso, onAuthStateChanged dispara null enquanto o Firebase ainda
-  // está processando o resultado do redirect do Google, fazendo o app
-  // voltar para a tela de login mesmo após autenticação bem-sucedida.
   useEffect(() => {
-    let unsubAuth: (() => void) | null = null;
+    const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
+      setUser(firebaseUser);
 
-    async function init() {
-      try { await getRedirectResult(auth); } catch {}
-
-      unsubAuth = onAuthStateChanged(auth, async (firebaseUser) => {
-        setUser(firebaseUser);
-
-        if (firebaseUser) {
-          try {
-            const snap = await getDoc(FIRESTORE_DOC(firebaseUser.uid));
-            if (snap.exists()) {
-              dispatch({ type: "LOAD", payload: snap.data() as AppState });
-            } else {
-              try {
-                const local = localStorage.getItem("flowcash_v2");
-                if (local) dispatch({ type: "LOAD", payload: JSON.parse(local) });
-              } catch {}
-            }
-          } catch {
+      if (firebaseUser) {
+        try {
+          const snap = await getDoc(FIRESTORE_DOC(firebaseUser.uid));
+          if (snap.exists()) {
+            dispatch({ type: "LOAD", payload: snap.data() as AppState });
+          } else {
             try {
               const local = localStorage.getItem("flowcash_v2");
               if (local) dispatch({ type: "LOAD", payload: JSON.parse(local) });
             } catch {}
           }
-        } else {
-          dispatch({ type: "LOAD", payload: seed });
+        } catch {
+          try {
+            const local = localStorage.getItem("flowcash_v2");
+            if (local) dispatch({ type: "LOAD", payload: JSON.parse(local) });
+          } catch {}
         }
+      } else {
+        dispatch({ type: "LOAD", payload: seed });
+      }
 
-        setAuthLoading(false);
-        setIsReady(true);
-      });
-    }
+      setAuthLoading(false);
+      setIsReady(true);
+    });
 
-    init();
-    return () => { unsubAuth?.(); };
+    return () => unsub();
   }, []);
 
   // ── Auto-save to Firestore (debounced 1.5s) ───────────────────────────────
@@ -257,11 +246,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [state, user, isReady]);
 
   // ── Auth actions ──────────────────────────────────────────────────────────
-  async function signIn() {
+  function signIn(): Promise<void> {
     const provider = new GoogleAuthProvider();
-    // Redirect funciona em iOS Safari, Android e desktop
-    // Popup é bloqueado por iOS Safari e alguns Android
-    await signInWithRedirect(auth, provider);
+    return signInWithPopup(auth, provider).then(() => undefined);
   }
 
   async function signOut() {
