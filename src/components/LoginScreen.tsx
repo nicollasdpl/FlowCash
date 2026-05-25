@@ -13,10 +13,9 @@ export default function LoginScreen() {
     try {
       await signIn();
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "";
-      if (!msg.includes("popup-closed")) {
-        setError("Erro ao entrar. Tente novamente.");
-      }
+      const code = (e as { code?: string })?.code ?? "";
+      const msg  = (e as { message?: string })?.message ?? "";
+      setError(`${code || msg || "erro desconhecido"}`);
     } finally {
       setLoading(false);
     }
