@@ -5,8 +5,8 @@ import {
 } from "react";
 import type { User } from "firebase/auth";
 import {
-  onAuthStateChanged, signInWithPopup, GoogleAuthProvider,
-  signOut as fbSignOut,
+  onAuthStateChanged, signInWithRedirect, getRedirectResult,
+  GoogleAuthProvider, signOut as fbSignOut,
 } from "firebase/auth";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
@@ -195,6 +195,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [authLoading, setAuthLoading] = useState(true);
   const [isReady, setIsReady]         = useState(false);
 
+  // ── Handle redirect result (iOS Safari / mobile não suporta popup) ────────
+  useEffect(() => {
+    getRedirectResult(auth).catch(() => {});
+  }, []);
+
   // ── Auth listener + initial load ──────────────────────────────────────────
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
@@ -250,7 +255,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // ── Auth actions ──────────────────────────────────────────────────────────
   async function signIn() {
     const provider = new GoogleAuthProvider();
-    await signInWithPopup(auth, provider);
+    // Redirect funciona em iOS Safari, Android e desktop
+    // Popup é bloqueado por iOS Safari e alguns Android
+    await signInWithRedirect(auth, provider);
   }
 
   async function signOut() {
