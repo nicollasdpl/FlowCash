@@ -195,44 +195,48 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [authLoading, setAuthLoading] = useState(true);
   const [isReady, setIsReady]         = useState(false);
 
-  // ── Handle redirect result (iOS Safari / mobile não suporta popup) ────────
-  useEffect(() => {
-    getRedirectResult(auth).catch(() => {});
-  }, []);
-
   // ── Auth listener + initial load ──────────────────────────────────────────
+  // Aguarda getRedirectResult ANTES de escutar onAuthStateChanged.
+  // Sem isso, onAuthStateChanged dispara null enquanto o Firebase ainda
+  // está processando o resultado do redirect do Google, fazendo o app
+  // voltar para a tela de login mesmo após autenticação bem-sucedida.
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
-      setUser(firebaseUser);
+    let unsubAuth: (() => void) | null = null;
 
-      if (firebaseUser) {
-        try {
-          const snap = await getDoc(FIRESTORE_DOC(firebaseUser.uid));
-          if (snap.exists()) {
-            dispatch({ type: "LOAD", payload: snap.data() as AppState });
-          } else {
-            // First login — try to migrate localStorage data
+    async function init() {
+      try { await getRedirectResult(auth); } catch {}
+
+      unsubAuth = onAuthStateChanged(auth, async (firebaseUser) => {
+        setUser(firebaseUser);
+
+        if (firebaseUser) {
+          try {
+            const snap = await getDoc(FIRESTORE_DOC(firebaseUser.uid));
+            if (snap.exists()) {
+              dispatch({ type: "LOAD", payload: snap.data() as AppState });
+            } else {
+              try {
+                const local = localStorage.getItem("flowcash_v2");
+                if (local) dispatch({ type: "LOAD", payload: JSON.parse(local) });
+              } catch {}
+            }
+          } catch {
             try {
               const local = localStorage.getItem("flowcash_v2");
               if (local) dispatch({ type: "LOAD", payload: JSON.parse(local) });
             } catch {}
           }
-        } catch (err) {
-          console.error("Firestore load error:", err);
-          try {
-            const local = localStorage.getItem("flowcash_v2");
-            if (local) dispatch({ type: "LOAD", payload: JSON.parse(local) });
-          } catch {}
+        } else {
+          dispatch({ type: "LOAD", payload: seed });
         }
-      } else {
-        dispatch({ type: "LOAD", payload: seed });
-      }
 
-      setAuthLoading(false);
-      setIsReady(true);
-    });
+        setAuthLoading(false);
+        setIsReady(true);
+      });
+    }
 
-    return () => unsub();
+    init();
+    return () => { unsubAuth?.(); };
   }, []);
 
   // ── Auto-save to Firestore (debounced 1.5s) ───────────────────────────────
