@@ -8,6 +8,7 @@ export default function Configuracoes() {
   const [nameInput, setNameInput] = useState(state.userName ?? "");
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [showPwaGuide, setShowPwaGuide] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   function saveName() {
@@ -36,45 +37,171 @@ export default function Configuracoes() {
   };
 
   return (
-    <div style={{ padding: "20px 16px", maxWidth: "640px", margin: "0 auto" }}>
+    <div style={{ padding: "16px", maxWidth: "640px", margin: "0 auto" }}>
 
       {/* Header */}
-      <div className="fade-up-1" style={{ marginBottom: "24px" }}>
-        <h1 style={{ fontSize: "22px", fontWeight: 700, color: "var(--text-1)", letterSpacing: "-0.03em" }}>Configurações</h1>
-        <p style={{ fontSize: "13px", color: "var(--text-2)", marginTop: "3px" }}>Personalize o FlowCash</p>
+      <div className="fade-up-1" style={{ marginBottom: "20px" }}>
+        <h1 style={{ fontSize: "20px", fontWeight: 700, color: "var(--text-1)", letterSpacing: "-0.03em" }}>
+          Configurações
+        </h1>
+        <p style={{ fontSize: "12px", color: "var(--text-3)", marginTop: "3px" }}>
+          Personalize o FlowCash
+        </p>
+      </div>
+
+      {/* ── INSTALAR NO CELULAR ── */}
+      <div
+        className="card fade-up-1"
+        style={{
+          overflow: "hidden", marginBottom: "14px",
+          background: "linear-gradient(135deg, rgba(0,229,195,0.08) 0%, rgba(0,229,195,0.03) 100%)",
+          borderColor: "rgba(0,229,195,0.2)",
+        }}
+      >
+        <button
+          onClick={() => setShowPwaGuide(!showPwaGuide)}
+          style={{
+            width: "100%", background: "none", border: "none",
+            cursor: "pointer", fontFamily: "inherit",
+            padding: "16px 18px",
+            display: "flex", alignItems: "center", gap: "12px",
+          }}
+        >
+          <div style={{
+            width: "44px", height: "44px", borderRadius: "12px", flexShrink: 0,
+            background: "var(--accent-10)", border: "1px solid var(--border-accent)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: "22px",
+          }}>
+            📱
+          </div>
+          <div style={{ flex: 1, textAlign: "left" }}>
+            <p style={{ fontSize: "14px", fontWeight: 700, color: "var(--accent)" }}>
+              Instalar na Tela de Início
+            </p>
+            <p style={{ fontSize: "12px", color: "var(--text-3)", marginTop: "2px" }}>
+              Acesse o FlowCash como app nativo
+            </p>
+          </div>
+          <span style={{ color: "var(--accent)", fontSize: "18px", flexShrink: 0 }}>
+            {showPwaGuide ? "↑" : "↓"}
+          </span>
+        </button>
+
+        {showPwaGuide && (
+          <div style={{ borderTop: "1px solid rgba(0,229,195,0.15)", padding: "16px 18px 20px" }}>
+            <p style={{
+              fontSize: "12px", color: "var(--text-2)", marginBottom: "16px", lineHeight: 1.6,
+            }}>
+              Siga os passos abaixo para instalar o FlowCash no seu iPhone 11:
+            </p>
+
+            {[
+              {
+                step: "1",
+                icon: "⬆️",
+                title: 'Toque em "Compartilhar"',
+                desc: 'Na barra inferior do Safari, toque no ícone de compartilhar (quadrado com seta para cima).',
+              },
+              {
+                step: "2",
+                icon: "➕",
+                title: '"Adicionar à Tela de Início"',
+                desc: 'Role a lista de opções e toque em "Adicionar à Tela de Início".',
+              },
+              {
+                step: "3",
+                icon: "💾",
+                title: 'Confirme o nome',
+                desc: 'O nome já vem como "FlowCash". Toque em "Adicionar" no canto superior direito.',
+              },
+              {
+                step: "4",
+                icon: "🚀",
+                title: 'Pronto!',
+                desc: 'O ícone do FlowCash aparece na sua tela de início. Abra e use como app nativo.',
+              },
+            ].map((item) => (
+              <div key={item.step} style={{
+                display: "flex", gap: "12px", marginBottom: "14px",
+                alignItems: "flex-start",
+              }}>
+                <div style={{
+                  width: "32px", height: "32px", borderRadius: "10px", flexShrink: 0,
+                  background: "var(--accent-10)", border: "1px solid var(--border-accent)",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: "16px",
+                }}>
+                  {item.icon}
+                </div>
+                <div>
+                  <p style={{ fontSize: "13px", fontWeight: 700, color: "var(--text-1)" }}>
+                    {item.title}
+                  </p>
+                  <p style={{ fontSize: "12px", color: "var(--text-3)", marginTop: "3px", lineHeight: 1.5 }}>
+                    {item.desc}
+                  </p>
+                </div>
+              </div>
+            ))}
+
+            <div style={{
+              background: "rgba(245,158,11,0.08)",
+              border: "1px solid rgba(245,158,11,0.2)",
+              borderRadius: "var(--r-sm)",
+              padding: "12px 14px",
+              marginTop: "4px",
+            }}>
+              <p style={{ fontSize: "12px", color: "var(--amber)", fontWeight: 600 }}>
+                ⚠️ Use apenas no Safari
+              </p>
+              <p style={{ fontSize: "11.5px", color: "var(--text-3)", marginTop: "3px", lineHeight: 1.5 }}>
+                A opção "Adicionar à Tela de Início" só aparece no Safari do iPhone. Não funciona no Chrome ou Firefox.
+              </p>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Perfil */}
-      <div className="card fade-up-2" style={{ overflow: "hidden", marginBottom: "16px" }}>
-        <div style={{ padding: "14px 18px", borderBottom: "1px solid var(--border)" }}>
-          <p style={{ fontSize: "11px", fontWeight: 700, color: "var(--text-3)", letterSpacing: "0.08em", textTransform: "uppercase" }}>Perfil</p>
+      <div className="card fade-up-2" style={{ overflow: "hidden", marginBottom: "14px" }}>
+        <div style={{ padding: "13px 16px", borderBottom: "1px solid var(--border)" }}>
+          <p style={{ fontSize: "11px", fontWeight: 700, color: "var(--text-3)", letterSpacing: "0.08em", textTransform: "uppercase" }}>
+            Perfil
+          </p>
         </div>
 
-        <div style={{ padding: "18px" }}>
-          {/* Avatar placeholder */}
-          <div style={{ display: "flex", alignItems: "center", gap: "16px", marginBottom: "20px" }}>
+        <div style={{ padding: "16px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "14px", marginBottom: "18px" }}>
             {user?.photoURL ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={user.photoURL} alt="" width={60} height={60} style={{ borderRadius: "18px", flexShrink: 0 }} />
+              <img src={user.photoURL} alt="" width={52} height={52} style={{ borderRadius: "16px", flexShrink: 0 }} />
             ) : (
-              <div style={{ width: "60px", height: "60px", borderRadius: "18px", flexShrink: 0, background: "var(--accent-10)", border: "1px solid var(--border-accent)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "26px", color: "var(--accent)", fontWeight: 700 }}>
+              <div style={{
+                width: "52px", height: "52px", borderRadius: "16px", flexShrink: 0,
+                background: "var(--accent-10)", border: "1px solid var(--border-accent)",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: "22px", color: "var(--accent)", fontWeight: 700,
+              }}>
                 {(state.userName || user?.displayName || "?")[0].toUpperCase()}
               </div>
             )}
             <div style={{ minWidth: 0 }}>
-              <p style={{ fontSize: "16px", fontWeight: 700, color: "var(--text-1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              <p style={{
+                fontSize: "15px", fontWeight: 700, color: "var(--text-1)",
+                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+              }}>
                 {state.userName || user?.displayName || "Sem nome"}
               </p>
-              <p style={{ fontSize: "12px", color: "var(--text-3)", marginTop: "2px" }}>
+              <p style={{
+                fontSize: "11.5px", color: "var(--text-3)", marginTop: "2px",
+                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+              }}>
                 {user?.email ?? ""}
-              </p>
-              <p style={{ fontSize: "11px", color: "var(--text-3)", marginTop: "1px" }}>
-                {stats.transactions} transaç{stats.transactions === 1 ? "ão" : "ões"} · {stats.accounts} conta{stats.accounts !== 1 ? "s" : ""}
               </p>
             </div>
           </div>
 
-          {/* Nome */}
           <div className="form-group">
             <label className="form-label">Seu nome</label>
             {editingName ? (
@@ -90,20 +217,8 @@ export default function Configuracoes() {
                   autoComplete="off"
                   style={{ flex: 1 }}
                 />
-                <button
-                  className="btn-primary"
-                  onClick={saveName}
-                  disabled={!nameInput.trim()}
-                  style={{ padding: "0 18px", flexShrink: 0 }}
-                >
-                  Salvar
-                </button>
-                <button
-                  className="btn-secondary"
-                  onClick={() => setEditingName(false)}
-                  style={{ padding: "0 14px", flexShrink: 0 }}
-                >
-                  ✕
+                <button className="btn-primary" onClick={saveName} disabled={!nameInput.trim()} style={{ padding: "0 16px", flexShrink: 0, minWidth: "70px" }}>
+                  OK
                 </button>
               </div>
             ) : (
@@ -111,11 +226,11 @@ export default function Configuracoes() {
                 onClick={startEdit}
                 style={{
                   display: "flex", alignItems: "center", justifyContent: "space-between",
-                  padding: "13px 14px",
-                  background: "rgba(255,255,255,0.05)",
+                  padding: "14px 16px",
+                  background: "var(--bg-input)",
                   border: "1px solid var(--border)",
-                  borderRadius: "12px",
-                  cursor: "pointer",
+                  borderRadius: "var(--r-md)",
+                  cursor: "pointer", minHeight: "52px",
                 }}
               >
                 <span style={{ fontSize: "16px", color: state.userName ? "var(--text-1)" : "var(--text-3)" }}>
@@ -134,13 +249,15 @@ export default function Configuracoes() {
       </div>
 
       {/* Dados */}
-      <div className="card fade-up-3" style={{ overflow: "hidden", marginBottom: "16px" }}>
-        <div style={{ padding: "14px 18px", borderBottom: "1px solid var(--border)" }}>
-          <p style={{ fontSize: "11px", fontWeight: 700, color: "var(--text-3)", letterSpacing: "0.08em", textTransform: "uppercase" }}>Dados do App</p>
+      <div className="card fade-up-3" style={{ overflow: "hidden", marginBottom: "14px" }}>
+        <div style={{ padding: "13px 16px", borderBottom: "1px solid var(--border)" }}>
+          <p style={{ fontSize: "11px", fontWeight: 700, color: "var(--text-3)", letterSpacing: "0.08em", textTransform: "uppercase" }}>
+            Dados do App
+          </p>
         </div>
 
-        <div style={{ padding: "16px 18px 4px" }}>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "16px" }}>
+        <div style={{ padding: "14px 16px" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "14px" }}>
             {[
               { label: "Contas", value: stats.accounts, icon: "🏦" },
               { label: "Transações", value: stats.transactions, icon: "💸" },
@@ -149,26 +266,20 @@ export default function Configuracoes() {
             ].map(({ label, value, icon }) => (
               <div key={label} style={{
                 padding: "12px 14px",
-                background: "rgba(255,255,255,0.03)",
+                background: "var(--bg-input)",
                 border: "1px solid var(--border)",
-                borderRadius: "12px",
+                borderRadius: "var(--r-md)",
               }}>
-                <p style={{ fontSize: "18px", marginBottom: "4px" }}>{icon}</p>
-                <p style={{ fontSize: "22px", fontWeight: 700, color: "var(--text-1)", lineHeight: 1 }}>{value}</p>
+                <p style={{ fontSize: "16px", marginBottom: "4px" }}>{icon}</p>
+                <p style={{ fontSize: "20px", fontWeight: 700, color: "var(--text-1)", lineHeight: 1 }}>{value}</p>
                 <p style={{ fontSize: "11px", color: "var(--text-3)", marginTop: "2px" }}>{label}</p>
               </div>
             ))}
           </div>
-        </div>
-
-        <div style={{ padding: "4px 18px 16px" }}>
           <button
             className="btn-secondary"
             onClick={() => {
-              const data = JSON.stringify(
-                JSON.parse(localStorage.getItem("flowcash_v2") ?? "{}"),
-                null, 2
-              );
+              const data = JSON.stringify(JSON.parse(localStorage.getItem("flowcash_v2") ?? "{}"), null, 2);
               const blob = new Blob([data], { type: "application/json" });
               const url = URL.createObjectURL(blob);
               const a = document.createElement("a");
@@ -177,7 +288,7 @@ export default function Configuracoes() {
               a.click();
               URL.revokeObjectURL(url);
             }}
-            style={{ width: "100%", textAlign: "center" }}
+            style={{ width: "100%", textAlign: "center", justifyContent: "center" }}
           >
             Exportar dados (JSON)
           </button>
@@ -185,63 +296,82 @@ export default function Configuracoes() {
       </div>
 
       {/* Categorias */}
-      <div className="card fade-up-4" style={{ overflow: "hidden", marginBottom: "16px" }}>
-        <div style={{ padding: "14px 18px", borderBottom: "1px solid var(--border)" }}>
+      <div className="card fade-up-4" style={{ overflow: "hidden", marginBottom: "14px" }}>
+        <div style={{ padding: "13px 16px", borderBottom: "1px solid var(--border)" }}>
           <p style={{ fontSize: "11px", fontWeight: 700, color: "var(--text-3)", letterSpacing: "0.08em", textTransform: "uppercase" }}>
             Categorias ({state.categories.length})
           </p>
         </div>
-        <div style={{ padding: "12px 18px", display: "flex", flexWrap: "wrap", gap: "8px" }}>
+        <div style={{ padding: "12px 16px", display: "flex", flexWrap: "wrap", gap: "7px" }}>
           {state.categories.map(cat => (
             <div key={cat.id} style={{
-              display: "inline-flex", alignItems: "center", gap: "6px",
+              display: "inline-flex", alignItems: "center", gap: "5px",
               padding: "6px 10px",
-              background: `${cat.color}15`,
-              border: `1px solid ${cat.color}30`,
+              background: `${cat.color}12`,
+              border: `1px solid ${cat.color}28`,
               borderRadius: "20px",
             }}>
-              <span style={{ fontSize: "13px" }}>{cat.icon}</span>
-              <span style={{ fontSize: "12px", fontWeight: 600, color: cat.color }}>{cat.name}</span>
+              <span style={{ fontSize: "12px" }}>{cat.icon}</span>
+              <span style={{ fontSize: "11.5px", fontWeight: 600, color: cat.color }}>{cat.name}</span>
             </div>
           ))}
         </div>
       </div>
 
-      {/* Zona de perigo */}
-      <div className="card fade-up-5" style={{ overflow: "hidden", marginBottom: "24px" }}>
-        <div style={{ padding: "14px 18px", borderBottom: "1px solid var(--border)" }}>
-          <p style={{ fontSize: "11px", fontWeight: 700, color: "var(--red)", letterSpacing: "0.08em", textTransform: "uppercase" }}>Zona de Perigo</p>
+      {/* Conta */}
+      <div className="card fade-up-5" style={{ overflow: "hidden", marginBottom: "14px" }}>
+        <div style={{
+          padding: "14px 16px",
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+        }}>
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <p style={{ fontSize: "13.5px", fontWeight: 600, color: "var(--text-1)" }}>Conta Google</p>
+            <p style={{
+              fontSize: "12px", color: "var(--text-3)", marginTop: "2px",
+              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+            }}>
+              {user?.email ?? ""}
+            </p>
+          </div>
+          <button
+            className="btn-secondary"
+            onClick={signOut}
+            style={{ padding: "10px 16px", fontSize: "13px", flexShrink: 0, marginLeft: "12px", minHeight: "44px" }}
+          >
+            Sair
+          </button>
         </div>
-        <div style={{ padding: "16px 18px" }}>
-          <p style={{ fontSize: "13px", color: "var(--text-2)", marginBottom: "14px" }}>
-            Apagar todos os dados do app. Esta ação não pode ser desfeita.
+      </div>
+
+      {/* Zona de perigo */}
+      <div className="card fade-up-5" style={{ overflow: "hidden", marginBottom: "20px", borderColor: "var(--red-20)" }}>
+        <div style={{ padding: "13px 16px", borderBottom: "1px solid var(--red-20)" }}>
+          <p style={{ fontSize: "11px", fontWeight: 700, color: "var(--red)", letterSpacing: "0.08em", textTransform: "uppercase" }}>
+            Zona de Perigo
+          </p>
+        </div>
+        <div style={{ padding: "14px 16px" }}>
+          <p style={{ fontSize: "13px", color: "var(--text-2)", marginBottom: "12px", lineHeight: 1.5 }}>
+            Apagar todos os dados. Esta ação não pode ser desfeita.
           </p>
           {!showClearConfirm ? (
             <button
               className="btn-danger"
               onClick={() => setShowClearConfirm(true)}
-              style={{ width: "100%", textAlign: "center" }}
+              style={{ width: "100%", textAlign: "center", justifyContent: "center" }}
             >
               Apagar todos os dados
             </button>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
               <p style={{ fontSize: "13px", fontWeight: 700, color: "var(--red)", textAlign: "center" }}>
-                Tem certeza? Todos os dados serão apagados.
+                Tem certeza? Esta ação é irreversível.
               </p>
-              <div style={{ display: "flex", gap: "10px" }}>
-                <button
-                  className="btn-danger"
-                  onClick={clearAllData}
-                  style={{ flex: 1, textAlign: "center" }}
-                >
-                  Sim, apagar tudo
+              <div style={{ display: "flex", gap: "8px" }}>
+                <button className="btn-danger" onClick={clearAllData} style={{ flex: 1, justifyContent: "center" }}>
+                  Sim, apagar
                 </button>
-                <button
-                  className="btn-secondary"
-                  onClick={() => setShowClearConfirm(false)}
-                  style={{ flex: 1, textAlign: "center" }}
-                >
+                <button className="btn-secondary" onClick={() => setShowClearConfirm(false)} style={{ flex: 1, justifyContent: "center" }}>
                   Cancelar
                 </button>
               </div>
@@ -250,26 +380,8 @@ export default function Configuracoes() {
         </div>
       </div>
 
-      {/* Versão */}
-      {/* Sair da conta */}
-      <div className="card fade-up-5" style={{ overflow: "hidden", marginBottom: "16px" }}>
-        <div style={{ padding: "16px 18px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div>
-            <p style={{ fontSize: "13.5px", fontWeight: 600, color: "var(--text-1)" }}>Conta Google</p>
-            <p style={{ fontSize: "12px", color: "var(--text-3)", marginTop: "2px" }}>{user?.email ?? ""}</p>
-          </div>
-          <button
-            className="btn-secondary"
-            onClick={signOut}
-            style={{ padding: "8px 16px", fontSize: "13px", flexShrink: 0 }}
-          >
-            Sair
-          </button>
-        </div>
-      </div>
-
-      <p style={{ textAlign: "center", fontSize: "11px", color: "var(--text-3)", paddingBottom: "8px" }}>
-        FlowCash · Motor financeiro temporal · v2.0
+      <p style={{ textAlign: "center", fontSize: "11px", color: "var(--text-4)", paddingBottom: "8px" }}>
+        FlowCash v2.0 · Motor financeiro temporal
       </p>
     </div>
   );
