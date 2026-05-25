@@ -14,6 +14,7 @@ const MONTH_NAMES = [
   "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
   "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
 ];
+
 const MONTH_SHORT: Record<string, string> = {
   "01": "Jan", "02": "Fev", "03": "Mar", "04": "Abr",
   "05": "Mai", "06": "Jun", "07": "Jul", "08": "Ago",
@@ -24,6 +25,7 @@ function fullMonthLabel(yyyymm: string) {
   const [y, m] = yyyymm.split("-").map(Number);
   return `${MONTH_NAMES[m - 1]} ${y}`;
 }
+
 function shortMonthLabel(yyyymm: string) {
   const [, m] = yyyymm.split("-");
   return MONTH_SHORT[m] ?? yyyymm;
@@ -73,55 +75,84 @@ function AlertSection({
 
   return (
     <div style={{
-      background: bgColor, border: `1px solid ${borderColor}`,
-      borderRadius: "16px", overflow: "hidden", marginBottom: "12px",
+      background: bgColor,
+      border: `1px solid ${borderColor}`,
+      borderRadius: "var(--r-lg)",
+      overflow: "hidden",
+      marginBottom: "12px",
     }}>
-      <div style={{ padding: "14px 16px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-          <span style={{ fontSize: "18px" }}>{icon}</span>
+      <div style={{
+        padding: "12px 14px",
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        borderBottom: `1px solid ${borderColor}`,
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          <span style={{ fontSize: "16px" }}>{icon}</span>
           <div>
             <p style={{ fontSize: "13px", fontWeight: 700, color: accentColor }}>{title}</p>
-            <p style={{ fontSize: "11.5px", color: "var(--text-3)", marginTop: "1px" }}>
-              {transactions.length} transaç{transactions.length === 1 ? "ão" : "ões"} · R$ {fmt(total)}
+            <p style={{ fontSize: "11px", color: "var(--text-3)", marginTop: "1px" }}>
+              {transactions.length} item{transactions.length > 1 ? "s" : ""} · R$ {fmt(total)}
             </p>
           </div>
         </div>
       </div>
-      <div style={{ borderTop: `1px solid ${borderColor}` }}>
-        {transactions.map((tx, i) => {
-          const cat = categories.find(c => c.id === tx.categoryId);
-          return (
+      {transactions.slice(0, 3).map((tx, i) => {
+        const cat = categories.find(c => c.id === tx.categoryId);
+        return (
+          <div
+            key={tx.id}
+            className="pay-row"
+            style={{
+              borderBottom: i < Math.min(transactions.length, 3) - 1 ? `1px solid ${borderColor}` : "none",
+            }}
+          >
             <div
-              key={tx.id}
-              className="pay-row"
-              style={{ borderBottom: i < transactions.length - 1 ? `1px solid ${borderColor}` : "none" }}
+              style={{
+                width: "36px", height: "36px", borderRadius: "10px", flexShrink: 0,
+                background: `${cat?.color ?? "#ffffff"}18`,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: "15px",
+              }}
+              onClick={() => onOpen(tx)}
             >
-              <div
-                style={{
-                  width: "38px", height: "38px", borderRadius: "10px", flexShrink: 0,
-                  background: `${cat?.color ?? "#ffffff"}15`,
-                  display: "flex", alignItems: "center", justifyContent: "center", fontSize: "16px",
-                }}
-                onClick={() => onOpen(tx)}
-              >
-                {cat?.icon ?? "📦"}
-              </div>
-              <div style={{ flex: 1, minWidth: 0 }} onClick={() => onOpen(tx)}>
-                <p style={{ fontSize: "13.5px", fontWeight: 600, color: "var(--text-1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {tx.description}
-                </p>
-                <p style={{ fontSize: "11px", color: "var(--text-3)", marginTop: "2px" }}>
-                  {cat?.name ?? "—"} · {fmtDate(tx.paymentDate)}
-                </p>
-              </div>
-              <p className="mono" onClick={() => onOpen(tx)} style={{ fontSize: "14px", fontWeight: 700, color: "var(--text-1)", flexShrink: 0, marginRight: "10px" }}>
+              {cat?.icon ?? "📦"}
+            </div>
+
+            <div
+              style={{ flex: 1, minWidth: 0, overflow: "hidden" }}
+              onClick={() => onOpen(tx)}
+            >
+              <p style={{
+                fontSize: "13px", fontWeight: 600, color: "var(--text-1)",
+                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+              }}>
+                {tx.description}
+              </p>
+              <p style={{ fontSize: "11px", color: "var(--text-3)", marginTop: "1px" }}>
+                {cat?.name ?? "—"} · {fmtDate(tx.paymentDate)}
+              </p>
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "4px", flexShrink: 0, marginLeft: "8px" }}>
+              <p className="mono" style={{ fontSize: "13px", fontWeight: 700, color: "var(--text-1)" }}>
                 R$ {fmt(tx.amount)}
               </p>
-              <button className="pay-btn" onClick={() => onPay(tx)}>Pagar</button>
+              <button className="pay-btn" onClick={() => onPay(tx)} style={{ fontSize: "11px", padding: "5px 10px", minHeight: "28px", minWidth: "58px" }}>
+                Pagar
+              </button>
             </div>
-          );
-        })}
-      </div>
+          </div>
+        );
+      })}
+      {transactions.length > 3 && (
+        <div style={{ padding: "10px 14px", textAlign: "center" }}>
+          <p style={{ fontSize: "12px", color: accentColor, fontWeight: 600 }}>
+            +{transactions.length - 3} mais
+          </p>
+        </div>
+      )}
     </div>
   );
 }
@@ -140,10 +171,10 @@ export default function Dashboard() {
     touchStartX.current = e.touches[0].clientX;
     touchStartY.current = e.touches[0].clientY;
   }
+
   function handleTouchEnd(e: React.TouchEvent) {
     const dx = touchStartX.current - e.changedTouches[0].clientX;
     const dy = Math.abs(touchStartY.current - e.changedTouches[0].clientY);
-    // Only swipe if horizontal movement dominates
     if (Math.abs(dx) > 60 && Math.abs(dx) > dy * 1.5) {
       if (dx > 0) setSelectedMonth(m => addMonths(m, 1));
       else setSelectedMonth(m => addMonths(m, -1));
@@ -197,16 +228,6 @@ export default function Dashboard() {
     [state.accounts, state.transactions]
   );
 
-  const recurringUpcoming = useMemo(() => {
-    const td = new Date();
-    const todayStr = td.toISOString().split("T")[0];
-    const t30 = new Date(td.getTime() + 30 * 86400000).toISOString().split("T")[0];
-    return state.transactions
-      .filter(t => t.isRecurring && t.status === "pending" && t.paymentDate >= todayStr && t.paymentDate <= t30)
-      .sort((a, b) => a.paymentDate.localeCompare(b.paymentDate))
-      .slice(0, 5);
-  }, [state.transactions]);
-
   const recentTxs = useMemo(() =>
     [...monthTxs]
       .sort((a, b) => b.paymentDate.localeCompare(a.paymentDate))
@@ -217,18 +238,20 @@ export default function Dashboard() {
   function payNow(tx: Transaction) {
     dispatch({ type: "UPD_TX", payload: { ...tx, status: "paid" } });
   }
+
   function handleStatusChange(id: string, status: Transaction["status"]) {
     const tx = state.transactions.find(t => t.id === id);
     if (!tx) return;
     dispatch({ type: "UPD_TX", payload: { ...tx, status } });
     setSelectedTx(prev => prev?.id === id ? { ...prev, status } : prev);
   }
+
   function handleDelete(id: string) {
     dispatch({ type: "DEL_TX", payload: id });
     setSelectedTx(null);
   }
 
-  const name = state.userName?.trim() || "";
+  const name = (state.userName?.trim() || "").split(" ")[0]; // Só primeiro nome
 
   return (
     <>
@@ -244,63 +267,82 @@ export default function Dashboard() {
       />
 
       <div
-        style={{ padding: "20px 16px", maxWidth: "680px", margin: "0 auto" }}
+        style={{ padding: "16px", maxWidth: "680px", margin: "0 auto" }}
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
       >
 
-        {/* ── Header ─────────────────────────── */}
-        <div className="fade-up-1" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "18px" }}>
-          <div>
-            {name ? (
-              <>
-                <p style={{ fontSize: "19px", fontWeight: 700, color: "var(--text-1)", letterSpacing: "-0.02em" }}>
-                  {greeting()}, {name} 👋
-                </p>
-                <p style={{ fontSize: "11.5px", color: "var(--text-3)", marginTop: "3px" }}>
-                  {new Date().toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long" })}
-                </p>
-              </>
-            ) : (
-              <>
-                <p style={{ fontSize: "18px", fontWeight: 700, color: "var(--text-1)" }}>{greeting()} 👋</p>
-                <a href="/configuracoes" style={{ fontSize: "11.5px", color: "var(--accent)", textDecoration: "none", fontWeight: 600 }}>
-                  Defina seu nome em Configurações →
-                </a>
-              </>
-            )}
+        {/* ── Header ── */}
+        <div className="fade-up-1" style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: "16px",
+        }}>
+          <div style={{ minWidth: 0, flex: 1, paddingRight: "12px" }}>
+            <p style={{
+              fontSize: "18px", fontWeight: 700, color: "var(--text-1)",
+              letterSpacing: "-0.02em", lineHeight: 1.2,
+              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+            }}>
+              {name ? `${greeting()}, ${name} 👋` : `${greeting()} 👋`}
+            </p>
+            <p style={{ fontSize: "11.5px", color: "var(--text-3)", marginTop: "3px" }}>
+              {new Date().toLocaleDateString("pt-BR", { weekday: "short", day: "numeric", month: "short" })}
+            </p>
           </div>
+
           <button
             className="btn-primary"
             onClick={() => setShowModal(true)}
-            style={{ fontSize: "22px", padding: "0", width: "48px", height: "48px", borderRadius: "14px", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
+            style={{
+              fontSize: "24px", padding: "0",
+              width: "48px", height: "48px",
+              borderRadius: "14px",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              flexShrink: 0,
+              boxShadow: "0 4px 20px rgba(0, 229, 195, 0.35)",
+            }}
             aria-label="Nova transação"
           >+</button>
         </div>
 
-        {/* ── Seletor de Mês ──────────────────── */}
+        {/* ── Seletor de Mês ── */}
         <div className="fade-up-1" style={{ marginBottom: "14px" }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "0" }}>
+          <div style={{
+            display: "flex", alignItems: "center", justifyContent: "center",
+            background: "var(--bg-card)",
+            border: "1px solid var(--border)",
+            borderRadius: "var(--r-lg)",
+            padding: "4px",
+          }}>
             <button
               onClick={() => setSelectedMonth(m => addMonths(m, -1))}
               style={{
-                background: "none", border: "none", color: "var(--text-2)", cursor: "pointer",
-                fontSize: "20px", padding: "8px 16px", minHeight: "44px", minWidth: "44px",
+                background: "none", border: "none", color: "var(--text-2)",
+                cursor: "pointer", fontSize: "20px",
+                padding: "8px 16px", minHeight: "44px", minWidth: "48px",
                 display: "flex", alignItems: "center", justifyContent: "center",
+                borderRadius: "var(--r-sm)",
               }}
               aria-label="Mês anterior"
             >‹</button>
 
-            <div style={{ textAlign: "center", minWidth: "160px" }}>
-              <p style={{ fontSize: "17px", fontWeight: 700, color: "var(--text-1)", letterSpacing: "-0.02em" }}>
+            <div style={{ textAlign: "center", flex: 1 }}>
+              <p style={{
+                fontSize: "15px", fontWeight: 700, color: "var(--text-1)",
+                letterSpacing: "-0.01em",
+              }}>
                 {fullMonthLabel(selectedMonth)}
               </p>
               {!isCurrentMonth && (
                 <button
                   onClick={() => setSelectedMonth(currentMonth())}
                   style={{
-                    background: "none", border: "none", color: "var(--accent)", cursor: "pointer",
-                    fontSize: "11px", fontWeight: 600, padding: "0", fontFamily: "inherit",
+                    background: "none", border: "none",
+                    color: "var(--accent)", cursor: "pointer",
+                    fontSize: "11px", fontWeight: 600, padding: "0",
+                    fontFamily: "inherit",
                   }}
                 >
                   Ir para hoje
@@ -311,74 +353,132 @@ export default function Dashboard() {
             <button
               onClick={() => setSelectedMonth(m => addMonths(m, 1))}
               style={{
-                background: "none", border: "none", color: "var(--text-2)", cursor: "pointer",
-                fontSize: "20px", padding: "8px 16px", minHeight: "44px", minWidth: "44px",
+                background: "none", border: "none", color: "var(--text-2)",
+                cursor: "pointer", fontSize: "20px",
+                padding: "8px 16px", minHeight: "44px", minWidth: "48px",
                 display: "flex", alignItems: "center", justifyContent: "center",
+                borderRadius: "var(--r-sm)",
               }}
               aria-label="Próximo mês"
             >›</button>
           </div>
         </div>
 
-        {/* ── Saldo Real + Projetado ──────────── */}
-        <div className="card fade-up-2" style={{ padding: "20px 20px 16px", marginBottom: "12px" }}>
-          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: "8px" }}>
-            <div>
-              <p style={{ fontSize: "10px", fontWeight: 700, color: "var(--text-3)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "5px" }}>
-                Saldo Real
-              </p>
-              <p className="mono" style={{
-                fontSize: "34px", fontWeight: 700, letterSpacing: "-0.03em",
-                color: totalBalance >= 0 ? "var(--text-1)" : "var(--red)",
-                lineHeight: 1,
-              }}>
-                R$ {fmt(totalBalance)}
+        {/* ── Saldo Principal ── */}
+        <div
+          className="card fade-up-2"
+          style={{
+            padding: "20px",
+            marginBottom: "12px",
+            background: "linear-gradient(135deg, #0C1623 0%, #0D1E34 100%)",
+            borderColor: "rgba(0,229,195,0.1)",
+          }}
+        >
+          <p style={{
+            fontSize: "10px", fontWeight: 700, color: "var(--text-3)",
+            letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "6px",
+          }}>
+            Saldo Real
+          </p>
+          <p
+            className="mono"
+            style={{
+              fontSize: "34px", fontWeight: 700, letterSpacing: "-0.03em",
+              color: totalBalance >= 0 ? "var(--text-1)" : "var(--red)",
+              lineHeight: 1,
+            }}
+          >
+            R$ {fmt(totalBalance)}
+          </p>
+
+          {totalProjected !== totalBalance && (
+            <div style={{
+              display: "flex", alignItems: "center", gap: "8px",
+              marginTop: "12px", paddingTop: "12px",
+              borderTop: "1px solid var(--border)",
+            }}>
+              <p style={{ fontSize: "11px", color: "var(--text-3)" }}>Projetado:</p>
+              <p
+                className="mono"
+                style={{
+                  fontSize: "15px", fontWeight: 700,
+                  color: totalProjected >= 0 ? "var(--accent)" : "var(--red)",
+                }}
+              >
+                R$ {fmt(totalProjected)}
               </p>
             </div>
-            {totalProjected !== totalBalance && (
-              <div style={{ textAlign: "right" }}>
-                <p style={{ fontSize: "10px", fontWeight: 700, color: "var(--text-3)", letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: "5px" }}>
-                  Projetado
-                </p>
-                <p className="mono" style={{ fontSize: "20px", fontWeight: 700, color: totalProjected >= 0 ? "var(--accent)" : "var(--red)" }}>
-                  R$ {fmt(totalProjected)}
-                </p>
-              </div>
-            )}
-          </div>
+          )}
         </div>
 
-        {/* ── Receitas / Despesas / Balanço ────── */}
-        <div className="fade-up-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "8px", marginBottom: "16px" }}>
-          <div className="card" style={{ padding: "12px 12px" }}>
-            <p style={{ fontSize: "9px", color: "var(--text-3)", fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: "4px" }}>↑ Receitas</p>
-            <p className="mono" style={{ fontSize: "15px", fontWeight: 700, color: "var(--green)" }}>
-              {monthIncome >= 1000 ? `${(monthIncome / 1000).toFixed(1)}k` : fmt(monthIncome)}
-            </p>
-          </div>
-          <div className="card" style={{ padding: "12px 12px" }}>
-            <p style={{ fontSize: "9px", color: "var(--text-3)", fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: "4px" }}>↓ Despesas</p>
-            <p className="mono" style={{ fontSize: "15px", fontWeight: 700, color: monthExpense > monthIncome ? "var(--red)" : "var(--text-1)" }}>
-              {monthExpense >= 1000 ? `${(monthExpense / 1000).toFixed(1)}k` : fmt(monthExpense)}
-            </p>
-          </div>
-          <div className="card" style={{ padding: "12px 12px" }}>
-            <p style={{ fontSize: "9px", color: "var(--text-3)", fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: "4px" }}>Balanço</p>
-            <p className="mono" style={{ fontSize: "15px", fontWeight: 700, color: monthBalance >= 0 ? "var(--accent)" : "var(--red)" }}>
-              {monthBalance >= 0 ? "+" : ""}
-              {Math.abs(monthBalance) >= 1000 ? `${(monthBalance / 1000).toFixed(1)}k` : fmt(monthBalance)}
-            </p>
-          </div>
+        {/* ── Métricas do Mês ── */}
+        <div
+          className="fade-up-2"
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr 1fr",
+            gap: "8px",
+            marginBottom: "16px",
+          }}
+        >
+          {[
+            {
+              label: "Receitas",
+              value: monthIncome,
+              color: "var(--green)",
+              icon: "↑",
+            },
+            {
+              label: "Despesas",
+              value: monthExpense,
+              color: monthExpense > monthIncome ? "var(--red)" : "var(--text-1)",
+              icon: "↓",
+            },
+            {
+              label: "Balanço",
+              value: monthBalance,
+              color: monthBalance >= 0 ? "var(--accent)" : "var(--red)",
+              icon: monthBalance >= 0 ? "+" : "",
+              prefix: true,
+            },
+          ].map((m, i) => (
+            <div
+              key={i}
+              className="card"
+              style={{ padding: "12px 10px" }}
+            >
+              <p style={{
+                fontSize: "9px", color: "var(--text-3)",
+                fontWeight: 700, letterSpacing: "0.06em",
+                textTransform: "uppercase", marginBottom: "5px",
+                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+              }}>
+                {m.icon} {m.label}
+              </p>
+              <p
+                className="mono"
+                style={{
+                  fontSize: "13px", fontWeight: 700, color: m.color,
+                  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                }}
+              >
+                {m.prefix && m.value > 0 ? "+" : ""}
+                {Math.abs(m.value) >= 1000
+                  ? `${(m.value / 1000).toFixed(1)}k`
+                  : fmt(m.value)}
+              </p>
+            </div>
+          ))}
         </div>
 
-        {/* ── Obrigações ─────────────────────── */}
+        {/* ── Alertas ── */}
         {isCurrentMonth && (
           <div className="fade-up-3">
             <AlertSection
-              title="Transações vencidas"
+              title="Vencidas"
               icon="⚠️"
               accentColor="var(--red)"
-              bgColor="var(--red-10)"
+              bgColor="rgba(255,61,94,0.06)"
               borderColor="var(--red-20)"
               transactions={overdue}
               categories={state.categories}
@@ -386,10 +486,10 @@ export default function Dashboard() {
               onOpen={tx => setSelectedTx(tx)}
             />
             <AlertSection
-              title="Vencendo esta semana"
+              title="Vence esta semana"
               icon="🔔"
               accentColor="var(--amber)"
-              bgColor="var(--amber-10)"
+              bgColor="rgba(245,158,11,0.06)"
               borderColor="var(--amber-20)"
               transactions={dueThisWeek}
               categories={state.categories}
@@ -399,37 +499,58 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* ── Faturas de Cartão ───────────────── */}
+        {/* ── Faturas de Cartão ── */}
         {cardInvoices.length > 0 && (
-          <div className="card fade-up-4" style={{ overflow: "hidden", marginBottom: "16px" }}>
-            <div style={{ padding: "12px 16px 10px", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <p style={{ fontSize: "11px", fontWeight: 700, color: "var(--text-3)", letterSpacing: "0.06em", textTransform: "uppercase" }}>
+          <div className="card fade-up-4" style={{ overflow: "hidden", marginBottom: "12px" }}>
+            <div style={{
+              padding: "12px 14px 10px",
+              borderBottom: "1px solid var(--border)",
+              display: "flex", justifyContent: "space-between", alignItems: "center",
+            }}>
+              <p style={{
+                fontSize: "11px", fontWeight: 700, color: "var(--text-3)",
+                letterSpacing: "0.07em", textTransform: "uppercase",
+              }}>
                 Faturas de Cartão
               </p>
-              <a href="/cartoes" style={{ fontSize: "11.5px", color: "var(--accent)", textDecoration: "none", fontWeight: 600 }}>Ver →</a>
+              <a href="/cartoes" style={{ fontSize: "11.5px", color: "var(--accent)", textDecoration: "none", fontWeight: 600 }}>
+                Ver →
+              </a>
             </div>
             {cardInvoices.map(({ card, invoice }, i) => (
               <div key={card.id} style={{
                 display: "flex", alignItems: "center", gap: "12px",
-                padding: "13px 16px",
+                padding: "13px 14px",
                 borderBottom: i < cardInvoices.length - 1 ? "1px solid var(--border)" : "none",
+                overflow: "hidden",
               }}>
                 <div style={{
-                  width: "38px", height: "38px", borderRadius: "10px", flexShrink: 0,
-                  background: `${card.color}22`, border: `1px solid ${card.color}44`,
+                  width: "36px", height: "36px", borderRadius: "10px", flexShrink: 0,
+                  background: `${card.color}20`,
+                  border: `1px solid ${card.color}35`,
                   display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: "15px",
                 }}>
-                  <span style={{ fontSize: "16px" }}>💳</span>
+                  💳
                 </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <p style={{ fontSize: "13.5px", fontWeight: 600, color: "var(--text-1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                <div style={{ flex: 1, minWidth: 0, overflow: "hidden" }}>
+                  <p style={{
+                    fontSize: "13px", fontWeight: 600, color: "var(--text-1)",
+                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                  }}>
                     {card.name}
                   </p>
                   <p style={{ fontSize: "11px", color: "var(--text-3)", marginTop: "2px" }}>
                     Vence {fmtDate(invoice.dueDate)} · {invoice.status === "paid" ? "Paga" : invoice.status === "closed" ? "Fechada" : "Em aberto"}
                   </p>
                 </div>
-                <p className="mono" style={{ fontSize: "14px", fontWeight: 700, color: invoice.status === "paid" ? "var(--green)" : "var(--text-1)", flexShrink: 0 }}>
+                <p
+                  className="mono"
+                  style={{
+                    fontSize: "14px", fontWeight: 700, flexShrink: 0,
+                    color: invoice.status === "paid" ? "var(--green)" : "var(--text-1)",
+                  }}
+                >
                   R$ {fmt(invoice.totalAmount)}
                 </p>
               </div>
@@ -437,55 +558,18 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* ── Recorrências ────────────────────── */}
-        {isCurrentMonth && recurringUpcoming.length > 0 && (
-          <div className="card fade-up-4" style={{ overflow: "hidden", marginBottom: "16px" }}>
-            <div style={{ padding: "12px 16px 10px", borderBottom: "1px solid var(--border)" }}>
-              <p style={{ fontSize: "11px", fontWeight: 700, color: "var(--text-3)", letterSpacing: "0.06em", textTransform: "uppercase" }}>
-                Recorrências (próx. 30 dias)
-              </p>
-            </div>
-            {recurringUpcoming.map((tx, i) => {
-              const cat = state.categories.find(c => c.id === tx.categoryId);
-              return (
-                <div
-                  key={tx.id}
-                  onClick={() => setSelectedTx(tx)}
-                  style={{
-                    display: "flex", alignItems: "center", gap: "12px",
-                    padding: "13px 16px", cursor: "pointer",
-                    borderBottom: i < recurringUpcoming.length - 1 ? "1px solid var(--border)" : "none",
-                  }}
-                >
-                  <div style={{
-                    width: "38px", height: "38px", borderRadius: "10px", flexShrink: 0,
-                    background: cat ? `${cat.color}18` : "rgba(255,255,255,0.06)",
-                    display: "flex", alignItems: "center", justifyContent: "center", fontSize: "16px",
-                  }}>
-                    {cat?.icon ?? "🔄"}
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ fontSize: "13.5px", fontWeight: 600, color: "var(--text-1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {tx.description}
-                    </p>
-                    <p style={{ fontSize: "11px", color: "var(--text-3)", marginTop: "2px" }}>
-                      {cat?.name ?? "—"} · {fmtDate(tx.paymentDate)}
-                    </p>
-                  </div>
-                  <p className="mono" style={{ fontSize: "14px", fontWeight: 700, color: tx.type === "income" ? "var(--green)" : "var(--text-1)", flexShrink: 0 }}>
-                    {tx.type === "income" ? "+" : "-"}R$ {fmt(tx.amount)}
-                  </p>
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        {/* ── Fluxo de Caixa ──────────────────── */}
+        {/* ── Fluxo de Caixa ── */}
         {isCurrentMonth && projections.some(p => p.projectedIncome > 0 || p.projectedExpense > 0) && (
-          <div className="card fade-up-5" style={{ overflow: "hidden", marginBottom: "16px" }}>
-            <div style={{ padding: "12px 16px 10px", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <p style={{ fontSize: "11px", fontWeight: 700, color: "var(--text-3)", letterSpacing: "0.06em", textTransform: "uppercase" }}>
+          <div className="card fade-up-5" style={{ overflow: "hidden", marginBottom: "12px" }}>
+            <div style={{
+              padding: "12px 14px 10px",
+              borderBottom: "1px solid var(--border)",
+              display: "flex", justifyContent: "space-between", alignItems: "center",
+            }}>
+              <p style={{
+                fontSize: "11px", fontWeight: 700, color: "var(--text-3)",
+                letterSpacing: "0.07em", textTransform: "uppercase",
+              }}>
                 Fluxo de Caixa
               </p>
               <a href="/relatorios" style={{ fontSize: "11.5px", color: "var(--accent)", textDecoration: "none", fontWeight: 600 }}>
@@ -497,20 +581,25 @@ export default function Dashboard() {
               const isThisMonth = p.month === currentMonth();
               return (
                 <div key={p.month} style={{
-                  display: "grid", gridTemplateColumns: "52px 1fr 1fr 1fr",
-                  alignItems: "center", padding: "11px 16px",
+                  display: "grid",
+                  gridTemplateColumns: "44px 1fr 1fr 1fr",
+                  alignItems: "center",
+                  padding: "11px 14px",
                   borderBottom: i < projections.length - 1 ? "1px solid var(--border)" : "none",
                   background: isThisMonth ? "rgba(0,229,195,0.04)" : "transparent",
-                  gap: "6px",
+                  gap: "4px",
                 }}>
-                  <span style={{ fontSize: "12px", fontWeight: 700, color: isThisMonth ? "var(--accent)" : "var(--text-2)" }}>
+                  <span style={{
+                    fontSize: "12px", fontWeight: 700,
+                    color: isThisMonth ? "var(--accent)" : "var(--text-2)",
+                  }}>
                     {shortMonthLabel(p.month)}
                   </span>
                   <span className="mono" style={{ fontSize: "11px", fontWeight: 600, color: "var(--green)", textAlign: "right" }}>
-                    +{fmt(p.projectedIncome)}
+                    +{p.projectedIncome >= 1000 ? `${(p.projectedIncome / 1000).toFixed(1)}k` : fmt(p.projectedIncome)}
                   </span>
                   <span className="mono" style={{ fontSize: "11px", fontWeight: 600, color: "var(--red)", textAlign: "right" }}>
-                    -{fmt(p.projectedExpense)}
+                    -{p.projectedExpense >= 1000 ? `${(p.projectedExpense / 1000).toFixed(1)}k` : fmt(p.projectedExpense)}
                   </span>
                   <span className="mono" style={{ fontSize: "11px", fontWeight: 700, color: riskColor, textAlign: "right" }}>
                     {p.projectedBalance >= 0 ? "" : "-"}
@@ -524,10 +613,16 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* ── Lançamentos do Mês ──────────────── */}
+        {/* ── Lançamentos ── */}
         <div className="card fade-up-6" style={{ overflow: "hidden" }}>
-          <div style={{ padding: "14px 16px 10px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <p style={{ fontSize: "11px", fontWeight: 700, color: "var(--text-3)", letterSpacing: "0.06em", textTransform: "uppercase" }}>
+          <div style={{
+            padding: "12px 14px 10px",
+            display: "flex", justifyContent: "space-between", alignItems: "center",
+          }}>
+            <p style={{
+              fontSize: "11px", fontWeight: 700, color: "var(--text-3)",
+              letterSpacing: "0.07em", textTransform: "uppercase",
+            }}>
               Lançamentos
             </p>
             <a href="/transacoes" style={{ fontSize: "11.5px", color: "var(--accent)", textDecoration: "none", fontWeight: 600 }}>
@@ -536,16 +631,14 @@ export default function Dashboard() {
           </div>
 
           {recentTxs.length === 0 ? (
-            <div style={{ padding: "36px 16px", textAlign: "center" }}>
+            <div style={{ padding: "40px 16px", textAlign: "center" }}>
               <p style={{ fontSize: "32px", marginBottom: "10px" }}>💸</p>
               <p style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-2)" }}>
-                Sem lançamentos em {fullMonthLabel(selectedMonth)}
+                Sem lançamentos
               </p>
-              {isCurrentMonth && (
-                <p style={{ fontSize: "12px", color: "var(--text-3)", marginTop: "4px" }}>
-                  Toque em + para adicionar
-                </p>
-              )}
+              <p style={{ fontSize: "12px", color: "var(--text-3)", marginTop: "4px" }}>
+                {isCurrentMonth ? "Toque em + para adicionar" : `Nenhum em ${fullMonthLabel(selectedMonth)}`}
+              </p>
             </div>
           ) : (
             recentTxs.map((tx, i) => {
@@ -555,35 +648,57 @@ export default function Dashboard() {
                   key={tx.id}
                   onClick={() => setSelectedTx(tx)}
                   style={{
-                    display: "flex", alignItems: "center", gap: "12px",
-                    padding: "13px 16px",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "12px",
+                    padding: "13px 14px",
                     borderTop: "1px solid var(--border)",
-                    cursor: "pointer", transition: "background 0.15s",
-                    minHeight: "60px",
+                    cursor: "pointer",
+                    transition: "background 0.12s",
+                    minHeight: "62px",
+                    overflow: "hidden",
                   }}
                   onTouchStart={e => e.stopPropagation()}
                 >
+                  {/* Ícone */}
                   <div style={{
                     width: "40px", height: "40px", borderRadius: "12px", flexShrink: 0,
                     background: cat ? `${cat.color}18` : "rgba(255,255,255,0.06)",
-                    border: `1px solid ${cat?.color ?? "#ffffff"}22`,
-                    display: "flex", alignItems: "center", justifyContent: "center", fontSize: "18px",
+                    border: `1px solid ${cat?.color ?? "#ffffff"}20`,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    fontSize: "17px",
                   }}>
                     {cat?.icon ?? (tx.type === "income" ? "💰" : "📦")}
                   </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ fontSize: "13.5px", fontWeight: 600, color: "var(--text-1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+
+                  {/* Info — com overflow explícito */}
+                  <div style={{ flex: 1, minWidth: 0, overflow: "hidden" }}>
+                    <p style={{
+                      fontSize: "13.5px", fontWeight: 600, color: "var(--text-1)",
+                      overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                      maxWidth: "100%",
+                    }}>
                       {tx.description}
                     </p>
                     <p style={{ fontSize: "11px", color: "var(--text-3)", marginTop: "2px" }}>
                       {cat?.name ?? "—"} · {fmtDate(tx.paymentDate)}
                     </p>
                   </div>
-                  <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "4px", flexShrink: 0 }}>
-                    <p className="mono" style={{
-                      fontSize: "14px", fontWeight: 700,
-                      color: tx.type === "income" ? "var(--green)" : "var(--text-1)",
-                    }}>
+
+                  {/* Valor + Status */}
+                  <div style={{
+                    display: "flex", flexDirection: "column",
+                    alignItems: "flex-end", gap: "4px",
+                    flexShrink: 0, marginLeft: "4px",
+                  }}>
+                    <p
+                      className="mono"
+                      style={{
+                        fontSize: "14px", fontWeight: 700,
+                        color: tx.type === "income" ? "var(--green)" : "var(--text-1)",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
                       {tx.type === "income" ? "+" : "-"}R$ {fmt(tx.amount)}
                     </p>
                     <StatusBadge status={tx.status} />
@@ -593,6 +708,7 @@ export default function Dashboard() {
             })
           )}
         </div>
+
       </div>
     </>
   );
