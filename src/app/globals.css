@@ -1,34 +1,76 @@
 @import "tailwindcss";
 
+/* ══════════════════════════════════════════════════════
+   FLOWCASH — Design System v3.0
+   Otimizado para iPhone 11 (414×896) e mobile-first
+   ══════════════════════════════════════════════════════ */
+
 :root {
-  --bg: #050B14;
-  --bg-card: #0A1525;
-  --bg-card-hover: #0E1D35;
-  --bg-sidebar: #060D1C;
+  /* ── Cores base ── */
+  --bg: #040B13;
+  --bg-card: #0C1623;
+  --bg-card-hover: #111E2E;
+  --bg-sidebar: #060F1A;
+  --bg-input: rgba(255, 255, 255, 0.06);
+  --bg-input-focus: rgba(255, 255, 255, 0.09);
+
+  /* ── Bordas ── */
   --border: rgba(255, 255, 255, 0.07);
-  --border-accent: rgba(0, 229, 195, 0.18);
+  --border-subtle: rgba(255, 255, 255, 0.04);
+  --border-accent: rgba(0, 229, 195, 0.2);
+
+  /* ── Cores semânticas ── */
   --accent: #00E5C3;
+  --accent-dim: #00BFA8;
   --accent-10: rgba(0, 229, 195, 0.1);
   --accent-20: rgba(0, 229, 195, 0.2);
-  --green: #22D47A;
-  --green-10: rgba(34, 212, 122, 0.1);
-  --green-20: rgba(34, 212, 122, 0.2);
-  --red: #FF4D6A;
-  --red-10: rgba(255, 77, 106, 0.1);
-  --red-20: rgba(255, 77, 106, 0.2);
-  --amber: #F5A623;
-  --amber-10: rgba(245, 166, 35, 0.1);
-  --amber-20: rgba(245, 166, 35, 0.2);
+  --accent-glow: rgba(0, 229, 195, 0.15);
+
+  --green: #21D97A;
+  --green-10: rgba(33, 217, 122, 0.1);
+  --green-20: rgba(33, 217, 122, 0.2);
+
+  --red: #FF3D5E;
+  --red-10: rgba(255, 61, 94, 0.1);
+  --red-20: rgba(255, 61, 94, 0.2);
+
+  --amber: #F59E0B;
+  --amber-10: rgba(245, 158, 11, 0.1);
+  --amber-20: rgba(245, 158, 11, 0.2);
+
   --blue: #4B8BF5;
   --blue-10: rgba(75, 139, 245, 0.1);
   --blue-20: rgba(75, 139, 245, 0.2);
-  --purple: #9B6DFF;
-  --text-1: #EEF2FF;
-  --text-2: #7A8FAD;
-  --text-3: #3A4F72;
 
-  /* Bottom nav height — used for padding */
-  --bottom-nav-h: 64px;
+  --purple: #9B6DFF;
+
+  /* ── Tipografia ── */
+  --text-1: #F0F4FF;
+  --text-2: #7A8FAD;
+  --text-3: #3A4F6E;
+  --text-4: #1E2E42;
+
+  /* ── Espaçamentos seguros (iPhone notch/home) ── */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+
+  /* ── Bottom nav ── */
+  --bottom-nav-h: 56px;
+  --bottom-nav-total: calc(var(--bottom-nav-h) + var(--safe-bottom));
+
+  /* ── Raios de borda ── */
+  --r-sm: 10px;
+  --r-md: 14px;
+  --r-lg: 18px;
+  --r-xl: 22px;
+  --r-2xl: 28px;
+
+  /* ── Sombras ── */
+  --shadow-card: 0 2px 20px rgba(0, 0, 0, 0.4);
+  --shadow-accent: 0 0 24px rgba(0, 229, 195, 0.2);
+  --shadow-modal: 0 -8px 40px rgba(0, 0, 0, 0.6);
 }
 
 @theme inline {
@@ -36,16 +78,19 @@
   --font-mono: var(--font-space-mono);
 }
 
+/* ── Reset ── */
 *, *::before, *::after {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
+  -webkit-tap-highlight-color: transparent;
 }
 
-html, body {
+html {
   height: 100%;
-  /* prevent horizontal scroll */
   overflow-x: hidden;
+  /* Previne zoom no iOS ao focar inputs */
+  touch-action: manipulation;
 }
 
 body {
@@ -54,18 +99,22 @@ body {
   font-family: var(--font-jakarta, "Plus Jakarta Sans", sans-serif);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  /* iOS: prevent text size adjustment on orientation change */
   -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  overflow-x: hidden;
+  min-height: 100%;
 }
 
 /* ── Scrollbar ── */
 ::-webkit-scrollbar { width: 3px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--text-3); border-radius: 2px; }
+::-webkit-scrollbar-thumb { background: var(--text-4); border-radius: 2px; }
 
-/* ── Animations ── */
+/* ══════════════════════════════════════════════════════
+   ANIMAÇÕES
+   ══════════════════════════════════════════════════════ */
 @keyframes fadeUp {
-  from { opacity: 0; transform: translateY(10px); }
+  from { opacity: 0; transform: translateY(12px); }
   to   { opacity: 1; transform: translateY(0); }
 }
 @keyframes fadeIn {
@@ -77,30 +126,43 @@ body {
   to   { transform: translateY(0); opacity: 1; }
 }
 @keyframes slideInRight {
-  from { transform: translateX(100%); opacity: 0; }
-  to   { transform: translateX(0); opacity: 1; }
+  from { transform: translateX(100%); }
+  to   { transform: translateX(0); }
 }
 @keyframes overlayIn {
   from { opacity: 0; }
   to   { opacity: 1; }
 }
+@keyframes pulseGlow {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
 
-.fade-up-1 { animation: fadeUp 0.45s 0.04s ease both; }
-.fade-up-2 { animation: fadeUp 0.45s 0.09s ease both; }
-.fade-up-3 { animation: fadeUp 0.45s 0.14s ease both; }
-.fade-up-4 { animation: fadeUp 0.45s 0.19s ease both; }
-.fade-up-5 { animation: fadeUp 0.45s 0.24s ease both; }
-.fade-up-6 { animation: fadeUp 0.45s 0.29s ease both; }
-.fade-up-7 { animation: fadeUp 0.45s 0.34s ease both; }
+.fade-up-1 { animation: fadeUp 0.4s 0.04s ease both; }
+.fade-up-2 { animation: fadeUp 0.4s 0.08s ease both; }
+.fade-up-3 { animation: fadeUp 0.4s 0.12s ease both; }
+.fade-up-4 { animation: fadeUp 0.4s 0.16s ease both; }
+.fade-up-5 { animation: fadeUp 0.4s 0.20s ease both; }
+.fade-up-6 { animation: fadeUp 0.4s 0.24s ease both; }
+.fade-up-7 { animation: fadeUp 0.4s 0.28s ease both; }
 
-/* ── Cards ── */
+/* ══════════════════════════════════════════════════════
+   CARDS
+   ══════════════════════════════════════════════════════ */
 .card {
   background: var(--bg-card);
   border: 1px solid var(--border);
-  border-radius: 16px;
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-card);
 }
 
-/* ── Badges ── */
+/* ══════════════════════════════════════════════════════
+   BADGES
+   ══════════════════════════════════════════════════════ */
 .badge {
   display: inline-flex;
   align-items: center;
@@ -108,22 +170,27 @@ body {
   border-radius: 20px;
   font-size: 10px;
   font-weight: 700;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
   white-space: nowrap;
+  flex-shrink: 0;
 }
 .badge-pago    { background: var(--green-10); color: var(--green); border: 1px solid var(--green-20); }
 .badge-pagar   { background: var(--amber-10); color: var(--amber); border: 1px solid var(--amber-20); }
-.badge-vencido { background: var(--red-10);   color: var(--red);   border: 1px solid var(--red-20);   }
+.badge-vencido { background: var(--red-10);   color: var(--red);   border: 1px solid var(--red-20); }
 
-/* ── Mono ── */
+/* ══════════════════════════════════════════════════════
+   MONO
+   ══════════════════════════════════════════════════════ */
 .mono { font-family: var(--font-space-mono, "Space Mono", monospace); }
 
-/* ── Progress bar ── */
+/* ══════════════════════════════════════════════════════
+   PROGRESS BAR
+   ══════════════════════════════════════════════════════ */
 .progress-bar-bg {
   background: rgba(255, 255, 255, 0.06);
   border-radius: 99px;
-  height: 4px;
+  height: 5px;
   overflow: hidden;
 }
 .progress-bar-fill {
@@ -132,13 +199,15 @@ body {
   transition: width 0.8s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-/* ── Sidebar nav ── */
+/* ══════════════════════════════════════════════════════
+   SIDEBAR (DESKTOP ONLY)
+   ══════════════════════════════════════════════════════ */
 .nav-link {
   display: flex;
   align-items: center;
   gap: 12px;
   padding: 10px 12px;
-  border-radius: 10px;
+  border-radius: var(--r-sm);
   margin-bottom: 2px;
   font-size: 13.5px;
   font-weight: 500;
@@ -150,70 +219,78 @@ body {
 .nav-link:hover  { background: rgba(255,255,255,0.04); color: var(--text-1); }
 .nav-link.active { background: var(--accent-10); color: var(--accent); border-left-color: var(--accent); font-weight: 600; }
 
-/* ── Drawer ── */
+/* ══════════════════════════════════════════════════════
+   DRAWER
+   ══════════════════════════════════════════════════════ */
 .drawer  { animation: slideInRight 0.25s cubic-bezier(0.22,1,0.36,1) forwards; }
 .overlay { animation: overlayIn 0.2s ease forwards; }
 
-/* ── Tx row ── */
+/* ══════════════════════════════════════════════════════
+   TX ROW (LINHA DE TRANSAÇÃO)
+   ══════════════════════════════════════════════════════ */
 .tx-row {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 12px 14px;
-  border-radius: 10px;
+  padding: 14px 16px;
+  border-radius: var(--r-sm);
   cursor: pointer;
   transition: background 0.15s ease;
-  min-height: 56px;
+  min-height: 64px;
+  /* Previne text-overflow em texto longo */
+  overflow: hidden;
 }
-.tx-row:hover, .tx-row:active { background: var(--bg-card-hover); }
+.tx-row:active { background: var(--bg-card-hover); }
 
-/* ── Forms ── */
+/* ══════════════════════════════════════════════════════
+   FORMULÁRIOS
+   ══════════════════════════════════════════════════════ */
 .form-label {
   display: block;
   font-size: 11px;
   font-weight: 700;
   color: var(--text-3);
-  letter-spacing: 0.07em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  margin-bottom: 7px;
+  margin-bottom: 8px;
 }
 
 .form-input {
   width: 100%;
-  /* CRITICAL: 16px prevents iOS Safari from zooming on focus */
+  /* CRÍTICO: 16px previne zoom do Safari iOS ao focar */
   font-size: 16px;
-  padding: 13px 14px;
-  background: rgba(255, 255, 255, 0.05);
+  padding: 14px 16px;
+  background: var(--bg-input);
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--r-md);
   color: var(--text-1);
   font-family: inherit;
   outline: none;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
   -webkit-appearance: none;
   appearance: none;
   max-width: 100%;
   box-sizing: border-box;
-  /* prevent tap highlight on mobile */
-  -webkit-tap-highlight-color: transparent;
+  /* Altura mínima para toque fácil */
+  min-height: 52px;
 }
 .form-input:focus {
-  border-color: rgba(0, 229, 195, 0.4);
+  background: var(--bg-input-focus);
+  border-color: var(--accent-dim);
   box-shadow: 0 0 0 3px rgba(0, 229, 195, 0.08);
 }
 .form-input::placeholder { color: var(--text-3); }
-.form-input option { background: #0A1525; color: var(--text-1); }
+.form-input option { background: #0C1623; color: var(--text-1); }
 
-/* Select — restore native arrow on iOS (appearance: none hides it) */
+/* Select com arrow customizado */
 select.form-input {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%237A8FAD' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
-  background-position: right 14px center;
-  padding-right: 36px;
+  background-position: right 16px center;
+  padding-right: 40px;
   cursor: pointer;
 }
 
-/* date/month inputs need explicit color on webkit */
 .form-input[type="date"],
 .form-input[type="month"],
 .form-input[type="number"],
@@ -230,14 +307,16 @@ select.form-input {
   margin-bottom: 16px;
 }
 
-/* ── Modal ── */
+/* ══════════════════════════════════════════════════════
+   MODAL / BOTTOM SHEET
+   ══════════════════════════════════════════════════════ */
 .modal-overlay {
   position: fixed;
   inset: 0;
-  z-index: 50;
-  background: rgba(0, 0, 0, 0.7);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
+  z-index: 100;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -248,10 +327,10 @@ select.form-input {
 .modal {
   background: var(--bg-sidebar);
   border: 1px solid var(--border);
-  border-radius: 20px;
+  border-radius: var(--r-xl);
   width: 480px;
   max-width: calc(100vw - 32px);
-  max-height: 86vh;
+  max-height: 88vh;
   overflow-y: auto;
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
@@ -260,20 +339,24 @@ select.form-input {
 }
 
 .modal-header {
-  padding: 20px 22px;
+  padding: 20px 20px 16px;
   border-bottom: 1px solid var(--border);
   display: flex;
   justify-content: space-between;
   align-items: center;
-  /* sticky so X button stays visible when scrolling */
   position: sticky;
   top: 0;
   background: var(--bg-sidebar);
   z-index: 1;
+  /* Linha de destaque no topo do header */
+  border-top: 2px solid var(--accent);
+  border-radius: var(--r-xl) var(--r-xl) 0 0;
 }
-.modal-body   { padding: 20px 22px; }
+
+.modal-body   { padding: 20px; }
+
 .modal-footer {
-  padding: 14px 22px;
+  padding: 16px 20px;
   border-top: 1px solid var(--border);
   display: flex;
   gap: 10px;
@@ -283,69 +366,75 @@ select.form-input {
   background: var(--bg-sidebar);
 }
 
-/* ── Buttons ── */
+/* ══════════════════════════════════════════════════════
+   BOTÕES
+   ══════════════════════════════════════════════════════ */
 .btn-primary {
-  padding: 12px 22px;
+  padding: 14px 24px;
   background: var(--accent);
   border: none;
-  border-radius: 12px;
-  color: #050B14;
+  border-radius: var(--r-md);
+  color: #030A10;
   font-size: 14px;
   font-weight: 700;
   cursor: pointer;
   font-family: inherit;
   transition: all 0.15s ease;
-  box-shadow: 0 0 20px rgba(0, 229, 195, 0.25);
-  min-height: 48px;
+  box-shadow: 0 4px 20px rgba(0, 229, 195, 0.3);
+  min-height: 52px;
   white-space: nowrap;
+  letter-spacing: 0.01em;
 }
-.btn-primary:hover  { box-shadow: 0 0 30px rgba(0, 229, 195, 0.4); }
+.btn-primary:hover  { box-shadow: 0 4px 28px rgba(0, 229, 195, 0.45); background: #00CDB0; }
 .btn-primary:active { opacity: 0.9; transform: scale(0.98); }
 
 .btn-secondary {
-  padding: 12px 18px;
+  padding: 14px 18px;
   background: transparent;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--r-md);
   color: var(--text-2);
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
   font-family: inherit;
   transition: all 0.15s ease;
-  min-height: 48px;
+  min-height: 52px;
   white-space: nowrap;
 }
-.btn-secondary:hover  { background: rgba(255,255,255,0.05); color: var(--text-1); }
+.btn-secondary:hover  { background: rgba(255,255,255,0.06); color: var(--text-1); border-color: rgba(255,255,255,0.12); }
 .btn-secondary:active { opacity: 0.8; }
 
 .btn-danger {
-  padding: 12px 18px;
+  padding: 14px 18px;
   background: var(--red-10);
   border: 1px solid var(--red-20);
-  border-radius: 12px;
+  border-radius: var(--r-md);
   color: var(--red);
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
   font-family: inherit;
   transition: all 0.15s ease;
-  min-height: 48px;
+  min-height: 52px;
   white-space: nowrap;
 }
-.btn-danger:hover  { background: rgba(255,77,106,0.2); }
+.btn-danger:hover  { background: rgba(255,61,94,0.18); }
 .btn-danger:active { opacity: 0.8; }
 
-/* ── Type toggle ── */
+/* ══════════════════════════════════════════════════════
+   TYPE TOGGLE
+   ══════════════════════════════════════════════════════ */
 .type-toggle {
   display: flex;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--r-md);
   overflow: hidden;
+  background: var(--bg-input);
 }
 .type-toggle-btn {
   flex: 1;
-  padding: 12px;
+  padding: 14px 12px;
   border: none;
   background: transparent;
   color: var(--text-3);
@@ -354,12 +443,14 @@ select.form-input {
   cursor: pointer;
   font-family: inherit;
   transition: all 0.15s ease;
-  min-height: 48px;
+  min-height: 52px;
 }
 .type-toggle-btn.active-income  { background: var(--green-10); color: var(--green); }
 .type-toggle-btn.active-expense { background: var(--red-10);   color: var(--red); }
 
-/* ── Filter buttons ── */
+/* ══════════════════════════════════════════════════════
+   FILTER BUTTONS
+   ══════════════════════════════════════════════════════ */
 .filter-btn {
   padding: 8px 16px;
   border-radius: 20px;
@@ -373,10 +464,18 @@ select.form-input {
   border: 1px solid var(--border);
   min-height: 36px;
   white-space: nowrap;
+  flex-shrink: 0;
 }
-.filter-btn.active { background: var(--accent-10); color: var(--accent); border-color: var(--border-accent); }
+.filter-btn.active {
+  background: var(--accent-10);
+  color: var(--accent);
+  border-color: var(--border-accent);
+  box-shadow: 0 0 12px var(--accent-glow);
+}
 
-/* ── Pay section ── */
+/* ══════════════════════════════════════════════════════
+   PAY ROW
+   ══════════════════════════════════════════════════════ */
 .pay-row {
   display: flex;
   align-items: center;
@@ -384,15 +483,16 @@ select.form-input {
   padding: 14px 16px;
   cursor: pointer;
   transition: background 0.15s ease;
-  min-height: 60px;
+  min-height: 64px;
+  overflow: hidden;
 }
 .pay-row:active { background: rgba(255,255,255,0.04); }
 
 .pay-btn {
   flex-shrink: 0;
-  padding: 10px 16px;
-  border-radius: 10px;
-  font-size: 13px;
+  padding: 10px 14px;
+  border-radius: var(--r-sm);
+  font-size: 12px;
   font-weight: 700;
   cursor: pointer;
   font-family: inherit;
@@ -401,11 +501,14 @@ select.form-input {
   color: var(--green);
   transition: all 0.15s ease;
   min-height: 40px;
-  min-width: 72px;
+  min-width: 68px;
+  white-space: nowrap;
 }
 .pay-btn:active { opacity: 0.8; transform: scale(0.96); }
 
-/* ── Bottom Nav ── */
+/* ══════════════════════════════════════════════════════
+   BOTTOM NAV (ESCONDIDA NO DESKTOP)
+   ══════════════════════════════════════════════════════ */
 .bottom-nav { display: none; }
 
 .bottom-nav-item {
@@ -413,25 +516,44 @@ select.form-input {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 3px;
-  padding: 6px 12px;
+  gap: 4px;
+  padding: 6px 8px;
   text-decoration: none;
   color: var(--text-3);
-  font-size: 9.5px;
-  font-weight: 600;
-  letter-spacing: 0.03em;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
   transition: color 0.15s ease;
   border: none;
   background: none;
   cursor: pointer;
   font-family: inherit;
-  min-width: 56px;
+  min-width: 52px;
   min-height: 52px;
+  position: relative;
 }
-.bottom-nav-item svg { width: 22px; height: 22px; }
+.bottom-nav-item svg { width: 22px; height: 22px; stroke-width: 1.8; }
 .bottom-nav-item.active { color: var(--accent); }
+.bottom-nav-item.active svg { stroke-width: 2.2; }
 
-/* ── Section divider ── */
+/* Dot indicator para tab ativa */
+.bottom-nav-item.active::before {
+  content: '';
+  position: absolute;
+  top: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 20px;
+  height: 2px;
+  background: var(--accent);
+  border-radius: 2px;
+  box-shadow: 0 0 8px var(--accent-glow);
+}
+
+/* ══════════════════════════════════════════════════════
+   SECTION LABEL
+   ══════════════════════════════════════════════════════ */
 .section-label {
   font-size: 10px;
   font-weight: 700;
@@ -441,67 +563,243 @@ select.form-input {
   margin-bottom: 10px;
 }
 
-/* ════════════════════════════════════
-   MOBILE — max-width: 767px
-   ════════════════════════════════════ */
+/* ══════════════════════════════════════════════════════
+   METRIC CARD (para dashboards)
+   ══════════════════════════════════════════════════════ */
+.metric-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: 16px;
+}
+
+/* ══════════════════════════════════════════════════════
+   SKELETON (loading placeholder)
+   ══════════════════════════════════════════════════════ */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    rgba(255,255,255,0.04) 0%,
+    rgba(255,255,255,0.08) 50%,
+    rgba(255,255,255,0.04) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: var(--r-sm);
+}
+
+/* ══════════════════════════════════════════════════════
+   GLASSMORPHISM CARD
+   ══════════════════════════════════════════════════════ */
+.glass-card {
+  background: rgba(12, 22, 35, 0.85);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--r-lg);
+}
+
+/* ══════════════════════════════════════════════════════
+   PAGE CONTAINER (mobile-first padding)
+   ══════════════════════════════════════════════════════ */
+.page-container {
+  padding: 20px 16px;
+  max-width: 680px;
+  margin: 0 auto;
+}
+
+/* ══════════════════════════════════════════════════════
+   CHIP / TAG
+   ══════════════════════════════════════════════════════ */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.04);
+  color: var(--text-2);
+  white-space: nowrap;
+}
+
+/* ══════════════════════════════════════════════════════
+   DIVIDER
+   ══════════════════════════════════════════════════════ */
+.divider {
+  height: 1px;
+  background: var(--border);
+  margin: 0;
+}
+
+/* ════════════════════════════════════════════════════
+   MOBILE — iPhone 11 e similares (max-width: 767px)
+   ════════════════════════════════════════════════════ */
 @media (max-width: 767px) {
-  /* hide desktop sidebar */
+
+  /* ── Esconde sidebar ── */
   aside { display: none !important; }
 
-  /* show bottom nav */
+  /* ── Mostra bottom nav ── */
   .bottom-nav {
     display: flex;
     position: fixed;
     bottom: 0;
     left: 0;
     right: 0;
-    z-index: 60;
-    background: rgba(6, 13, 28, 0.97);
-    border-top: 1px solid var(--border);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    padding-bottom: env(safe-area-inset-bottom, 8px);
+    z-index: 200;
+    background: rgba(4, 11, 19, 0.96);
+    border-top: 1px solid rgba(255,255,255,0.06);
+    backdrop-filter: blur(24px) saturate(180%);
+    -webkit-backdrop-filter: blur(24px) saturate(180%);
+    padding-bottom: var(--safe-bottom);
     justify-content: space-around;
     align-items: stretch;
   }
 
-  /* content clears bottom nav */
+  /* ── Main clears bottom nav ── */
   main {
-    padding-bottom: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom, 8px)) !important;
+    padding-bottom: calc(var(--bottom-nav-h) + var(--safe-bottom) + 8px) !important;
   }
 
-  /* modals as bottom sheet */
+  /* ── Padding de página mobile ── */
+  .page-container,
+  [style*="padding: 28px"],
+  [style*="padding: 20px 16px"] {
+    padding-left: 16px !important;
+    padding-right: 16px !important;
+  }
+
+  /* ── Modal como bottom sheet ── */
   .modal-overlay {
     align-items: flex-end !important;
     padding: 0 !important;
   }
+
   .modal {
     width: 100% !important;
     max-width: 100% !important;
-    border-radius: 24px 24px 0 0 !important;
-    max-height: 92vh;
-    /* handle notch/home indicator */
-    padding-bottom: env(safe-area-inset-bottom, 0px);
-  }
-  /* keyboard clearance — ensures last fields stay visible */
-  .modal-body {
-    padding-bottom: 32px;
-  }
-  .modal-footer {
-    padding-bottom: max(14px, env(safe-area-inset-bottom));
+    border-radius: var(--r-2xl) var(--r-2xl) 0 0 !important;
+    max-height: 94vh;
+    padding-bottom: var(--safe-bottom);
+    border-top: 2px solid var(--accent) !important;
+    /* Handle de arraste visual */
   }
 
-  /* form-row collapses on mobile */
+  /* Handle no topo do modal */
+  .modal::before {
+    content: '';
+    display: block;
+    width: 36px;
+    height: 4px;
+    background: rgba(255,255,255,0.15);
+    border-radius: 2px;
+    margin: 12px auto 0;
+  }
+
+  .modal-header {
+    border-radius: 0 !important;
+    border-top: none !important;
+    padding-top: 8px;
+  }
+
+  .modal-body {
+    padding: 16px 20px 24px;
+  }
+
+  .modal-footer {
+    padding-bottom: max(16px, var(--safe-bottom));
+    gap: 8px;
+  }
+
+  /* ── Form row colapsa no mobile ── */
   .form-row {
     grid-template-columns: 1fr !important;
+    gap: 12px;
   }
 
-  /* drawers take full width */
+  /* ── Drawer em full width ── */
   .drawer { width: 100% !important; }
 
-  /* hide scrollbar on mobile */
+  /* ── Esconde scrollbar no mobile ── */
   ::-webkit-scrollbar { display: none; }
+  * { scrollbar-width: none; }
 
-  /* slightly tighter page padding */
-  .page-pad { padding: 16px !important; }
+  /* ── Textos com overflow explícito ── */
+  .tx-description,
+  .tx-title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 100%;
+  }
+
+  /* ── Botões em tela cheia no footer do modal ── */
+  .modal-footer .btn-primary,
+  .modal-footer .btn-secondary {
+    flex: 1;
+    text-align: center;
+    justify-content: center;
+  }
+
+  /* ── Grid de métricas: 2 colunas no mobile ── */
+  .metrics-grid {
+    grid-template-columns: 1fr 1fr !important;
+  }
+
+  /* ── Cards de cartão mais estreitos ── */
+  .card-selector {
+    flex: 0 0 200px !important;
+  }
+}
+
+/* ════════════════════════════════════════════════════
+   EXTRA SMALL — iPhones antigos (max-width: 375px)
+   ════════════════════════════════════════════════════ */
+@media (max-width: 375px) {
+  .bottom-nav-item {
+    min-width: 44px;
+    font-size: 8px;
+  }
+  .form-input {
+    padding: 12px 14px;
+  }
+  .btn-primary,
+  .btn-secondary,
+  .btn-danger {
+    padding: 12px 16px;
+    font-size: 13px;
+  }
+}
+
+/* ════════════════════════════════════════════════════
+   PWA / STANDALONE (instalado na home screen)
+   ════════════════════════════════════════════════════ */
+@media (display-mode: standalone) {
+  /* Espaço extra para status bar no PWA */
+  body {
+    padding-top: var(--safe-top);
+  }
+
+  /* Bottom nav precisa de mais espaço no PWA */
+  .bottom-nav {
+    padding-bottom: max(var(--safe-bottom), 8px);
+  }
+}
+
+/* ════════════════════════════════════════════════════
+   DESKTOP — sidebar visível (min-width: 768px)
+   ════════════════════════════════════════════════════ */
+@media (min-width: 768px) {
+  .modal-overlay {
+    align-items: center;
+    padding: 16px;
+  }
+  .modal {
+    border-radius: var(--r-xl);
+    max-height: 86vh;
+  }
+  .modal::before { display: none; }
 }
