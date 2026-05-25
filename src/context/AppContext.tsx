@@ -10,6 +10,7 @@ import { generateInstallments } from "@/engine/invoiceEngine";
 export type { Account, Transaction, CreditCard, CardPurchase, CardInstallment, Goal, Category, Budget };
 
 interface AppState {
+  userName: string;
   accounts: Account[];
   transactions: Transaction[];
   cards: CreditCard[];
@@ -22,6 +23,7 @@ interface AppState {
 
 type Action =
   | { type: "LOAD"; payload: AppState }
+  | { type: "SET_USER_NAME"; payload: string }
   | { type: "ADD_ACCOUNT"; payload: Account }
   | { type: "UPD_ACCOUNT"; payload: Account }
   | { type: "DEL_ACCOUNT"; payload: string }
@@ -60,6 +62,7 @@ const SEED_CATEGORIES: Category[] = [
 ];
 
 const seed: AppState = {
+  userName: "",
   accounts: [],
   transactions: [],
   cards: [],
@@ -76,6 +79,8 @@ function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
     case "LOAD":
       return action.payload;
+    case "SET_USER_NAME":
+      return { ...state, userName: action.payload };
 
     case "ADD_ACCOUNT":
       return { ...state, accounts: [...state.accounts, action.payload] };

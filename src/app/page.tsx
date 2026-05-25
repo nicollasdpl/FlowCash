@@ -1,22 +1,45 @@
 "use client";
 import { useState, useMemo } from "react";
-import DonutChart, { Segment } from "@/components/DonutChart";
 import TransactionDrawer from "@/components/TransactionDrawer";
 import TransactionModal from "@/components/TransactionModal";
 import { useApp } from "@/context/AppContext";
 import type { Transaction } from "@/context/AppContext";
 import {
-  getCurrentBalance, getDueThisWeek, getOverdueTransactions, currentMonth,
+  getCurrentBalance, getProjectedBalance, getDueThisWeek,
+  getOverdueTransactions, getMonthlyProjections, currentMonth, fmt,
 } from "@/engine/financialEngine";
+import { computeInvoice } from "@/engine/invoiceEngine";
 
-function fmt(v: number) {
-  return v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
 function fmtDate(d: string) {
   if (!d) return "—";
   const [, m, day] = d.split("-");
   return `${day}/${m}`;
 }
+
+function greeting() {
+  const h = new Date().getHours();
+  if (h < 12) return "Bom dia";
+  if (h < 18) return "Boa tarde";
+  return "Boa noite";
+}
+
+function endOfMonth() {
+  const d = new Date();
+  const last = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+  return last.toISOString().split("T")[0];
+}
+
+const MONTH_LABELS: Record<string, string> = {
+  "01": "Jan", "02": "Fev", "03": "Mar", "04": "Abr",
+  "05": "Mai", "06": "Jun", "07": "Jul", "08": "Ago",
+  "09": "Set", "10": "Out", "11": "Nov", "12": "Dez",
+};
+
+function monthLabel(yyyymm: string) {
+  const [, m] = yyyymm.split("-");
+  return MONTH_LABELS[m] ?? yyyymm;
+}
+
 function StatusBadge({ status }: { status: Transaction["status"] }) {
   const map = {
     paid: { cls: "badge badge-pago", label: "Pago" },
@@ -27,7 +50,6 @@ function StatusBadge({ status }: { status: Transaction["status"] }) {
   return <span className={item.cls}>{item.label}</span>;
 }
 
-// Seção de alerta acionável — mostra lista de transações com botão Pagar
 function AlertSection({
   title, icon, accentColor, bgColor, borderColor,
   transactions, categories, onPay, onOpen,
@@ -46,7 +68,6 @@ function AlertSection({
       background: bgColor, border: `1px solid ${borderColor}`,
       borderRadius: "16px", overflow: "hidden", marginBottom: "12px",
     }}>
-      {/* Header */}
       <div style={{ padding: "14px 16px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
           <span style={{ fontSize: "18px" }}>{icon}</span>
@@ -59,7 +80,6 @@ function AlertSection({
         </div>
       </div>
 
-      {/* Transaction rows */}
       <div style={{ borderTop: `1px solid ${borderColor}` }}>
         {transactions.map((tx, i) => {
           const cat = categories.find(c => c.id === tx.categoryId);
@@ -69,18 +89,16 @@ function AlertSection({
               className="pay-row"
               style={{ borderBottom: i < transactions.length - 1 ? `1px solid ${borderColor}` : "none" }}
             >
-              {/* Icon */}
-              <div style={{
-                width: "38px", height: "38px", borderRadius: "10px", flexShrink: 0,
-                background: `${cat?.color ?? "#ffffff"}15`,
-                display: "flex", alignItems: "center", justifyContent: "center", fontSize: "16px",
-              }}
+              <div
+                style={{
+                  width: "38px", height: "38px", borderRadius: "10px", flexShrink: 0,
+                  background: `${cat?.color ?? "#ffffff"}15`,
+                  display: "flex", alignItems: "center", justifyContent: "center", fontSize: "16px",
+                }}
                 onClick={() => onOpen(tx)}
               >
                 {cat?.icon ?? "📦"}
               </div>
-
-              {/* Info */}
               <div style={{ flex: 1, minWidth: 0 }} onClick={() => onOpen(tx)}>
                 <p style={{ fontSize: "13.5px", fontWeight: 600, color: "var(--text-1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   {tx.description}
@@ -89,19 +107,10 @@ function AlertSection({
                   {cat?.name ?? "—"} · {fmtDate(tx.paymentDate)}
                 </p>
               </div>
-
-              {/* Amount */}
               <p className="mono" onClick={() => onOpen(tx)} style={{ fontSize: "14px", fontWeight: 700, color: "var(--text-1)", flexShrink: 0, marginRight: "10px" }}>
                 R$ {fmt(tx.amount)}
               </p>
-
-              {/* Pay button */}
-              <button
-                className="pay-btn"
-                onClick={() => onPay(tx)}
-              >
-                Pagar
-              </button>
+              <button className="pay-btn" onClick={() => onPay(tx)}>Pagar</button>
             </div>
           );
         })}
@@ -115,17 +124,20 @@ export default function Dashboard() {
   const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
   const [editTx, setEditTx] = useState<Transaction | null>(null);
   const [showModal, setShowModal] = useState(false);
-  const [activeCategory, setActiveCategory] = useState<string | null>(null);
 
   const cm = currentMonth();
+  const eom = endOfMonth();
 
-  // Saldo real de todas as contas
   const totalBalance = useMemo(() =>
     state.accounts.filter(a => a.active).reduce((s, a) => s + getCurrentBalance(a, state.transactions), 0),
     [state.accounts, state.transactions]
   );
 
-  // Receitas e despesas do mês (todas, sem filtro de status)
+  const totalProjected = useMemo(() =>
+    state.accounts.filter(a => a.active).reduce((s, a) => s + getProjectedBalance(a, state.transactions, eom), 0),
+    [state.accounts, state.transactions, eom]
+  );
+
   const monthTxs = useMemo(() =>
     state.transactions.filter(t => t.competenceDate.startsWith(cm)),
     [state.transactions, cm]
@@ -133,49 +145,41 @@ export default function Dashboard() {
   const monthIncome = monthTxs.filter(t => t.type === "income").reduce((s, t) => s + t.amount, 0);
   const monthExpense = monthTxs.filter(t => t.type === "expense").reduce((s, t) => s + t.amount, 0);
 
-  // Alertas
   const overdue = useMemo(() => getOverdueTransactions(state.transactions), [state.transactions]);
   const dueThisWeek = useMemo(() =>
     getDueThisWeek(state.transactions).filter(t => t.status !== "overdue"),
     [state.transactions]
   );
 
-  // Gráfico de categorias (mês atual, pagas)
-  const segments: Segment[] = useMemo(() => {
-    const expenses = state.transactions.filter(
-      t => t.type === "expense" && t.competenceDate.startsWith(cm) && t.status === "paid"
-    );
-    const total = expenses.reduce((s, t) => s + t.amount, 0) || 1;
-    const byCat: Record<string, { amount: number; color: string }> = {};
-    expenses.forEach(t => {
-      const cat = state.categories.find(c => c.id === t.categoryId);
-      const name = cat?.name ?? "Outros";
-      if (!byCat[name]) byCat[name] = { amount: 0, color: cat?.color ?? "#6B7FA3" };
-      byCat[name].amount += t.amount;
-    });
-    return Object.entries(byCat)
-      .sort((a, b) => b[1].amount - a[1].amount)
-      .slice(0, 6)
-      .map(([name, { amount, color }]) => ({
-        name, amount, color,
-        percentage: Math.round((amount / total) * 100),
-      }));
-  }, [state.transactions, state.categories, cm]);
+  const cardInvoices = useMemo(() =>
+    state.cards.filter(c => c.active).map(card => ({
+      card,
+      invoice: computeInvoice(card, state.installments, cm),
+    })).filter(({ invoice }) => invoice.totalAmount > 0),
+    [state.cards, state.installments, cm]
+  );
 
-  // Transações recentes
+  const projections = useMemo(() =>
+    getMonthlyProjections(state.accounts, state.transactions, 3),
+    [state.accounts, state.transactions]
+  );
+
+  const recurringUpcoming = useMemo(() => {
+    const td = new Date();
+    const todayStr = td.toISOString().split("T")[0];
+    const t30 = new Date(td.getTime() + 30 * 86400000).toISOString().split("T")[0];
+    return state.transactions
+      .filter(t => t.isRecurring && t.status === "pending" && t.paymentDate >= todayStr && t.paymentDate <= t30)
+      .sort((a, b) => a.paymentDate.localeCompare(b.paymentDate))
+      .slice(0, 5);
+  }, [state.transactions]);
+
   const recent = useMemo(() =>
     [...state.transactions]
       .sort((a, b) => b.paymentDate.localeCompare(a.paymentDate))
       .slice(0, 10),
     [state.transactions]
   );
-  const filteredRecent = useMemo(() => {
-    if (!activeCategory) return recent;
-    return recent.filter(t => {
-      const cat = state.categories.find(c => c.id === t.categoryId);
-      return cat?.name === activeCategory;
-    });
-  }, [recent, activeCategory, state.categories]);
 
   function payNow(tx: Transaction) {
     dispatch({ type: "UPD_TX", payload: { ...tx, status: "paid" } });
@@ -193,6 +197,8 @@ export default function Dashboard() {
     setSelectedTx(null);
   }
 
+  const name = state.userName?.trim() || "";
+
   return (
     <>
       {showModal && <TransactionModal onClose={() => setShowModal(false)} />}
@@ -209,53 +215,86 @@ export default function Dashboard() {
       <div style={{ padding: "20px 16px", maxWidth: "680px", margin: "0 auto" }}>
 
         {/* ── Header ─────────────────────────── */}
-        <div className="fade-up-1" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+        <div className="fade-up-1" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "20px" }}>
           <div>
-            <p style={{ fontSize: "12px", color: "var(--text-3)", fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase" }}>
-              Saldo disponível
-            </p>
-            <p className="mono" style={{
-              fontSize: "32px", fontWeight: 700, letterSpacing: "-0.03em",
-              color: totalBalance >= 0 ? "var(--text-1)" : "var(--red)",
-              marginTop: "2px",
-            }}>
-              R$ {fmt(totalBalance)}
-            </p>
+            {name ? (
+              <>
+                <p style={{ fontSize: "20px", fontWeight: 700, color: "var(--text-1)", letterSpacing: "-0.02em" }}>
+                  {greeting()}, {name} 👋
+                </p>
+                <p style={{ fontSize: "11.5px", color: "var(--text-3)", marginTop: "3px" }}>
+                  {new Date().toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long" })}
+                </p>
+              </>
+            ) : (
+              <>
+                <p style={{ fontSize: "18px", fontWeight: 700, color: "var(--text-1)" }}>{greeting()} 👋</p>
+                <a href="/configuracoes" style={{ fontSize: "11.5px", color: "var(--accent)", textDecoration: "none", fontWeight: 600 }}>
+                  Defina seu nome em Configurações →
+                </a>
+              </>
+            )}
           </div>
           <button
             className="btn-primary"
             onClick={() => setShowModal(true)}
-            style={{ fontSize: "20px", padding: "0", width: "48px", height: "48px", borderRadius: "14px", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
+            style={{ fontSize: "22px", padding: "0", width: "48px", height: "48px", borderRadius: "14px", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
+            aria-label="Nova transação"
           >+</button>
         </div>
 
-        {/* ── Receitas / Despesas ─────────────── */}
-        <div className="fade-up-1" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "20px" }}>
-          <div className="card" style={{ padding: "16px" }}>
-            <p style={{ fontSize: "11px", color: "var(--text-3)", fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", marginBottom: "6px" }}>
-              ↑ Receitas
-            </p>
-            <p className="mono" style={{ fontSize: "20px", fontWeight: 700, color: "var(--green)", letterSpacing: "-0.02em" }}>
-              R$ {fmt(monthIncome)}
-            </p>
-            <p style={{ fontSize: "10.5px", color: "var(--text-3)", marginTop: "4px" }}>
+        {/* ── Saldo Real + Projetado ──────────── */}
+        <div className="card fade-up-1" style={{ padding: "20px 20px 16px", marginBottom: "12px" }}>
+          <p style={{ fontSize: "10px", fontWeight: 700, color: "var(--text-3)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "6px" }}>
+            Saldo Real
+          </p>
+          <p className="mono" style={{
+            fontSize: "36px", fontWeight: 700, letterSpacing: "-0.03em",
+            color: totalBalance >= 0 ? "var(--text-1)" : "var(--red)",
+            lineHeight: 1,
+          }}>
+            R$ {fmt(totalBalance)}
+          </p>
+
+          {totalProjected !== totalBalance && (
+            <div style={{
+              marginTop: "14px", paddingTop: "14px", borderTop: "1px solid var(--border)",
+              display: "flex", alignItems: "center", justifyContent: "space-between",
+            }}>
+              <div>
+                <p style={{ fontSize: "10px", fontWeight: 700, color: "var(--text-3)", letterSpacing: "0.07em", textTransform: "uppercase" }}>
+                  Projetado (fim do mês)
+                </p>
+                <p style={{ fontSize: "10.5px", color: "var(--text-3)", marginTop: "2px" }}>
+                  Inclui pendentes ainda não pagos
+                </p>
+              </div>
+              <p className="mono" style={{ fontSize: "16px", fontWeight: 700, color: totalProjected >= 0 ? "var(--accent)" : "var(--red)", flexShrink: 0 }}>
+                R$ {fmt(totalProjected)}
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* ── Receitas / Despesas do mês ─────── */}
+        <div className="fade-up-1" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "16px" }}>
+          <div className="card" style={{ padding: "14px 16px" }}>
+            <p style={{ fontSize: "10px", color: "var(--text-3)", fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: "5px" }}>↑ Receitas</p>
+            <p className="mono" style={{ fontSize: "19px", fontWeight: 700, color: "var(--green)" }}>R$ {fmt(monthIncome)}</p>
+            <p style={{ fontSize: "10.5px", color: "var(--text-3)", marginTop: "3px" }}>
               {monthTxs.filter(t => t.type === "income").length} lançamento{monthTxs.filter(t => t.type === "income").length !== 1 ? "s" : ""}
             </p>
           </div>
-          <div className="card" style={{ padding: "16px" }}>
-            <p style={{ fontSize: "11px", color: "var(--text-3)", fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", marginBottom: "6px" }}>
-              ↓ Despesas
-            </p>
-            <p className="mono" style={{ fontSize: "20px", fontWeight: 700, color: monthExpense > monthIncome ? "var(--red)" : "var(--text-1)", letterSpacing: "-0.02em" }}>
-              R$ {fmt(monthExpense)}
-            </p>
-            <p style={{ fontSize: "10.5px", color: "var(--text-3)", marginTop: "4px" }}>
+          <div className="card" style={{ padding: "14px 16px" }}>
+            <p style={{ fontSize: "10px", color: "var(--text-3)", fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: "5px" }}>↓ Despesas</p>
+            <p className="mono" style={{ fontSize: "19px", fontWeight: 700, color: monthExpense > monthIncome ? "var(--red)" : "var(--text-1)" }}>R$ {fmt(monthExpense)}</p>
+            <p style={{ fontSize: "10.5px", color: "var(--text-3)", marginTop: "3px" }}>
               {monthTxs.filter(t => t.type === "expense").length} lançamento{monthTxs.filter(t => t.type === "expense").length !== 1 ? "s" : ""}
             </p>
           </div>
         </div>
 
-        {/* ── Seções de alerta ────────────────── */}
+        {/* ── Obrigações Futuras ──────────────── */}
         <div className="fade-up-2">
           <AlertSection
             title="Transações vencidas"
@@ -281,46 +320,147 @@ export default function Dashboard() {
           />
         </div>
 
-        {/* ── Gráfico de gastos ───────────────── */}
-        {segments.length > 0 && (
-          <div className="card fade-up-3" style={{ padding: "20px", marginBottom: "16px" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
-              <p style={{ fontSize: "12px", fontWeight: 700, color: "var(--text-3)", letterSpacing: "0.05em", textTransform: "uppercase" }}>
-                Gastos por categoria
+        {/* ── Faturas de Cartão ───────────────── */}
+        {cardInvoices.length > 0 && (
+          <div className="card fade-up-3" style={{ overflow: "hidden", marginBottom: "16px" }}>
+            <div style={{ padding: "12px 16px 10px", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <p style={{ fontSize: "11px", fontWeight: 700, color: "var(--text-3)", letterSpacing: "0.06em", textTransform: "uppercase" }}>
+                Faturas de Cartão
               </p>
-              {activeCategory && (
-                <button onClick={() => setActiveCategory(null)} style={{ fontSize: "11px", color: "var(--accent)", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontWeight: 600 }}>
-                  Limpar ×
-                </button>
-              )}
+              <a href="/cartoes" style={{ fontSize: "11.5px", color: "var(--accent)", textDecoration: "none", fontWeight: 600 }}>Ver →</a>
             </div>
-            <DonutChart
-              segments={segments}
-              totalLabel="Gastos"
-              total={`R$ ${fmt(segments.reduce((s, c) => s + c.amount, 0))}`}
-              onSegmentClick={seg => setActiveCategory(seg?.name ?? null)}
-              activeSegment={activeCategory}
-            />
+            {cardInvoices.map(({ card, invoice }, i) => (
+              <div key={card.id} style={{
+                display: "flex", alignItems: "center", gap: "12px",
+                padding: "13px 16px",
+                borderBottom: i < cardInvoices.length - 1 ? "1px solid var(--border)" : "none",
+              }}>
+                <div style={{
+                  width: "38px", height: "38px", borderRadius: "10px", flexShrink: 0,
+                  background: `${card.color}22`, border: `1px solid ${card.color}44`,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                }}>
+                  <span style={{ fontSize: "16px" }}>💳</span>
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ fontSize: "13.5px", fontWeight: 600, color: "var(--text-1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {card.name}
+                  </p>
+                  <p style={{ fontSize: "11px", color: "var(--text-3)", marginTop: "2px" }}>
+                    Vence {fmtDate(invoice.dueDate)} · {invoice.status === "paid" ? "Paga" : invoice.status === "closed" ? "Fechada" : "Em aberto"}
+                  </p>
+                </div>
+                <p className="mono" style={{ fontSize: "14px", fontWeight: 700, color: invoice.status === "paid" ? "var(--green)" : "var(--text-1)", flexShrink: 0 }}>
+                  R$ {fmt(invoice.totalAmount)}
+                </p>
+              </div>
+            ))}
           </div>
         )}
 
-        {/* ── Transações recentes ─────────────── */}
-        <div className="card fade-up-4" style={{ overflow: "hidden" }}>
-          <div style={{ padding: "16px 16px 12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <p style={{ fontSize: "12px", fontWeight: 700, color: "var(--text-3)", letterSpacing: "0.05em", textTransform: "uppercase" }}>
+        {/* ── Recorrências ────────────────────── */}
+        {recurringUpcoming.length > 0 && (
+          <div className="card fade-up-3" style={{ overflow: "hidden", marginBottom: "16px" }}>
+            <div style={{ padding: "12px 16px 10px", borderBottom: "1px solid var(--border)" }}>
+              <p style={{ fontSize: "11px", fontWeight: 700, color: "var(--text-3)", letterSpacing: "0.06em", textTransform: "uppercase" }}>
+                Recorrências (próx. 30 dias)
+              </p>
+            </div>
+            {recurringUpcoming.map((tx, i) => {
+              const cat = state.categories.find(c => c.id === tx.categoryId);
+              return (
+                <div
+                  key={tx.id}
+                  onClick={() => setSelectedTx(tx)}
+                  style={{
+                    display: "flex", alignItems: "center", gap: "12px",
+                    padding: "13px 16px", cursor: "pointer", transition: "background 0.15s",
+                    borderBottom: i < recurringUpcoming.length - 1 ? "1px solid var(--border)" : "none",
+                  }}
+                >
+                  <div style={{
+                    width: "38px", height: "38px", borderRadius: "10px", flexShrink: 0,
+                    background: cat ? `${cat.color}18` : "rgba(255,255,255,0.06)",
+                    display: "flex", alignItems: "center", justifyContent: "center", fontSize: "16px",
+                  }}>
+                    {cat?.icon ?? "🔄"}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ fontSize: "13.5px", fontWeight: 600, color: "var(--text-1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {tx.description}
+                    </p>
+                    <p style={{ fontSize: "11px", color: "var(--text-3)", marginTop: "2px" }}>
+                      {cat?.name ?? "—"} · {fmtDate(tx.paymentDate)}
+                    </p>
+                  </div>
+                  <p className="mono" style={{ fontSize: "14px", fontWeight: 700, color: tx.type === "income" ? "var(--green)" : "var(--text-1)", flexShrink: 0 }}>
+                    {tx.type === "income" ? "+" : "-"}R$ {fmt(tx.amount)}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* ── Fluxo de Caixa ──────────────────── */}
+        {projections.some(p => p.projectedIncome > 0 || p.projectedExpense > 0) && (
+          <div className="card fade-up-4" style={{ overflow: "hidden", marginBottom: "16px" }}>
+            <div style={{ padding: "12px 16px 10px", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <p style={{ fontSize: "11px", fontWeight: 700, color: "var(--text-3)", letterSpacing: "0.06em", textTransform: "uppercase" }}>
+                Fluxo de Caixa
+              </p>
+              <a href="/relatorios" style={{ fontSize: "11.5px", color: "var(--accent)", textDecoration: "none", fontWeight: 600 }}>
+                Relatórios →
+              </a>
+            </div>
+            {projections.map((p, i) => {
+              const riskColor = p.riskLevel === "danger" ? "var(--red)" : p.riskLevel === "warning" ? "var(--amber)" : "var(--green)";
+              return (
+                <div key={p.month} style={{
+                  display: "grid", gridTemplateColumns: "56px 1fr 1fr 1fr",
+                  alignItems: "center", padding: "12px 16px",
+                  borderBottom: i < projections.length - 1 ? "1px solid var(--border)" : "none",
+                  gap: "8px",
+                }}>
+                  <span style={{ fontSize: "12px", fontWeight: 700, color: "var(--text-2)" }}>{monthLabel(p.month)}</span>
+                  <span className="mono" style={{ fontSize: "11.5px", fontWeight: 600, color: "var(--green)", textAlign: "right" }}>
+                    +{fmt(p.projectedIncome)}
+                  </span>
+                  <span className="mono" style={{ fontSize: "11.5px", fontWeight: 600, color: "var(--red)", textAlign: "right" }}>
+                    -{fmt(p.projectedExpense)}
+                  </span>
+                  <span className="mono" style={{ fontSize: "11.5px", fontWeight: 700, color: riskColor, textAlign: "right" }}>
+                    {p.projectedBalance >= 0 ? "" : "-"}R${Math.abs(p.projectedBalance) >= 1000
+                      ? `${(Math.abs(p.projectedBalance) / 1000).toFixed(1)}k`
+                      : fmt(Math.abs(p.projectedBalance))}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* ── Lançamentos Recentes ─────────────── */}
+        <div className="card fade-up-5" style={{ overflow: "hidden" }}>
+          <div style={{ padding: "14px 16px 10px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <p style={{ fontSize: "11px", fontWeight: 700, color: "var(--text-3)", letterSpacing: "0.06em", textTransform: "uppercase" }}>
               Lançamentos
             </p>
-            <a href="/transacoes" style={{ fontSize: "12px", color: "var(--accent)", textDecoration: "none", fontWeight: 600 }}>
+            <a href="/transacoes" style={{ fontSize: "11.5px", color: "var(--accent)", textDecoration: "none", fontWeight: 600 }}>
               Ver todos →
             </a>
           </div>
 
-          {filteredRecent.length === 0 ? (
-            <div style={{ padding: "32px", textAlign: "center", color: "var(--text-3)", fontSize: "13px" }}>
-              Nenhuma transação encontrada.
+          {recent.length === 0 ? (
+            <div style={{ padding: "36px 16px", textAlign: "center" }}>
+              <p style={{ fontSize: "32px", marginBottom: "10px" }}>💸</p>
+              <p style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-2)" }}>Nenhum lançamento ainda</p>
+              <p style={{ fontSize: "12px", color: "var(--text-3)", marginTop: "4px" }}>
+                Toque em + para adicionar sua primeira transação
+              </p>
             </div>
           ) : (
-            filteredRecent.map((tx, i) => {
+            recent.map((tx, i) => {
               const cat = state.categories.find(c => c.id === tx.categoryId);
               return (
                 <div
