@@ -1,9 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Plus_Jakarta_Sans, Space_Mono } from "next/font/google";
 import "./globals.css";
-import Sidebar from "@/components/Sidebar";
-import BottomNav from "@/components/BottomNav";
-import { AppProvider } from "@/context/AppContext";
+import ClientRootWrapper from "@/components/ClientRootWrapper";
 
 const jakarta = Plus_Jakarta_Sans({
   subsets: ["latin"],
@@ -43,13 +41,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           background: "var(--bg)",
         }}
       >
-        <AppProvider>
-          <Sidebar />
-          <main style={{ flex: 1, overflowY: "auto", background: "var(--bg)" }}>
-            {children}
-          </main>
-          <BottomNav />
-        </AppProvider>
+        <ClientRootWrapper>{children}</ClientRootWrapper>
       </body>
     </html>
   );

@@ -1,13 +1,27 @@
 "use client";
-import { createContext, useContext, useReducer, useEffect, ReactNode } from "react";
+import {
+  createContext, useContext, useReducer, useEffect,
+  useState, ReactNode,
+} from "react";
+import type { User } from "firebase/auth";
+import {
+  onAuthStateChanged, signInWithPopup, GoogleAuthProvider,
+  signOut as fbSignOut,
+} from "firebase/auth";
+import { doc, getDoc, setDoc } from "firebase/firestore";
+import { auth, db } from "@/lib/firebase";
 import type {
   Account, Transaction, CreditCard, CardPurchase, CardInstallment,
   Goal, Category, Budget,
 } from "@/types/financial";
 import { generateInstallments } from "@/engine/invoiceEngine";
 
-// Re-export types for convenience
-export type { Account, Transaction, CreditCard, CardPurchase, CardInstallment, Goal, Category, Budget };
+export type {
+  Account, Transaction, CreditCard, CardPurchase, CardInstallment,
+  Goal, Category, Budget,
+};
+
+// ─── STATE ────────────────────────────────────────────────────────────────────
 
 interface AppState {
   userName: string;
@@ -44,21 +58,21 @@ type Action =
   | { type: "UPD_BUDGET"; payload: Budget }
   | { type: "DEL_BUDGET"; payload: string };
 
-// ─── SEED DATA ────────────────────────────────────────────────────────────────
+// ─── SEED ─────────────────────────────────────────────────────────────────────
 
 const SEED_CATEGORIES: Category[] = [
-  { id: "cat_alimentacao", name: "Alimentação", type: "expense", color: "#00E5C3", icon: "🍔" },
-  { id: "cat_transporte", name: "Transporte", type: "expense", color: "#4B8BF5", icon: "🚗" },
-  { id: "cat_lazer", name: "Lazer", type: "expense", color: "#9B6DFF", icon: "🎮" },
-  { id: "cat_saude", name: "Saúde", type: "expense", color: "#22D47A", icon: "💊" },
-  { id: "cat_moradia", name: "Moradia", type: "expense", color: "#F5A623", icon: "🏠" },
-  { id: "cat_educacao", name: "Educação", type: "expense", color: "#FF8C42", icon: "📚" },
-  { id: "cat_vestuario", name: "Vestuário", type: "expense", color: "#FF4D6A", icon: "👕" },
-  { id: "cat_eletronicos", name: "Eletrônicos", type: "expense", color: "#4B8BF5", icon: "📱" },
-  { id: "cat_outros", name: "Outros", type: "expense", color: "#6B7FA3", icon: "📦" },
-  { id: "cat_salario", name: "Salário", type: "income", color: "#22D47A", icon: "💰" },
-  { id: "cat_freelance", name: "Freelance", type: "income", color: "#00E5C3", icon: "💻" },
-  { id: "cat_investimento", name: "Investimentos", type: "income", color: "#F5A623", icon: "📈" },
+  { id: "cat_alimentacao", name: "Alimentação",   type: "expense", color: "#00E5C3", icon: "🍔" },
+  { id: "cat_transporte",  name: "Transporte",    type: "expense", color: "#4B8BF5", icon: "🚗" },
+  { id: "cat_lazer",       name: "Lazer",         type: "expense", color: "#9B6DFF", icon: "🎮" },
+  { id: "cat_saude",       name: "Saúde",         type: "expense", color: "#22D47A", icon: "💊" },
+  { id: "cat_moradia",     name: "Moradia",       type: "expense", color: "#F5A623", icon: "🏠" },
+  { id: "cat_educacao",    name: "Educação",      type: "expense", color: "#FF8C42", icon: "📚" },
+  { id: "cat_vestuario",   name: "Vestuário",     type: "expense", color: "#FF4D6A", icon: "👕" },
+  { id: "cat_eletronicos", name: "Eletrônicos",   type: "expense", color: "#4B8BF5", icon: "📱" },
+  { id: "cat_outros",      name: "Outros",        type: "expense", color: "#6B7FA3", icon: "📦" },
+  { id: "cat_salario",     name: "Salário",       type: "income",  color: "#22D47A", icon: "💰" },
+  { id: "cat_freelance",   name: "Freelance",     type: "income",  color: "#00E5C3", icon: "💻" },
+  { id: "cat_investimento",name: "Investimentos", type: "income",  color: "#F5A623", icon: "📈" },
 ];
 
 const seed: AppState = {
@@ -78,7 +92,7 @@ const seed: AppState = {
 function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
     case "LOAD":
-      return action.payload;
+      return { ...seed, ...action.payload };
     case "SET_USER_NAME":
       return { ...state, userName: action.payload };
 
@@ -162,23 +176,94 @@ function reducer(state: AppState, action: Action): AppState {
 
 // ─── CONTEXT ──────────────────────────────────────────────────────────────────
 
-const Ctx = createContext<{ state: AppState; dispatch: React.Dispatch<Action> } | null>(null);
+interface CtxType {
+  state: AppState;
+  dispatch: React.Dispatch<Action>;
+  user: User | null;
+  authLoading: boolean;
+  signIn: () => Promise<void>;
+  signOut: () => Promise<void>;
+}
+
+const Ctx = createContext<CtxType | null>(null);
+
+const FIRESTORE_DOC = (uid: string) => doc(db, "users", uid, "app", "state");
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reducer, seed);
+  const [user, setUser]   = useState<User | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [isReady, setIsReady]         = useState(false);
 
+  // ── Auth listener + initial load ──────────────────────────────────────────
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem("flowcash_v2");
-      if (saved) dispatch({ type: "LOAD", payload: JSON.parse(saved) });
-    } catch {}
+    const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
+      setUser(firebaseUser);
+
+      if (firebaseUser) {
+        try {
+          const snap = await getDoc(FIRESTORE_DOC(firebaseUser.uid));
+          if (snap.exists()) {
+            dispatch({ type: "LOAD", payload: snap.data() as AppState });
+          } else {
+            // First login — try to migrate localStorage data
+            try {
+              const local = localStorage.getItem("flowcash_v2");
+              if (local) dispatch({ type: "LOAD", payload: JSON.parse(local) });
+            } catch {}
+          }
+        } catch (err) {
+          console.error("Firestore load error:", err);
+          try {
+            const local = localStorage.getItem("flowcash_v2");
+            if (local) dispatch({ type: "LOAD", payload: JSON.parse(local) });
+          } catch {}
+        }
+      } else {
+        dispatch({ type: "LOAD", payload: seed });
+      }
+
+      setAuthLoading(false);
+      setIsReady(true);
+    });
+
+    return () => unsub();
   }, []);
 
+  // ── Auto-save to Firestore (debounced 1.5s) ───────────────────────────────
   useEffect(() => {
-    localStorage.setItem("flowcash_v2", JSON.stringify(state));
-  }, [state]);
+    if (!isReady || !user) return;
 
-  return <Ctx.Provider value={{ state, dispatch }}>{children}</Ctx.Provider>;
+    const timer = setTimeout(async () => {
+      try {
+        await setDoc(FIRESTORE_DOC(user.uid), state);
+        localStorage.setItem("flowcash_v2", JSON.stringify(state));
+      } catch (err) {
+        console.error("Firestore save error:", err);
+        localStorage.setItem("flowcash_v2", JSON.stringify(state));
+      }
+    }, 1500);
+
+    return () => clearTimeout(timer);
+  }, [state, user, isReady]);
+
+  // ── Auth actions ──────────────────────────────────────────────────────────
+  async function signIn() {
+    const provider = new GoogleAuthProvider();
+    await signInWithPopup(auth, provider);
+  }
+
+  async function signOut() {
+    await fbSignOut(auth);
+    setIsReady(false);
+    dispatch({ type: "LOAD", payload: seed });
+  }
+
+  return (
+    <Ctx.Provider value={{ state, dispatch, user, authLoading, signIn, signOut }}>
+      {children}
+    </Ctx.Provider>
+  );
 }
 
 export function useApp() {
@@ -193,7 +278,6 @@ export function newId(): string {
     : Math.random().toString(36).slice(2) + Date.now().toString(36);
 }
 
-// ─── METADADOS DE CATEGORIA ───────────────────────────────────────────────────
-export const CARD_COLORS = ["#9B6DFF", "#4B8BF5", "#00E5C3", "#22D47A", "#F5A623", "#FF4D6A", "#FF8C42"];
+export const CARD_COLORS    = ["#9B6DFF", "#4B8BF5", "#00E5C3", "#22D47A", "#F5A623", "#FF4D6A", "#FF8C42"];
 export const ACCOUNT_COLORS = ["#22D47A", "#4B8BF5", "#00E5C3", "#9B6DFF", "#F5A623", "#FF8C42"];
-export const ACCOUNT_ICONS = ["🏦", "💰", "👛", "📈", "💳", "🏧"];
+export const ACCOUNT_ICONS  = ["🏦", "💰", "👛", "📈", "💳", "🏧"];

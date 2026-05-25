@@ -1,9 +1,9 @@
 "use client";
 import { useState, useRef } from "react";
-import { useApp, newId } from "@/context/AppContext";
+import { useApp } from "@/context/AppContext";
 
 export default function Configuracoes() {
-  const { state, dispatch } = useApp();
+  const { state, dispatch, user, signOut } = useApp();
   const [editingName, setEditingName] = useState(false);
   const [nameInput, setNameInput] = useState(state.userName ?? "");
   const [showClearConfirm, setShowClearConfirm] = useState(false);
@@ -53,19 +53,22 @@ export default function Configuracoes() {
         <div style={{ padding: "18px" }}>
           {/* Avatar placeholder */}
           <div style={{ display: "flex", alignItems: "center", gap: "16px", marginBottom: "20px" }}>
-            <div style={{
-              width: "60px", height: "60px", borderRadius: "18px", flexShrink: 0,
-              background: "var(--accent-10)", border: "1px solid var(--border-accent)",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: "26px",
-            }}>
-              {state.userName ? state.userName[0].toUpperCase() : "?"}
-            </div>
+            {user?.photoURL ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={user.photoURL} alt="" width={60} height={60} style={{ borderRadius: "18px", flexShrink: 0 }} />
+            ) : (
+              <div style={{ width: "60px", height: "60px", borderRadius: "18px", flexShrink: 0, background: "var(--accent-10)", border: "1px solid var(--border-accent)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "26px", color: "var(--accent)", fontWeight: 700 }}>
+                {(state.userName || user?.displayName || "?")[0].toUpperCase()}
+              </div>
+            )}
             <div style={{ minWidth: 0 }}>
               <p style={{ fontSize: "16px", fontWeight: 700, color: "var(--text-1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {state.userName || "Sem nome"}
+                {state.userName || user?.displayName || "Sem nome"}
               </p>
               <p style={{ fontSize: "12px", color: "var(--text-3)", marginTop: "2px" }}>
+                {user?.email ?? ""}
+              </p>
+              <p style={{ fontSize: "11px", color: "var(--text-3)", marginTop: "1px" }}>
                 {stats.transactions} transaç{stats.transactions === 1 ? "ão" : "ões"} · {stats.accounts} conta{stats.accounts !== 1 ? "s" : ""}
               </p>
             </div>
@@ -248,6 +251,23 @@ export default function Configuracoes() {
       </div>
 
       {/* Versão */}
+      {/* Sair da conta */}
+      <div className="card fade-up-5" style={{ overflow: "hidden", marginBottom: "16px" }}>
+        <div style={{ padding: "16px 18px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div>
+            <p style={{ fontSize: "13.5px", fontWeight: 600, color: "var(--text-1)" }}>Conta Google</p>
+            <p style={{ fontSize: "12px", color: "var(--text-3)", marginTop: "2px" }}>{user?.email ?? ""}</p>
+          </div>
+          <button
+            className="btn-secondary"
+            onClick={signOut}
+            style={{ padding: "8px 16px", fontSize: "13px", flexShrink: 0 }}
+          >
+            Sair
+          </button>
+        </div>
+      </div>
+
       <p style={{ textAlign: "center", fontSize: "11px", color: "var(--text-3)", paddingBottom: "8px" }}>
         FlowCash · Motor financeiro temporal · v2.0
       </p>

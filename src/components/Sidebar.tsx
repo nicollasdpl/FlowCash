@@ -83,8 +83,11 @@ const navItems = [
   { href: "/relatorios", label: "Relatórios", icon: <IconChart /> },
 ];
 
+import { useApp } from "@/context/AppContext";
+
 export default function Sidebar() {
   const pathname = usePathname();
+  const { user, signOut, state } = useApp();
 
   return (
     <aside
@@ -198,49 +201,30 @@ export default function Sidebar() {
         </Link>
 
         {/* User */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "10px",
-            padding: "10px 12px",
-            marginTop: "4px",
-            borderRadius: "10px",
-            background: "rgba(255,255,255,0.03)",
-          }}
-        >
-          <div
-            style={{
-              width: "30px",
-              height: "30px",
-              borderRadius: "50%",
-              background: "linear-gradient(135deg, var(--accent) 0%, #0096FF 100%)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: "12px",
-              fontWeight: 700,
-              color: "#060C16",
-              flexShrink: 0,
-            }}
-          >
-            N
-          </div>
-          <div>
-            <div
-              style={{
-                fontSize: "12.5px",
-                fontWeight: 600,
-                color: "var(--text-1)",
-                lineHeight: 1.2,
-              }}
-            >
-              Nicollas
+        <div style={{ display: "flex", alignItems: "center", gap: "10px", padding: "10px 12px", marginTop: "4px", borderRadius: "10px", background: "rgba(255,255,255,0.03)" }}>
+          {user?.photoURL ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={user.photoURL} alt="" width={30} height={30} style={{ borderRadius: "50%", flexShrink: 0 }} />
+          ) : (
+            <div style={{ width: "30px", height: "30px", borderRadius: "50%", background: "var(--accent-10)", border: "1px solid var(--border-accent)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "13px", fontWeight: 700, color: "var(--accent)", flexShrink: 0 }}>
+              {(state.userName || user?.displayName || "?")[0].toUpperCase()}
             </div>
-            <div style={{ fontSize: "10.5px", color: "var(--text-3)" }}>
-              Conta pessoal
+          )}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: "12.5px", fontWeight: 600, color: "var(--text-1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {state.userName || user?.displayName || "Usuário"}
+            </div>
+            <div style={{ fontSize: "10.5px", color: "var(--text-3)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {user?.email ?? ""}
             </div>
           </div>
+          <button onClick={signOut} title="Sair" style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-3)", padding: "4px", display: "flex", alignItems: "center", flexShrink: 0 }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+              <polyline points="16 17 21 12 16 7" />
+              <line x1="21" y1="12" x2="9" y2="12" />
+            </svg>
+          </button>
         </div>
       </div>
     </aside>
