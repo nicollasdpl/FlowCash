@@ -38,16 +38,22 @@ export default function TransactionModal({ transaction, onClose }: Props) {
     return () => document.removeEventListener("keydown", handler);
   }, [onClose]);
 
-  // When switching type, reset category
   useEffect(() => {
     if (transaction) return;
     const cats = txType === "income" ? incomeCategories : expenseCategories;
     setCategoryId(cats[0]?.id ?? "");
   }, [txType]);
 
+  function handleAmountChange(val: string) {
+    // Allow digits, comma, period
+    const clean = val.replace(/[^0-9.,]/g, "");
+    setAmount(clean);
+  }
+
   function handleSave() {
     if (!description.trim()) return setError("Informe a descrição.");
-    const amt = parseFloat(amount);
+    const normalized = amount.replace(",", ".");
+    const amt = parseFloat(normalized);
     if (!amount || isNaN(amt) || amt <= 0) return setError("Informe um valor válido.");
     if (!accountId) return setError("Selecione uma conta.");
     setError("");
@@ -61,7 +67,7 @@ export default function TransactionModal({ transaction, onClose }: Props) {
       categoryId,
       competenceDate,
       paymentDate,
-      status: txType === "income" ? (status === "pending" ? "pending" : status) : status,
+      status,
       isRecurring: transaction?.isRecurring ?? false,
       recurringRuleId: transaction?.recurringRuleId,
       origin: "manual",
@@ -82,7 +88,7 @@ export default function TransactionModal({ transaction, onClose }: Props) {
           <span style={{ fontSize: "16px", fontWeight: 700, color: "var(--text-1)" }}>
             {transaction ? "Editar transação" : "Nova transação"}
           </span>
-          <button className="btn-secondary" onClick={onClose} style={{ padding: "6px 12px", fontSize: "16px" }}>×</button>
+          <button className="btn-secondary" onClick={onClose} style={{ padding: "6px 14px", fontSize: "18px", minHeight: "40px" }}>×</button>
         </div>
 
         <div className="modal-body">
@@ -101,39 +107,35 @@ export default function TransactionModal({ transaction, onClose }: Props) {
             </div>
           </div>
 
+          {/* Amount — FIRST on mobile for faster entry */}
+          <div className="form-group">
+            <label className="form-label">Valor (R$)</label>
+            <input
+              className="form-input mono"
+              type="text"
+              inputMode="decimal"
+              pattern="[0-9]*[.,]?[0-9]*"
+              placeholder="0,00"
+              value={amount}
+              onChange={e => handleAmountChange(e.target.value)}
+              autoComplete="off"
+              style={{ fontSize: "20px", letterSpacing: "0.02em" }}
+            />
+          </div>
+
           {/* Description */}
           <div className="form-group">
             <label className="form-label">Descrição</label>
             <input
               className="form-input"
+              type="text"
+              inputMode="text"
               placeholder="Ex: iFood, Salário, Aluguel..."
               value={description}
               onChange={e => setDescription(e.target.value)}
+              autoComplete="off"
+              autoCorrect="off"
             />
-          </div>
-
-          {/* Amount */}
-          <div className="form-group">
-            <label className="form-label">Valor (R$)</label>
-            <input
-              className="form-input mono"
-              type="number"
-              placeholder="0,00"
-              min="0"
-              step="0.01"
-              value={amount}
-              onChange={e => setAmount(e.target.value)}
-            />
-          </div>
-
-          {/* Account */}
-          <div className="form-group">
-            <label className="form-label">Conta</label>
-            <select className="form-input" value={accountId} onChange={e => setAccountId(e.target.value)}>
-              {state.accounts.filter(a => a.active).map(a => (
-                <option key={a.id} value={a.id}>{a.icon} {a.name}</option>
-              ))}
-            </select>
           </div>
 
           {/* Category */}
@@ -146,15 +148,41 @@ export default function TransactionModal({ transaction, onClose }: Props) {
             </select>
           </div>
 
+          {/* Account */}
+          <div className="form-group">
+            <label className="form-label">Conta</label>
+            {state.accounts.filter(a => a.active).length === 0 ? (
+              <p style={{ fontSize: "13px", color: "var(--red)", padding: "12px 0" }}>
+                Nenhuma conta cadastrada. <a href="/contas" style={{ color: "var(--accent)" }}>Criar conta</a>
+              </p>
+            ) : (
+              <select className="form-input" value={accountId} onChange={e => setAccountId(e.target.value)}>
+                {state.accounts.filter(a => a.active).map(a => (
+                  <option key={a.id} value={a.id}>{a.icon} {a.name}</option>
+                ))}
+              </select>
+            )}
+          </div>
+
           {/* Dates */}
           <div className="form-row">
             <div className="form-group" style={{ margin: 0 }}>
               <label className="form-label">Competência</label>
-              <input className="form-input" type="date" value={competenceDate} onChange={e => setCompetenceDate(e.target.value)} />
+              <input
+                className="form-input"
+                type="date"
+                value={competenceDate}
+                onChange={e => setCompetenceDate(e.target.value)}
+              />
             </div>
             <div className="form-group" style={{ margin: 0 }}>
               <label className="form-label">Data pagamento</label>
-              <input className="form-input" type="date" value={paymentDate} onChange={e => setPaymentDate(e.target.value)} />
+              <input
+                className="form-input"
+                type="date"
+                value={paymentDate}
+                onChange={e => setPaymentDate(e.target.value)}
+              />
             </div>
           </div>
 
@@ -171,12 +199,13 @@ export default function TransactionModal({ transaction, onClose }: Props) {
                   key={opt.key}
                   onClick={() => setStatus(opt.key)}
                   style={{
-                    flex: 1, padding: "8px", borderRadius: "8px", cursor: "pointer",
+                    flex: 1, padding: "10px 4px", borderRadius: "10px", cursor: "pointer",
                     fontSize: "12px", fontWeight: 700, fontFamily: "inherit",
                     background: status === opt.key ? opt.bg : "transparent",
                     color: status === opt.key ? opt.color : "var(--text-3)",
                     border: status === opt.key ? `1px solid ${opt.border}` : "1px solid var(--border)",
                     transition: "all 0.15s",
+                    minHeight: "44px",
                   }}
                 >{opt.label}</button>
               ))}
@@ -188,19 +217,22 @@ export default function TransactionModal({ transaction, onClose }: Props) {
             <label className="form-label">Observação (opcional)</label>
             <input
               className="form-input"
+              type="text"
+              inputMode="text"
               placeholder="Notas adicionais..."
               value={notes}
               onChange={e => setNotes(e.target.value)}
+              autoComplete="off"
             />
           </div>
 
-          {error && <p style={{ color: "var(--red)", fontSize: "12px", marginTop: "12px" }}>{error}</p>}
+          {error && <p style={{ color: "var(--red)", fontSize: "13px", marginTop: "14px", fontWeight: 600 }}>{error}</p>}
         </div>
 
         <div className="modal-footer">
           <button className="btn-secondary" onClick={onClose}>Cancelar</button>
           <button className="btn-primary" onClick={handleSave}>
-            {transaction ? "Salvar alterações" : "Adicionar"}
+            {transaction ? "Salvar" : "Adicionar"}
           </button>
         </div>
       </div>

@@ -192,9 +192,10 @@ body {
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
   -webkit-appearance: none;
   appearance: none;
-  /* prevent overflow on small screens */
   max-width: 100%;
   box-sizing: border-box;
+  /* prevent tap highlight on mobile */
+  -webkit-tap-highlight-color: transparent;
 }
 .form-input:focus {
   border-color: rgba(0, 229, 195, 0.4);
@@ -203,10 +204,20 @@ body {
 .form-input::placeholder { color: var(--text-3); }
 .form-input option { background: #0A1525; color: var(--text-1); }
 
+/* Select — restore native arrow on iOS (appearance: none hides it) */
+select.form-input {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%237A8FAD' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  padding-right: 36px;
+  cursor: pointer;
+}
+
 /* date/month inputs need explicit color on webkit */
 .form-input[type="date"],
 .form-input[type="month"],
-.form-input[type="number"] {
+.form-input[type="number"],
+.form-input[type="text"] {
   color-scheme: dark;
 }
 
@@ -242,10 +253,10 @@ body {
   max-width: calc(100vw - 32px);
   max-height: 86vh;
   overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
-  animation: fadeUp 0.22s ease;
-  /* prevent content from overflowing */
   overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  animation: fadeUp 0.22s ease;
 }
 
 .modal-header {
@@ -468,9 +479,13 @@ body {
     width: 100% !important;
     max-width: 100% !important;
     border-radius: 24px 24px 0 0 !important;
-    max-height: 90vh;
+    max-height: 92vh;
     /* handle notch/home indicator */
     padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  /* keyboard clearance — ensures last fields stay visible */
+  .modal-body {
+    padding-bottom: 32px;
   }
   .modal-footer {
     padding-bottom: max(14px, env(safe-area-inset-bottom));
