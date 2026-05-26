@@ -182,6 +182,24 @@ export function getInstallmentsByMonth(
   );
 }
 
+// ─── COMPROMETIDO DE CARTÃO POR CATEGORIA ───────────────────────────────────
+// Agrupa parcelas não pagas (passadas pré-filtradas pelo chamador) por categoryId
+// da compra original. Útil para gráficos de categoria incluindo cartão.
+export function getCardExpensesByCategory(
+  installments: CardInstallment[],
+  purchases: CardPurchase[],
+): Record<string, number> {
+  const result: Record<string, number> = {};
+  installments
+    .filter(i => !i.paid)
+    .forEach(i => {
+      const purchase = purchases.find(p => p.id === i.purchaseId);
+      if (!purchase?.categoryId) return;
+      result[purchase.categoryId] = (result[purchase.categoryId] ?? 0) + i.amount;
+    });
+  return result;
+}
+
 // ─── VALOR TOTAL DE UMA COMPRA PARCELADA ────────────────────────────────────
 export function getPurchaseTotalPaid(
   purchase: CardPurchase,

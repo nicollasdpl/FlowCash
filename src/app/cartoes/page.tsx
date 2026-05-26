@@ -1,14 +1,15 @@
 "use client";
 import { useState, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { useApp, newId } from "@/context/AppContext";
-import type { CreditCard, CardPurchase, CardInstallment } from "@/context/AppContext";
-import CardModal from "@/components/CardModal";
+import type { CreditCard, CardInstallment } from "@/context/AppContext";
 import {
-  getCardLimitSummary, currentMonth, addMonths,
+  getCardLimitSummary, getCurrentBalance, currentMonth, addMonths, today,
 } from "@/engine/financialEngine";
 import {
   getCardInvoices, getInstallmentsByMonth,
 } from "@/engine/invoiceEngine";
+import { CreditCard as CreditCardIcon, Pencil, Package, Trash2 } from "lucide-react";
 
 function fmt(v: number) {
   return v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -20,123 +21,13 @@ function formatDate(d: string) {
   return `${day}/${m}/${y}`;
 }
 
-// ─── MODAL DE NOVA COMPRA ─────────────────────────────────────────────────────
-function PurchaseModal({ card, onClose }: { card: CreditCard; onClose: () => void }) {
-  const { state, dispatch } = useApp();
-  const todayStr = new Date().toISOString().split("T")[0];
-
-  const [description, setDescription] = useState("");
-  const [amount, setAmount] = useState("");
-  const [categoryId, setCategoryId] = useState(state.categories.find(c => c.type === "expense")?.id ?? "");
-  const [purchaseDate, setPurchaseDate] = useState(todayStr);
-  const [totalInstallments, setTotalInstallments] = useState("1");
-  const [error, setError] = useState("");
-
-  function handleSave() {
-    if (!description.trim()) return setError("Informe a descrição.");
-    const amt = parseFloat(amount.replace(",", "."));
-    if (!amount || isNaN(amt) || amt <= 0) return setError("Informe um valor válido.");
-    const inst = parseInt(totalInstallments);
-    if (!inst || inst < 1 || inst > 60) return setError("Parcelas inválidas (1–60).");
-    setError("");
-
-    const purchase: CardPurchase = {
-      id: newId(),
-      cardId: card.id,
-      amount: amt,
-      description: description.trim(),
-      categoryId,
-      purchaseDate,
-      totalInstallments: inst,
-      createdAt: new Date().toISOString(),
-    };
-
-    dispatch({ type: "ADD_PURCHASE", payload: { purchase, card } });
-    onClose();
-  }
-
-  const instCategories = state.categories.filter(c => c.type === "expense");
-
-  return (
-    <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="modal">
-        <div className="modal-header">
-          <span style={{ fontSize: "16px", fontWeight: 700, color: "var(--text-1)" }}>
-            Nova compra — {card.name}
-          </span>
-          <button className="btn-secondary" onClick={onClose} style={{ padding: "6px 12px", fontSize: "16px" }}>×</button>
-        </div>
-        <div className="modal-body">
-          <div className="form-group">
-            <label className="form-label">Descrição</label>
-            <input
-              className="form-input"
-              type="text"
-              placeholder="Ex: iPhone, Restaurante, Netflix..."
-              value={description}
-              onChange={e => setDescription(e.target.value)}
-              autoComplete="off"
-              autoCorrect="off"
-            />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Categoria</label>
-            <select className="form-input" value={categoryId} onChange={e => setCategoryId(e.target.value)}>
-              {instCategories.map(c => <option key={c.id} value={c.id}>{c.icon} {c.name}</option>)}
-            </select>
-          </div>
-          <div className="form-row">
-            <div className="form-group" style={{ margin: 0 }}>
-              <label className="form-label">Valor total (R$)</label>
-              <input
-                className="form-input mono"
-                type="text"
-                inputMode="decimal"
-                pattern="[0-9]*[.,]?[0-9]*"
-                placeholder="0,00"
-                value={amount}
-                onChange={e => setAmount(e.target.value.replace(/[^0-9.,]/g, ""))}
-                autoComplete="off"
-              />
-            </div>
-            <div className="form-group" style={{ margin: 0 }}>
-              <label className="form-label">Parcelas</label>
-              <input
-                className="form-input mono"
-                type="text"
-                inputMode="numeric"
-                pattern="[0-9]*"
-                placeholder="1"
-                maxLength={2}
-                value={totalInstallments}
-                onChange={e => setTotalInstallments(e.target.value.replace(/\D/g, ""))}
-                autoComplete="off"
-              />
-            </div>
-          </div>
-          <div className="form-group" style={{ marginBottom: 0 }}>
-            <label className="form-label">Data da compra</label>
-            <input className="form-input" type="date" value={purchaseDate} onChange={e => setPurchaseDate(e.target.value)} />
-          </div>
-          {error && <p style={{ color: "var(--red)", fontSize: "12px", marginTop: "12px" }}>{error}</p>}
-        </div>
-        <div className="modal-footer">
-          <button className="btn-secondary" onClick={onClose}>Cancelar</button>
-          <button className="btn-primary" onClick={handleSave}>Adicionar compra</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── PÁGINA PRINCIPAL ─────────────────────────────────────────────────────────
 export default function Cartoes() {
+  const router = useRouter();
   const { state, dispatch } = useApp();
   const [selectedCard, setSelectedCard] = useState<CreditCard | null>(null);
-  const [editCard, setEditCard] = useState<CreditCard | null>(null);
-  const [showCardModal, setShowCardModal] = useState(false);
-  const [showPurchaseModal, setShowPurchaseModal] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState(currentMonth());
+  const [payError, setPayError] = useState("");
+  const [payWarning, setPayWarning] = useState("");
 
   const activeCard = selectedCard ?? state.cards[0] ?? null;
 
@@ -175,6 +66,68 @@ export default function Cartoes() {
     dispatch({ type: "DEL_PURCHASE", payload: purchaseId });
   }
 
+  function payInvoice() {
+    if (!activeCard) return;
+
+    setPayError("");
+    setPayWarning("");
+
+    if (!activeCard.paymentAccountId) {
+      setPayError("Vincule uma conta bancária ao cartão antes de pagar a fatura. Edite o cartão para configurar.");
+      return;
+    }
+
+    const pendingInsts = installmentsThisMonth.filter(i => !i.paid);
+    if (pendingInsts.length === 0) return;
+
+    const total = pendingInsts.reduce((s, i) => s + i.amount, 0);
+
+    const paymentAccount = state.accounts.find(a => a.id === activeCard.paymentAccountId);
+    if (paymentAccount) {
+      const balance = getCurrentBalance(paymentAccount, state.transactions);
+      if (balance < total) {
+        setPayWarning(`Saldo insuficiente (R$ ${fmt(balance)}). A conta ficará negativa após o pagamento.`);
+      }
+    }
+
+    const todayDate = today();
+
+    pendingInsts.forEach(inst => {
+      dispatch({
+        type: "PAY_INSTALLMENT",
+        payload: { installmentId: inst.id, paidAt: todayDate },
+      });
+    });
+
+    const cardCategory = state.categories.find(c =>
+      /cart[aã]o|credit/i.test(c.name) && c.type === "expense"
+    );
+    const fallbackCategory = state.categories.find(c => c.type === "expense");
+    const categoryId = cardCategory?.id ?? fallbackCategory?.id ?? "";
+
+    const monthLabel = new Date(selectedMonth + "-15")
+      .toLocaleDateString("pt-BR", { month: "short", year: "2-digit" })
+      .replace(".", "");
+
+    dispatch({
+      type: "ADD_TX",
+      payload: {
+        id: newId(),
+        accountId: activeCard.paymentAccountId,
+        type: "expense",
+        amount: total,
+        description: `Fatura ${activeCard.name} ${monthLabel}`,
+        categoryId,
+        competenceDate: todayDate,
+        paymentDate: todayDate,
+        status: "paid",
+        isRecurring: false,
+        origin: "invoice",
+        createdAt: new Date().toISOString(),
+      },
+    });
+  }
+
   const months = useMemo(() => {
     const cm = currentMonth();
     return Array.from({ length: 5 }, (_, i) => addMonths(cm, i - 1));
@@ -182,11 +135,6 @@ export default function Cartoes() {
 
   return (
     <div style={{ padding: "20px 16px", maxWidth: "1000px", margin: "0 auto" }}>
-      {showCardModal && <CardModal onClose={() => setShowCardModal(false)} />}
-      {editCard && <CardModal card={editCard} onClose={() => setEditCard(null)} />}
-      {showPurchaseModal && activeCard && (
-        <PurchaseModal card={activeCard} onClose={() => setShowPurchaseModal(false)} />
-      )}
 
       {/* Header */}
       <div className="fade-up-1" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "20px" }}>
@@ -198,19 +146,21 @@ export default function Cartoes() {
             {state.cards.length} cartão{state.cards.length !== 1 ? "ões" : ""} cadastrado{state.cards.length !== 1 ? "s" : ""}
           </p>
         </div>
-        <button className="btn-primary" onClick={() => setShowCardModal(true)} style={{ fontSize: "13px", padding: "10px 16px" }}>
+        <button className="btn-primary" onClick={() => router.push("/cartoes/nova")} style={{ fontSize: "13px", padding: "10px 16px" }}>
           + Novo
         </button>
       </div>
 
       {state.cards.length === 0 && (
         <div className="card" style={{ padding: "48px 24px", textAlign: "center" }}>
-          <div style={{ fontSize: "44px", marginBottom: "14px" }}>💳</div>
+          <div style={{ display: "flex", justifyContent: "center", marginBottom: "14px", color: "var(--text-3)" }}>
+            <CreditCardIcon size={44} strokeWidth={1.5} />
+          </div>
           <p style={{ color: "var(--text-2)", fontSize: "15px", fontWeight: 600 }}>Nenhum cartão cadastrado</p>
           <p style={{ color: "var(--text-3)", fontSize: "13px", marginTop: "6px", marginBottom: "20px" }}>
             Adicione seu cartão para controlar faturas e parcelamentos.
           </p>
-          <button className="btn-primary" onClick={() => setShowCardModal(true)}>+ Adicionar cartão</button>
+          <button className="btn-primary" onClick={() => router.push("/cartoes/nova")}>+ Adicionar cartão</button>
         </div>
       )}
 
@@ -254,9 +204,16 @@ export default function Cartoes() {
                       </p>
                     </div>
                     <button
-                      onClick={e => { e.stopPropagation(); setEditCard(card); }}
-                      style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-3)", fontSize: "13px", flexShrink: 0, padding: "0 0 0 8px" }}
-                    >✏️</button>
+                      onClick={e => { e.stopPropagation(); router.push(`/cartoes/${card.id}/editar`); }}
+                      style={{
+                        background: "none", border: "none", cursor: "pointer", color: "var(--text-3)",
+                        flexShrink: 0, padding: "0 0 0 8px",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        minWidth: "28px", minHeight: "28px",
+                      }}
+                    >
+                      <Pencil size={14} strokeWidth={1.5} />
+                    </button>
                   </div>
                   <div style={{ marginBottom: "8px" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "5px" }}>
@@ -313,7 +270,7 @@ export default function Cartoes() {
                   <button
                     className="btn-primary"
                     style={{ fontSize: "12px", padding: "8px 14px", flexShrink: 0, whiteSpace: "nowrap" }}
-                    onClick={() => setShowPurchaseModal(true)}
+                    onClick={() => activeCard && router.push(`/cartoes/${activeCard.id}/nova-compra`)}
                   >+ Compra</button>
                 </div>
               </div>
@@ -351,14 +308,52 @@ export default function Cartoes() {
                   </div>
                 </div>
 
-                {/* Installments — card layout para mobile */}
+                {/* Pagar Fatura */}
+                {installmentsThisMonth.length > 0 && (() => {
+                  const pendingInsts = installmentsThisMonth.filter(i => !i.paid);
+                  const allPaid = pendingInsts.length === 0;
+                  const pendingTotal = pendingInsts.reduce((s, i) => s + i.amount, 0);
+                  return (
+                    <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--border)" }}>
+                      {payError && (
+                        <p style={{ fontSize: "11.5px", color: "var(--red)", marginBottom: "8px", lineHeight: "1.4" }}>
+                          {payError}
+                        </p>
+                      )}
+                      {payWarning && (
+                        <p style={{ fontSize: "11.5px", color: "var(--amber)", marginBottom: "8px", lineHeight: "1.4" }}>
+                          {payWarning}
+                        </p>
+                      )}
+                      <button
+                        onClick={payInvoice}
+                        disabled={allPaid}
+                        style={{
+                          width: "100%", padding: "11px 16px", borderRadius: "10px",
+                          fontSize: "13px", fontWeight: 700, fontFamily: "inherit",
+                          cursor: allPaid ? "not-allowed" : "pointer",
+                          background: allPaid ? "rgba(255,255,255,0.04)" : "var(--green)",
+                          color: allPaid ? "var(--text-3)" : "#000",
+                          border: allPaid ? "1px solid var(--border)" : "none",
+                          opacity: allPaid ? 0.7 : 1,
+                          minHeight: "44px",
+                          transition: "opacity 0.15s",
+                        }}
+                      >
+                        {allPaid ? "✓ Fatura já paga" : `Pagar Fatura · R$ ${fmt(pendingTotal)}`}
+                      </button>
+                    </div>
+                  );
+                })()}
+
+                {/* Installments */}
                 {installmentsThisMonth.length === 0 ? (
                   <div style={{ padding: "32px 16px", textAlign: "center", color: "var(--text-3)", fontSize: "13px" }}>
                     Nenhuma compra nesta fatura.
                   </div>
                 ) : (
                   <div>
-                    {installmentsThisMonth.map((inst, i) => {
+                    {installmentsThisMonth.map((inst) => {
                       const purchase = state.purchases.find(p => p.id === inst.purchaseId);
                       const cat = state.categories.find(c => c.id === purchase?.categoryId);
                       return (
@@ -375,7 +370,12 @@ export default function Cartoes() {
                             width: "38px", height: "38px", borderRadius: "10px", flexShrink: 0,
                             background: cat ? `${cat.color}18` : "rgba(255,255,255,0.06)",
                             display: "flex", alignItems: "center", justifyContent: "center", fontSize: "16px",
-                          }}>{cat?.icon ?? "📦"}</div>
+                          }}>
+                            {cat?.icon
+                              ? cat.icon
+                              : <Package size={16} strokeWidth={1.5} color="var(--text-3)" />
+                            }
+                          </div>
 
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <p style={{
@@ -412,10 +412,12 @@ export default function Cartoes() {
                                   style={{
                                     width: "30px", height: "30px", borderRadius: "7px", cursor: "pointer",
                                     background: "var(--red-10)", border: "1px solid var(--red-20)",
-                                    color: "var(--red)", fontSize: "12px", fontFamily: "inherit",
+                                    color: "var(--red)", fontFamily: "inherit",
                                     display: "flex", alignItems: "center", justifyContent: "center",
                                   }}
-                                >🗑</button>
+                                >
+                                  <Trash2 size={12} strokeWidth={1.5} />
+                                </button>
                               )}
                             </div>
                           </div>

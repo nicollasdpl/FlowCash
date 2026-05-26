@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useApp } from "@/context/AppContext";
+import { Wallet, Cloud, Lock, BarChart2, LoaderCircle } from "lucide-react";
 
 export default function LoginScreen() {
   const { signIn } = useApp();
@@ -22,6 +23,12 @@ export default function LoginScreen() {
       });
   }
 
+  const features = [
+    { Icon: Cloud,    text: "Dados sincronizados entre celular e PC" },
+    { Icon: Lock,     text: "Login seguro com sua conta Google" },
+    { Icon: BarChart2, text: "Motor de saldo real, projetado e fluxo de caixa" },
+  ];
+
   return (
     <div style={{
       height: "100dvh", width: "100%",
@@ -37,9 +44,9 @@ export default function LoginScreen() {
           background: "var(--accent-10)", border: "1px solid var(--border-accent)",
           display: "flex", alignItems: "center", justifyContent: "center",
           margin: "0 auto 24px",
-          fontSize: "34px",
+          color: "var(--accent)",
         }}>
-          💸
+          <Wallet size={34} strokeWidth={1.5} />
         </div>
 
         <h1 style={{ fontSize: "28px", fontWeight: 800, color: "var(--text-1)", letterSpacing: "-0.04em", marginBottom: "8px" }}>
@@ -53,13 +60,16 @@ export default function LoginScreen() {
 
         {/* Features */}
         <div style={{ marginBottom: "36px", display: "flex", flexDirection: "column", gap: "10px" }}>
-          {[
-            { icon: "☁️", text: "Dados sincronizados entre celular e PC" },
-            { icon: "🔒", text: "Login seguro com sua conta Google" },
-            { icon: "📊", text: "Motor de saldo real, projetado e fluxo de caixa" },
-          ].map(({ icon, text }) => (
+          {features.map(({ Icon, text }) => (
             <div key={text} style={{ display: "flex", alignItems: "center", gap: "12px", textAlign: "left" }}>
-              <span style={{ fontSize: "18px", flexShrink: 0 }}>{icon}</span>
+              <div style={{
+                width: "32px", height: "32px", borderRadius: "10px", flexShrink: 0,
+                background: "var(--bg-input)", border: "1px solid var(--border)",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                color: "var(--text-2)",
+              }}>
+                <Icon size={16} strokeWidth={1.5} />
+              </div>
               <span style={{ fontSize: "13px", color: "var(--text-2)" }}>{text}</span>
             </div>
           ))}
@@ -90,7 +100,7 @@ export default function LoginScreen() {
         >
           {loading ? (
             <>
-              <span style={{ fontSize: "18px" }}>⏳</span>
+              <LoaderCircle size={18} strokeWidth={2} style={{ animation: "spin 0.7s linear infinite" }} />
               Redirecionando...
             </>
           ) : (

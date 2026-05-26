@@ -56,7 +56,10 @@ type Action =
   | { type: "DEL_GOAL"; payload: string }
   | { type: "ADD_BUDGET"; payload: Budget }
   | { type: "UPD_BUDGET"; payload: Budget }
-  | { type: "DEL_BUDGET"; payload: string };
+  | { type: "DEL_BUDGET"; payload: string }
+  | { type: "ADD_CATEGORY"; payload: Category }
+  | { type: "UPD_CATEGORY"; payload: Category }
+  | { type: "DEL_CATEGORY"; payload: string };
 
 // ─── SEED ─────────────────────────────────────────────────────────────────────
 
@@ -114,13 +117,20 @@ function reducer(state: AppState, action: Action): AppState {
       return { ...state, cards: [...state.cards, action.payload] };
     case "UPD_CARD":
       return { ...state, cards: state.cards.map(c => c.id === action.payload.id ? action.payload : c) };
-    case "DEL_CARD":
+    case "DEL_CARD": {
+      const cardId = action.payload;
+      const removedPurchaseIds = new Set(
+        state.purchases.filter(p => p.cardId === cardId).map(p => p.id)
+      );
       return {
         ...state,
-        cards: state.cards.filter(c => c.id !== action.payload),
-        purchases: state.purchases.filter(p => p.cardId !== action.payload),
-        installments: state.installments.filter(i => i.cardId !== action.payload),
+        cards: state.cards.filter(c => c.id !== cardId),
+        purchases: state.purchases.filter(p => p.cardId !== cardId),
+        installments: state.installments.filter(
+          i => i.cardId !== cardId && !removedPurchaseIds.has(i.purchaseId)
+        ),
       };
+    }
 
     case "ADD_PURCHASE": {
       const { purchase, card } = action.payload;
@@ -131,12 +141,16 @@ function reducer(state: AppState, action: Action): AppState {
         installments: [...state.installments, ...newInstallments],
       };
     }
-    case "DEL_PURCHASE":
+    case "DEL_PURCHASE": {
+      const purchaseId = action.payload;
       return {
         ...state,
-        purchases: state.purchases.filter(p => p.id !== action.payload),
-        installments: state.installments.filter(i => i.purchaseId !== action.payload),
+        purchases: state.purchases.filter(p => p.id !== purchaseId),
+        installments: state.installments.filter(
+          i => i.purchaseId !== purchaseId && !i.id.startsWith(`${purchaseId}_inst_`)
+        ),
       };
+    }
 
     case "PAY_INSTALLMENT":
       return {
@@ -168,6 +182,13 @@ function reducer(state: AppState, action: Action): AppState {
       return { ...state, budgets: state.budgets.map(b => b.id === action.payload.id ? action.payload : b) };
     case "DEL_BUDGET":
       return { ...state, budgets: state.budgets.filter(b => b.id !== action.payload) };
+
+    case "ADD_CATEGORY":
+      return { ...state, categories: [...state.categories, action.payload] };
+    case "UPD_CATEGORY":
+      return { ...state, categories: state.categories.map(c => c.id === action.payload.id ? action.payload : c) };
+    case "DEL_CATEGORY":
+      return { ...state, categories: state.categories.filter(c => c.id !== action.payload) };
 
     default:
       return state;

@@ -1,54 +1,68 @@
 @import "tailwindcss";
 
 /* ══════════════════════════════════════════════════════
-   FLOWCASH — Design System v3.0
-   Otimizado para iPhone 11 (414×896) e mobile-first
+   FLOWCASH — Design System v4.0
+   Estética fintech dark refinada — Nubank + Revolut
+   Tipografia: DM Sans + DM Mono
+   Viewport de referência: 390px (iPhone 14)
    ══════════════════════════════════════════════════════ */
 
 :root {
-  /* ── Cores base ── */
-  --bg: #040B13;
-  --bg-card: #0C1623;
-  --bg-card-hover: #111E2E;
-  --bg-sidebar: #060F1A;
-  --bg-input: rgba(255, 255, 255, 0.06);
-  --bg-input-focus: rgba(255, 255, 255, 0.09);
+  /* ── Backgrounds (camadas de profundidade) ── */
+  --bg: #080F17;
+  --bg-base: #080F17;
+  --bg-card: #0F1923;
+  --bg-surface: #0F1923;
+  --bg-elevated: #162030;
+  --bg-card-hover: #1A2840;
+  --bg-sidebar: #162030;
+  --bg-input: #1C2840;
+  --bg-input-focus: #203050;
 
   /* ── Bordas ── */
-  --border: rgba(255, 255, 255, 0.07);
-  --border-subtle: rgba(255, 255, 255, 0.04);
-  --border-accent: rgba(0, 229, 195, 0.2);
+  --border: #1C2D40;
+  --border-subtle: #0F1D2A;
+  --border-accent: rgba(0, 229, 160, 0.2);
 
-  /* ── Cores semânticas ── */
-  --accent: #00E5C3;
+  /* ── Accent verde-ciano (ações, receitas) ── */
+  --accent: #00E5A0;
   --accent-dim: #00BFA8;
-  --accent-10: rgba(0, 229, 195, 0.1);
-  --accent-20: rgba(0, 229, 195, 0.2);
-  --accent-glow: rgba(0, 229, 195, 0.15);
+  --accent-10: rgba(0, 229, 160, 0.1);
+  --accent-20: rgba(0, 229, 160, 0.2);
+  --accent-glow: rgba(0, 229, 160, 0.15);
 
+  /* ── Verde (positivo, lucro) ── */
   --green: #21D97A;
   --green-10: rgba(33, 217, 122, 0.1);
   --green-20: rgba(33, 217, 122, 0.2);
 
-  --red: #FF3D5E;
-  --red-10: rgba(255, 61, 94, 0.1);
-  --red-20: rgba(255, 61, 94, 0.2);
+  /* ── Danger/Red (despesas, alertas, delete) ── */
+  --danger: #FF4D6A;
+  --danger-dim: rgba(255, 77, 106, 0.1);
+  --red: #FF4D6A;
+  --red-10: rgba(255, 77, 106, 0.1);
+  --red-20: rgba(255, 77, 106, 0.2);
 
-  --amber: #F59E0B;
-  --amber-10: rgba(245, 158, 11, 0.1);
-  --amber-20: rgba(245, 158, 11, 0.2);
+  /* ── Warning/Amber (pendente, atenção) ── */
+  --warning: #FFB830;
+  --amber: #FFB830;
+  --amber-10: rgba(255, 184, 48, 0.1);
+  --amber-20: rgba(255, 184, 48, 0.2);
 
+  /* ── Extras ── */
   --blue: #4B8BF5;
   --blue-10: rgba(75, 139, 245, 0.1);
   --blue-20: rgba(75, 139, 245, 0.2);
-
   --purple: #9B6DFF;
 
   /* ── Tipografia ── */
-  --text-1: #F0F4FF;
-  --text-2: #7A8FAD;
-  --text-3: #3A4F6E;
+  --text-1: #F0F4F8;
+  --text-2: #7A8FA6;
+  --text-3: #3D5166;
   --text-4: #1E2E42;
+  --text-primary: #F0F4F8;
+  --text-secondary: #7A8FA6;
+  --text-muted: #3D5166;
 
   /* ── Espaçamentos seguros (iPhone notch/home) ── */
   --safe-top: env(safe-area-inset-top, 0px);
@@ -57,7 +71,7 @@
   --safe-right: env(safe-area-inset-right, 0px);
 
   /* ── Bottom nav ── */
-  --bottom-nav-h: 56px;
+  --bottom-nav-h: 48px;
   --bottom-nav-total: calc(var(--bottom-nav-h) + var(--safe-bottom));
 
   /* ── Raios de borda ── */
@@ -69,13 +83,13 @@
 
   /* ── Sombras ── */
   --shadow-card: 0 2px 20px rgba(0, 0, 0, 0.4);
-  --shadow-accent: 0 0 24px rgba(0, 229, 195, 0.2);
+  --shadow-accent: 0 0 24px rgba(0, 229, 160, 0.2);
   --shadow-modal: 0 -8px 40px rgba(0, 0, 0, 0.6);
 }
 
 @theme inline {
-  --font-sans: var(--font-jakarta);
-  --font-mono: var(--font-space-mono);
+  --font-sans: var(--font-dm-sans);
+  --font-mono: var(--font-dm-mono);
 }
 
 /* ── Reset ── */
@@ -89,14 +103,13 @@
 html {
   height: 100%;
   overflow-x: hidden;
-  /* Previne zoom no iOS ao focar inputs */
   touch-action: manipulation;
 }
 
 body {
   background: var(--bg);
   color: var(--text-1);
-  font-family: var(--font-jakarta, "Plus Jakarta Sans", sans-serif);
+  font-family: var(--font-dm-sans, "DM Sans", sans-serif);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   -webkit-text-size-adjust: 100%;
@@ -141,6 +154,29 @@ body {
   0% { background-position: -200% 0; }
   100% { background-position: 200% 0; }
 }
+@keyframes aiPulse {
+  0%, 100% { box-shadow: 0 0 0 3px rgba(0, 229, 160, 0.08); }
+  50%       { box-shadow: 0 0 0 5px rgba(0, 229, 160, 0.18); }
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes fabBreath {
+  0%, 100% { box-shadow: 0 4px 20px rgba(0,229,160,0.40), 0 0 0 1px rgba(0,229,160,0.12); }
+  50%       { box-shadow: 0 6px 28px rgba(0,229,160,0.60), 0 0 0 1px rgba(0,229,160,0.20); }
+}
+@keyframes sheetSlideUp {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+@keyframes sheetSlideDown {
+  from { transform: translateY(0); }
+  to   { transform: translateY(100%); }
+}
+@keyframes fadeOut {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
 
 .fade-up-1 { animation: fadeUp 0.4s 0.04s ease both; }
 .fade-up-2 { animation: fadeUp 0.4s 0.08s ease both; }
@@ -180,9 +216,9 @@ body {
 .badge-vencido { background: var(--red-10);   color: var(--red);   border: 1px solid var(--red-20); }
 
 /* ══════════════════════════════════════════════════════
-   MONO
+   MONO (DM Mono para valores financeiros)
    ══════════════════════════════════════════════════════ */
-.mono { font-family: var(--font-space-mono, "Space Mono", monospace); }
+.mono { font-family: var(--font-dm-mono, "DM Mono", monospace); }
 
 /* ══════════════════════════════════════════════════════
    PROGRESS BAR
@@ -237,7 +273,6 @@ body {
   cursor: pointer;
   transition: background 0.15s ease;
   min-height: 64px;
-  /* Previne text-overflow em texto longo */
   overflow: hidden;
 }
 .tx-row:active { background: var(--bg-card-hover); }
@@ -271,20 +306,19 @@ body {
   appearance: none;
   max-width: 100%;
   box-sizing: border-box;
-  /* Altura mínima para toque fácil */
   min-height: 52px;
 }
 .form-input:focus {
   background: var(--bg-input-focus);
-  border-color: var(--accent-dim);
-  box-shadow: 0 0 0 3px rgba(0, 229, 195, 0.08);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(0, 229, 160, 0.08);
 }
 .form-input::placeholder { color: var(--text-3); }
-.form-input option { background: #0C1623; color: var(--text-1); }
+.form-input option { background: #0F1923; color: var(--text-1); }
 
 /* Select com arrow customizado */
 select.form-input {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%237A8FAD' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%237A8FA6' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 16px center;
   padding-right: 40px;
@@ -312,7 +346,10 @@ select.form-input {
    ══════════════════════════════════════════════════════ */
 .modal-overlay {
   position: fixed;
-  inset: 0;
+  left: 0;
+  right: 0;
+  top: var(--vv-top, 0px);
+  height: var(--vv-height, 100dvh);
   z-index: 100;
   background: rgba(0, 0, 0, 0.75);
   backdrop-filter: blur(8px);
@@ -330,11 +367,10 @@ select.form-input {
   border-radius: var(--r-xl);
   width: 480px;
   max-width: calc(100vw - 32px);
-  max-height: 88vh;
-  overflow-y: auto;
-  overflow-x: hidden;
-  -webkit-overflow-scrolling: touch;
-  overscroll-behavior: contain;
+  max-height: var(--modal-max-h, 88vh);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   animation: fadeUp 0.22s ease;
 }
 
@@ -344,16 +380,21 @@ select.form-input {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  position: sticky;
-  top: 0;
+  flex-shrink: 0;
   background: var(--bg-sidebar);
-  z-index: 1;
-  /* Linha de destaque no topo do header */
   border-top: 2px solid var(--accent);
   border-radius: var(--r-xl) var(--r-xl) 0 0;
 }
 
-.modal-body   { padding: 20px; }
+.modal-body {
+  padding: 20px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
 
 .modal-footer {
   padding: 16px 20px;
@@ -361,8 +402,7 @@ select.form-input {
   display: flex;
   gap: 10px;
   justify-content: flex-end;
-  position: sticky;
-  bottom: 0;
+  flex-shrink: 0;
   background: var(--bg-sidebar);
 }
 
@@ -374,18 +414,18 @@ select.form-input {
   background: var(--accent);
   border: none;
   border-radius: var(--r-md);
-  color: #030A10;
-  font-size: 14px;
-  font-weight: 700;
+  color: #06100E;
+  font-size: 15px;
+  font-weight: 600;
   cursor: pointer;
   font-family: inherit;
   transition: all 0.15s ease;
-  box-shadow: 0 4px 20px rgba(0, 229, 195, 0.3);
+  box-shadow: 0 4px 20px rgba(0, 229, 160, 0.3);
   min-height: 52px;
   white-space: nowrap;
   letter-spacing: 0.01em;
 }
-.btn-primary:hover  { box-shadow: 0 4px 28px rgba(0, 229, 195, 0.45); background: #00CDB0; }
+.btn-primary:hover  { box-shadow: 0 4px 28px rgba(0, 229, 160, 0.45); background: #00CF90; }
 .btn-primary:active { opacity: 0.9; transform: scale(0.98); }
 
 .btn-secondary {
@@ -407,10 +447,10 @@ select.form-input {
 
 .btn-danger {
   padding: 14px 18px;
-  background: var(--red-10);
+  background: var(--danger-dim);
   border: 1px solid var(--red-20);
   border-radius: var(--r-md);
-  color: var(--red);
+  color: var(--danger);
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
@@ -419,7 +459,7 @@ select.form-input {
   min-height: 52px;
   white-space: nowrap;
 }
-.btn-danger:hover  { background: rgba(255,61,94,0.18); }
+.btn-danger:hover  { background: rgba(255,77,106,0.18); }
 .btn-danger:active { opacity: 0.8; }
 
 /* ══════════════════════════════════════════════════════
@@ -516,39 +556,52 @@ select.form-input {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-  padding: 6px 8px;
+  gap: 3px;
+  padding: 6px 4px 4px;
   text-decoration: none;
   color: var(--text-3);
   font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
+  font-weight: 600;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
-  transition: color 0.15s ease;
+  transition: color 0.18s ease, opacity 0.18s ease;
   border: none;
   background: none;
   cursor: pointer;
   font-family: inherit;
-  min-width: 52px;
+  flex: 1;
   min-height: 52px;
   position: relative;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }
-.bottom-nav-item svg { width: 22px; height: 22px; stroke-width: 1.8; }
-.bottom-nav-item.active { color: var(--accent); }
-.bottom-nav-item.active svg { stroke-width: 2.2; }
+.bottom-nav-item svg {
+  width: 22px;
+  height: 22px;
+  stroke-width: 1.5;
+  transition: stroke-width 0.18s ease, filter 0.18s ease;
+}
+.bottom-nav-item:active { opacity: 0.65; }
+.bottom-nav-item.active {
+  color: var(--accent);
+}
+.bottom-nav-item.active svg {
+  stroke-width: 2;
+  filter: drop-shadow(0 0 6px rgba(0,229,160,0.45));
+}
 
-/* Dot indicator para tab ativa */
-.bottom-nav-item.active::before {
+/* Linha indicadora no topo do item ativo */
+.bottom-nav-item.active::after {
   content: '';
   position: absolute;
-  top: 4px;
+  top: 0;
   left: 50%;
   transform: translateX(-50%);
-  width: 20px;
+  width: 24px;
   height: 2px;
   background: var(--accent);
-  border-radius: 2px;
-  box-shadow: 0 0 8px var(--accent-glow);
+  border-radius: 0 0 2px 2px;
+  box-shadow: 0 0 8px rgba(0,229,160,0.6);
 }
 
 /* ══════════════════════════════════════════════════════
@@ -592,7 +645,7 @@ select.form-input {
    GLASSMORPHISM CARD
    ══════════════════════════════════════════════════════ */
 .glass-card {
-  background: rgba(12, 22, 35, 0.85);
+  background: rgba(15, 25, 35, 0.85);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border: 1px solid rgba(255, 255, 255, 0.08);
@@ -642,7 +695,14 @@ select.form-input {
   /* ── Esconde sidebar ── */
   aside { display: none !important; }
 
-  /* ── Mostra bottom nav ── */
+  /* ── Scroll principal ── */
+  main {
+    overscroll-behavior-y: contain;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: calc(52px + env(safe-area-inset-bottom, 0px) + 12px) !important;
+  }
+
+  /* ── Bottom Nav nativa ── */
   .bottom-nav {
     display: flex;
     position: fixed;
@@ -650,18 +710,13 @@ select.form-input {
     left: 0;
     right: 0;
     z-index: 200;
-    background: rgba(4, 11, 19, 0.96);
-    border-top: 1px solid rgba(255,255,255,0.06);
-    backdrop-filter: blur(24px) saturate(180%);
-    -webkit-backdrop-filter: blur(24px) saturate(180%);
-    padding-bottom: var(--safe-bottom);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    background: rgba(8, 15, 23, 0.94);
+    border-top: 1px solid var(--border);
+    backdrop-filter: blur(28px) saturate(200%);
+    -webkit-backdrop-filter: blur(28px) saturate(200%);
     justify-content: space-around;
     align-items: stretch;
-  }
-
-  /* ── Main clears bottom nav ── */
-  main {
-    padding-bottom: calc(var(--bottom-nav-h) + var(--safe-bottom) + 8px) !important;
   }
 
   /* ── Padding de página mobile ── */
@@ -672,7 +727,7 @@ select.form-input {
     padding-right: 16px !important;
   }
 
-  /* ── Modal como bottom sheet ── */
+  /* ── Modal como bottom sheet nativo ── */
   .modal-overlay {
     align-items: flex-end !important;
     padding: 0 !important;
@@ -682,36 +737,41 @@ select.form-input {
     width: 100% !important;
     max-width: 100% !important;
     border-radius: var(--r-2xl) var(--r-2xl) 0 0 !important;
-    max-height: 94vh;
-    padding-bottom: var(--safe-bottom);
+    max-height: var(--modal-max-h, 88dvh);
     border-top: 2px solid var(--accent) !important;
-    /* Handle de arraste visual */
-  }
-
-  /* Handle no topo do modal */
-  .modal::before {
-    content: '';
-    display: block;
-    width: 36px;
-    height: 4px;
-    background: rgba(255,255,255,0.15);
-    border-radius: 2px;
-    margin: 12px auto 0;
   }
 
   .modal-header {
     border-radius: 0 !important;
     border-top: none !important;
-    padding-top: 8px;
+    padding-top: 16px;
+  }
+
+  .modal-header::before {
+    content: '';
+    display: block;
+    width: 32px;
+    height: 3px;
+    background: rgba(255, 255, 255, 0.12);
+    border-radius: 2px;
+    margin: 0 auto 12px;
   }
 
   .modal-body {
-    padding: 16px 20px 24px;
+    padding: 16px 20px;
   }
 
   .modal-footer {
-    padding-bottom: max(16px, var(--safe-bottom));
+    padding-bottom: max(16px, env(safe-area-inset-bottom, 0px));
     gap: 8px;
+  }
+
+  /* ── Botões em tela cheia no footer do modal ── */
+  .modal-footer .btn-primary,
+  .modal-footer .btn-secondary {
+    flex: 1;
+    text-align: center;
+    justify-content: center;
   }
 
   /* ── Form row colapsa no mobile ── */
@@ -727,7 +787,7 @@ select.form-input {
   ::-webkit-scrollbar { display: none; }
   * { scrollbar-width: none; }
 
-  /* ── Textos com overflow explícito ── */
+  /* ── Textos com overflow ── */
   .tx-description,
   .tx-title {
     overflow: hidden;
@@ -736,20 +796,12 @@ select.form-input {
     max-width: 100%;
   }
 
-  /* ── Botões em tela cheia no footer do modal ── */
-  .modal-footer .btn-primary,
-  .modal-footer .btn-secondary {
-    flex: 1;
-    text-align: center;
-    justify-content: center;
-  }
-
   /* ── Grid de métricas: 2 colunas no mobile ── */
   .metrics-grid {
     grid-template-columns: 1fr 1fr !important;
   }
 
-  /* ── Cards de cartão mais estreitos ── */
+  /* ── Cards de cartão ── */
   .card-selector {
     flex: 0 0 200px !important;
   }
@@ -778,14 +830,8 @@ select.form-input {
    PWA / STANDALONE (instalado na home screen)
    ════════════════════════════════════════════════════ */
 @media (display-mode: standalone) {
-  /* Espaço extra para status bar no PWA */
   body {
-    padding-top: var(--safe-top);
-  }
-
-  /* Bottom nav precisa de mais espaço no PWA */
-  .bottom-nav {
-    padding-bottom: max(var(--safe-bottom), 8px);
+    padding-top: env(safe-area-inset-top, 0px);
   }
 }
 
@@ -794,12 +840,14 @@ select.form-input {
    ════════════════════════════════════════════════════ */
 @media (min-width: 768px) {
   .modal-overlay {
+    top: 0 !important;
+    height: 100dvh !important;
     align-items: center;
     padding: 16px;
   }
   .modal {
     border-radius: var(--r-xl);
-    max-height: 86vh;
+    max-height: var(--modal-max-h, 86vh);
   }
-  .modal::before { display: none; }
+  .modal-header::before { display: none; }
 }

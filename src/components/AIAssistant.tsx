@@ -1,0 +1,48 @@
+"use client";
+import { usePathname, useRouter } from "next/navigation";
+
+function SparkleIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M12 2L13.9 9.1L21 11L13.9 12.9L12 20L10.1 12.9L3 11L10.1 9.1L12 2Z" />
+      <circle cx="19" cy="4" r="1.5" opacity="0.5" />
+      <circle cx="5"  cy="18" r="1"   opacity="0.4" />
+    </svg>
+  );
+}
+
+export default function AIAssistant() {
+  const pathname = usePathname();
+  const router   = useRouter();
+
+  if (pathname !== "/") return null;
+
+  return (
+    <button
+      onClick={() => router.push("/assistente")}
+      aria-label="Abrir assistente IA"
+      style={{
+        position: "fixed",
+        bottom: "calc(var(--bottom-nav-total, 48px) + 14px)",
+        right: "16px",
+        zIndex: 300,
+        width: "52px",
+        height: "52px",
+        borderRadius: "50%",
+        background: "var(--accent)",
+        border: "none",
+        color: "#06100E",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        cursor: "pointer",
+        boxShadow: "0 4px 20px rgba(0,229,160,0.45), 0 0 0 1px rgba(0,229,160,0.15)",
+        animation: "fabBreath 3s ease-in-out infinite",
+        touchAction: "manipulation",
+        WebkitTapHighlightColor: "transparent",
+      }}
+    >
+      <SparkleIcon />
+    </button>
+  );
+}

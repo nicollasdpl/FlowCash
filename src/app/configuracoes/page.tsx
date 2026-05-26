@@ -1,6 +1,10 @@
 "use client";
 import { useState, useRef } from "react";
+import Link from "next/link";
 import { useApp } from "@/context/AppContext";
+import type { Category } from "@/context/AppContext";
+import CategoryModal from "@/components/CategoryModal";
+import { Landmark, BarChart2, TrendingUp, ArrowUpDown, CreditCard, Target } from "lucide-react";
 
 export default function Configuracoes() {
   const { state, dispatch, user, signOut } = useApp();
@@ -8,6 +12,8 @@ export default function Configuracoes() {
   const [nameInput, setNameInput] = useState(state.userName ?? "");
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [showCatModal, setShowCatModal] = useState(false);
+  const [editCat, setEditCat] = useState<Category | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   function saveName() {
@@ -35,8 +41,23 @@ export default function Configuracoes() {
     goals: state.goals.length,
   };
 
+  const navItems = [
+    { href: "/contas", Icon: Landmark, label: "Minhas Contas", desc: `${stats.accounts} conta${stats.accounts !== 1 ? "s" : ""} cadastrada${stats.accounts !== 1 ? "s" : ""}` },
+    { href: "/orcamentos", Icon: BarChart2, label: "Orçamentos", desc: `${state.budgets.length} limite${state.budgets.length !== 1 ? "s" : ""} definido${state.budgets.length !== 1 ? "s" : ""}` },
+    { href: "/relatorios", Icon: TrendingUp, label: "Relatórios", desc: "Análises e gráficos" },
+  ];
+
+  const statItems = [
+    { label: "Contas", value: stats.accounts, Icon: Landmark },
+    { label: "Transações", value: stats.transactions, Icon: ArrowUpDown },
+    { label: "Cartões", value: stats.cards, Icon: CreditCard },
+    { label: "Metas", value: stats.goals, Icon: Target },
+  ];
+
   return (
     <div style={{ padding: "16px", maxWidth: "640px", margin: "0 auto" }}>
+      {showCatModal && <CategoryModal onClose={() => setShowCatModal(false)} />}
+      {editCat && <CategoryModal category={editCat} onClose={() => setEditCat(null)} />}
 
       {/* Header */}
       <div className="fade-up-1" style={{ marginBottom: "20px" }}>
@@ -55,31 +76,30 @@ export default function Configuracoes() {
             Seções
           </p>
         </div>
-        {[
-          { href: "/contas", icon: "🏦", label: "Minhas Contas", desc: `${stats.accounts} conta${stats.accounts !== 1 ? "s" : ""} cadastrada${stats.accounts !== 1 ? "s" : ""}` },
-          { href: "/relatorios", icon: "📊", label: "Relatórios", desc: "Análises e gráficos" },
-        ].map((item, i, arr) => (
-          <a
+        {navItems.map((item, i) => (
+          <Link
             key={item.href}
             href={item.href}
             style={{
               display: "flex", alignItems: "center", gap: "14px",
               padding: "14px 16px",
-              borderBottom: i < arr.length - 1 ? "1px solid var(--border)" : "none",
+              borderBottom: i < navItems.length - 1 ? "1px solid var(--border)" : "none",
               textDecoration: "none",
             }}
           >
             <div style={{
               width: "40px", height: "40px", borderRadius: "12px", flexShrink: 0,
               background: "var(--bg-input)", border: "1px solid var(--border)",
-              display: "flex", alignItems: "center", justifyContent: "center", fontSize: "20px",
-            }}>{item.icon}</div>
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}>
+              <item.Icon size={20} strokeWidth={1.5} color="var(--text-2)" />
+            </div>
             <div style={{ flex: 1 }}>
               <p style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-1)" }}>{item.label}</p>
               <p style={{ fontSize: "11.5px", color: "var(--text-3)", marginTop: "2px" }}>{item.desc}</p>
             </div>
             <span style={{ color: "var(--text-3)", fontSize: "16px" }}>›</span>
-          </a>
+          </Link>
         ))}
       </div>
 
@@ -178,19 +198,16 @@ export default function Configuracoes() {
 
         <div style={{ padding: "14px 16px" }}>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "14px" }}>
-            {[
-              { label: "Contas", value: stats.accounts, icon: "🏦" },
-              { label: "Transações", value: stats.transactions, icon: "💸" },
-              { label: "Cartões", value: stats.cards, icon: "💳" },
-              { label: "Metas", value: stats.goals, icon: "🎯" },
-            ].map(({ label, value, icon }) => (
+            {statItems.map(({ label, value, Icon }) => (
               <div key={label} style={{
                 padding: "12px 14px",
                 background: "var(--bg-input)",
                 border: "1px solid var(--border)",
                 borderRadius: "var(--r-md)",
               }}>
-                <p style={{ fontSize: "16px", marginBottom: "4px" }}>{icon}</p>
+                <div style={{ marginBottom: "4px", color: "var(--text-3)" }}>
+                  <Icon size={16} strokeWidth={1.5} />
+                </div>
                 <p style={{ fontSize: "20px", fontWeight: 700, color: "var(--text-1)", lineHeight: 1 }}>{value}</p>
                 <p style={{ fontSize: "11px", color: "var(--text-3)", marginTop: "2px" }}>{label}</p>
               </div>
@@ -217,23 +234,38 @@ export default function Configuracoes() {
 
       {/* Categorias */}
       <div className="card fade-up-4" style={{ overflow: "hidden", marginBottom: "14px" }}>
-        <div style={{ padding: "13px 16px", borderBottom: "1px solid var(--border)" }}>
+        <div style={{ padding: "13px 16px", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <p style={{ fontSize: "11px", fontWeight: 700, color: "var(--text-3)", letterSpacing: "0.08em", textTransform: "uppercase" }}>
             Categorias ({state.categories.length})
           </p>
+          <button
+            onClick={() => setShowCatModal(true)}
+            style={{
+              background: "var(--accent-10)", border: "1px solid var(--border-accent)",
+              borderRadius: "8px", color: "var(--accent)", fontWeight: 700,
+              fontSize: "13px", padding: "6px 12px", cursor: "pointer",
+              fontFamily: "inherit", minHeight: "36px",
+            }}
+          >+ Nova</button>
         </div>
         <div style={{ padding: "12px 16px", display: "flex", flexWrap: "wrap", gap: "7px" }}>
           {state.categories.map(cat => (
-            <div key={cat.id} style={{
-              display: "inline-flex", alignItems: "center", gap: "5px",
-              padding: "6px 10px",
-              background: `${cat.color}12`,
-              border: `1px solid ${cat.color}28`,
-              borderRadius: "20px",
-            }}>
+            <button
+              key={cat.id}
+              onClick={() => setEditCat(cat)}
+              style={{
+                display: "inline-flex", alignItems: "center", gap: "5px",
+                padding: "6px 10px",
+                background: `${cat.color}12`,
+                border: `1px solid ${cat.color}28`,
+                borderRadius: "20px",
+                cursor: "pointer",
+                fontFamily: "inherit",
+              }}
+            >
               <span style={{ fontSize: "12px" }}>{cat.icon}</span>
               <span style={{ fontSize: "11.5px", fontWeight: 600, color: cat.color }}>{cat.name}</span>
-            </div>
+            </button>
           ))}
         </div>
       </div>

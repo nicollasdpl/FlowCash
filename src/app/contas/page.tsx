@@ -5,6 +5,7 @@ import type { Account } from "@/context/AppContext";
 import {
   getCurrentBalance, getProjectedBalance, getAvailableBalance,
 } from "@/engine/financialEngine";
+import { Landmark, Pencil } from "lucide-react";
 
 function fmt(v: number) {
   return v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -203,7 +204,9 @@ export default function Contas() {
       {/* Account cards */}
       {state.accounts.length === 0 && (
         <div className="card" style={{ padding: "48px", textAlign: "center" }}>
-          <div style={{ fontSize: "48px", marginBottom: "16px" }}>🏦</div>
+          <div style={{ display: "flex", justifyContent: "center", marginBottom: "16px", color: "var(--text-3)" }}>
+            <Landmark size={48} strokeWidth={1.5} />
+          </div>
           <p style={{ color: "var(--text-2)", fontSize: "15px", fontWeight: 600 }}>Nenhuma conta cadastrada</p>
           <p style={{ color: "var(--text-3)", fontSize: "13px", marginTop: "6px", marginBottom: "20px" }}>
             Adicione suas contas bancárias para calcular saldos automaticamente.
@@ -236,8 +239,16 @@ export default function Contas() {
                 </div>
                 <button
                   onClick={() => setEditAccount(acc)}
-                  style={{ background: "none", border: "none", color: "var(--text-3)", cursor: "pointer", fontSize: "14px" }}
-                >✏️ Editar</button>
+                  style={{
+                    background: "rgba(255,255,255,0.05)", border: "1px solid var(--border)",
+                    borderRadius: "8px", color: "var(--text-2)",
+                    cursor: "pointer", fontSize: "13px", fontWeight: 600,
+                    display: "flex", alignItems: "center", gap: "6px",
+                    padding: "8px 12px", minHeight: "36px", fontFamily: "inherit",
+                  }}
+                >
+                  <Pencil size={13} strokeWidth={1.5} /> Editar
+                </button>
               </div>
 
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "10px" }}>

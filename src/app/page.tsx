@@ -1,14 +1,17 @@
 "use client";
 import { useState, useMemo, useRef } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import TransactionDrawer from "@/components/TransactionDrawer";
-import TransactionModal from "@/components/TransactionModal";
 import { useApp } from "@/context/AppContext";
 import type { Transaction } from "@/context/AppContext";
 import {
   getCurrentBalance, getProjectedBalance, getDueThisWeek,
-  getOverdueTransactions, getMonthlyProjections, currentMonth, addMonths, fmt,
+  getOverdueTransactions, getMonthlyProjections, getCardCommittedByMonth,
+  currentMonth, addMonths, fmt,
 } from "@/engine/financialEngine";
 import { computeInvoice } from "@/engine/invoiceEngine";
+import { AlertTriangle, Bell, CreditCard, Wallet, TrendingUp, Package } from "lucide-react";
 
 const MONTH_NAMES = [
   "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
@@ -64,7 +67,7 @@ function AlertSection({
   title, icon, accentColor, bgColor, borderColor,
   transactions, categories, onPay, onOpen,
 }: {
-  title: string; icon: string; accentColor: string; bgColor: string; borderColor: string;
+  title: string; icon: React.ReactNode; accentColor: string; bgColor: string; borderColor: string;
   transactions: Transaction[];
   categories: { id: string; name: string; icon: string; color: string }[];
   onPay: (tx: Transaction) => void;
@@ -89,7 +92,7 @@ function AlertSection({
         borderBottom: `1px solid ${borderColor}`,
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-          <span style={{ fontSize: "16px" }}>{icon}</span>
+          <span style={{ display: "flex", alignItems: "center" }}>{icon}</span>
           <div>
             <p style={{ fontSize: "13px", fontWeight: 700, color: accentColor }}>{title}</p>
             <p style={{ fontSize: "11px", color: "var(--text-3)", marginTop: "1px" }}>
@@ -117,7 +120,7 @@ function AlertSection({
               }}
               onClick={() => onOpen(tx)}
             >
-              {cat?.icon ?? "📦"}
+              {cat?.icon ?? <Package size={15} strokeWidth={1.5} color="var(--text-3)" />}
             </div>
 
             <div
@@ -158,10 +161,9 @@ function AlertSection({
 }
 
 export default function Dashboard() {
+  const router = useRouter();
   const { state, dispatch } = useApp();
   const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
-  const [editTx, setEditTx] = useState<Transaction | null>(null);
-  const [showModal, setShowModal] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState(currentMonth());
 
   const touchStartX = useRef<number>(0);
@@ -223,9 +225,14 @@ export default function Dashboard() {
     [state.cards, state.installments, selectedMonth]
   );
 
+  const cardCommitted = useMemo(() =>
+    getCardCommittedByMonth(state.installments, selectedMonth),
+    [state.installments, selectedMonth]
+  );
+
   const projections = useMemo(() =>
-    getMonthlyProjections(state.accounts, state.transactions, 3),
-    [state.accounts, state.transactions]
+    getMonthlyProjections(state.accounts, state.transactions, 3, state.installments),
+    [state.accounts, state.transactions, state.installments]
   );
 
   const recentTxs = useMemo(() =>
@@ -251,19 +258,17 @@ export default function Dashboard() {
     setSelectedTx(null);
   }
 
-  const name = (state.userName?.trim() || "").split(" ")[0]; // Só primeiro nome
+  const name = (state.userName?.trim() || "").split(" ")[0];
 
   return (
     <>
-      {showModal && <TransactionModal onClose={() => setShowModal(false)} />}
-      {editTx && <TransactionModal transaction={editTx} onClose={() => setEditTx(null)} />}
       <TransactionDrawer
         tx={selectedTx}
         categories={state.categories}
         onClose={() => setSelectedTx(null)}
         onStatusChange={handleStatusChange}
         onDelete={handleDelete}
-        onEdit={tx => { setSelectedTx(null); setEditTx(tx); }}
+        onEdit={tx => { setSelectedTx(null); router.push(`/transacoes/${tx.id}/editar`); }}
       />
 
       <div
@@ -285,26 +290,12 @@ export default function Dashboard() {
               letterSpacing: "-0.02em", lineHeight: 1.2,
               overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
             }}>
-              {name ? `${greeting()}, ${name} 👋` : `${greeting()} 👋`}
+              {name ? `${greeting()}, ${name}` : greeting()}
             </p>
             <p style={{ fontSize: "11.5px", color: "var(--text-3)", marginTop: "3px" }}>
               {new Date().toLocaleDateString("pt-BR", { weekday: "short", day: "numeric", month: "short" })}
             </p>
           </div>
-
-          <button
-            className="btn-primary"
-            onClick={() => setShowModal(true)}
-            style={{
-              fontSize: "24px", padding: "0",
-              width: "48px", height: "48px",
-              borderRadius: "14px",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              flexShrink: 0,
-              boxShadow: "0 4px 20px rgba(0, 229, 195, 0.35)",
-            }}
-            aria-label="Nova transação"
-          >+</button>
         </div>
 
         {/* ── Seletor de Mês ── */}
@@ -370,8 +361,8 @@ export default function Dashboard() {
           style={{
             padding: "20px",
             marginBottom: "12px",
-            background: "linear-gradient(135deg, #0C1623 0%, #0D1E34 100%)",
-            borderColor: "rgba(0,229,195,0.1)",
+            background: "linear-gradient(135deg, #0F1923 0%, #0D1E34 100%)",
+            borderColor: "rgba(0,229,160,0.1)",
           }}
         >
           <p style={{
@@ -471,14 +462,48 @@ export default function Dashboard() {
           ))}
         </div>
 
+        {/* ── Comprometido com Cartão ── */}
+        {cardCommitted > 0 && (
+          <div
+            className="fade-up-3"
+            style={{
+              background: "rgba(255,184,48,0.07)",
+              border: "1px solid var(--amber-20)",
+              borderRadius: "var(--r-md)",
+              padding: "13px 14px",
+              marginBottom: "12px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: "12px",
+            }}
+          >
+            <div>
+              <p style={{
+                fontSize: "10px", fontWeight: 700, color: "var(--amber)",
+                letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: "3px",
+                display: "flex", alignItems: "center", gap: "6px",
+              }}>
+                <CreditCard size={12} strokeWidth={1.5} /> Comprometido com Cartão
+              </p>
+              <p style={{ fontSize: "11px", color: "var(--text-3)" }}>
+                {fullMonthLabel(selectedMonth)} · parcelas em aberto
+              </p>
+            </div>
+            <p className="mono" style={{ fontSize: "18px", fontWeight: 700, color: "var(--amber)", flexShrink: 0 }}>
+              R$ {fmt(cardCommitted)}
+            </p>
+          </div>
+        )}
+
         {/* ── Alertas ── */}
         {isCurrentMonth && (
           <div className="fade-up-3">
             <AlertSection
               title="Vencidas"
-              icon="⚠️"
+              icon={<AlertTriangle size={16} strokeWidth={1.5} color="var(--red)" />}
               accentColor="var(--red)"
-              bgColor="rgba(255,61,94,0.06)"
+              bgColor="rgba(255,77,106,0.06)"
               borderColor="var(--red-20)"
               transactions={overdue}
               categories={state.categories}
@@ -487,9 +512,9 @@ export default function Dashboard() {
             />
             <AlertSection
               title="Vence esta semana"
-              icon="🔔"
+              icon={<Bell size={16} strokeWidth={1.5} color="var(--amber)" />}
               accentColor="var(--amber)"
-              bgColor="rgba(245,158,11,0.06)"
+              bgColor="rgba(255,184,48,0.06)"
               borderColor="var(--amber-20)"
               transactions={dueThisWeek}
               categories={state.categories}
@@ -513,9 +538,9 @@ export default function Dashboard() {
               }}>
                 Faturas de Cartão
               </p>
-              <a href="/cartoes" style={{ fontSize: "11.5px", color: "var(--accent)", textDecoration: "none", fontWeight: 600 }}>
+              <Link href="/cartoes" style={{ fontSize: "11.5px", color: "var(--accent)", textDecoration: "none", fontWeight: 600 }}>
                 Ver →
-              </a>
+              </Link>
             </div>
             {cardInvoices.map(({ card, invoice }, i) => (
               <div key={card.id} style={{
@@ -529,9 +554,8 @@ export default function Dashboard() {
                   background: `${card.color}20`,
                   border: `1px solid ${card.color}35`,
                   display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: "15px",
                 }}>
-                  💳
+                  <CreditCard size={16} strokeWidth={1.5} color={card.color} />
                 </div>
                 <div style={{ flex: 1, minWidth: 0, overflow: "hidden" }}>
                   <p style={{
@@ -572,9 +596,9 @@ export default function Dashboard() {
               }}>
                 Fluxo de Caixa
               </p>
-              <a href="/relatorios" style={{ fontSize: "11.5px", color: "var(--accent)", textDecoration: "none", fontWeight: 600 }}>
+              <Link href="/relatorios" style={{ fontSize: "11.5px", color: "var(--accent)", textDecoration: "none", fontWeight: 600 }}>
                 Relatórios →
-              </a>
+              </Link>
             </div>
             {projections.map((p, i) => {
               const riskColor = p.riskLevel === "danger" ? "var(--red)" : p.riskLevel === "warning" ? "var(--amber)" : "var(--green)";
@@ -586,7 +610,7 @@ export default function Dashboard() {
                   alignItems: "center",
                   padding: "11px 14px",
                   borderBottom: i < projections.length - 1 ? "1px solid var(--border)" : "none",
-                  background: isThisMonth ? "rgba(0,229,195,0.04)" : "transparent",
+                  background: isThisMonth ? "rgba(0,229,160,0.04)" : "transparent",
                   gap: "4px",
                 }}>
                   <span style={{
@@ -625,19 +649,21 @@ export default function Dashboard() {
             }}>
               Lançamentos
             </p>
-            <a href="/transacoes" style={{ fontSize: "11.5px", color: "var(--accent)", textDecoration: "none", fontWeight: 600 }}>
+            <Link href="/transacoes" style={{ fontSize: "11.5px", color: "var(--accent)", textDecoration: "none", fontWeight: 600 }}>
               Ver todos →
-            </a>
+            </Link>
           </div>
 
           {recentTxs.length === 0 ? (
             <div style={{ padding: "40px 16px", textAlign: "center" }}>
-              <p style={{ fontSize: "32px", marginBottom: "10px" }}>💸</p>
+              <div style={{ display: "flex", justifyContent: "center", marginBottom: "10px", color: "var(--text-3)" }}>
+                <Wallet size={32} strokeWidth={1.5} />
+              </div>
               <p style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-2)" }}>
                 Sem lançamentos
               </p>
               <p style={{ fontSize: "12px", color: "var(--text-3)", marginTop: "4px" }}>
-                {isCurrentMonth ? "Toque em + para adicionar" : `Nenhum em ${fullMonthLabel(selectedMonth)}`}
+                {isCurrentMonth ? "Nenhuma transação neste mês" : `Nenhum em ${fullMonthLabel(selectedMonth)}`}
               </p>
             </div>
           ) : (
@@ -660,7 +686,6 @@ export default function Dashboard() {
                   }}
                   onTouchStart={e => e.stopPropagation()}
                 >
-                  {/* Ícone */}
                   <div style={{
                     width: "40px", height: "40px", borderRadius: "12px", flexShrink: 0,
                     background: cat ? `${cat.color}18` : "rgba(255,255,255,0.06)",
@@ -668,10 +693,14 @@ export default function Dashboard() {
                     display: "flex", alignItems: "center", justifyContent: "center",
                     fontSize: "17px",
                   }}>
-                    {cat?.icon ?? (tx.type === "income" ? "💰" : "📦")}
+                    {cat?.icon
+                      ? cat.icon
+                      : tx.type === "income"
+                        ? <TrendingUp size={17} strokeWidth={1.5} color="var(--green)" />
+                        : <Package size={17} strokeWidth={1.5} color="var(--text-3)" />
+                    }
                   </div>
 
-                  {/* Info — com overflow explícito */}
                   <div style={{ flex: 1, minWidth: 0, overflow: "hidden" }}>
                     <p style={{
                       fontSize: "13.5px", fontWeight: 600, color: "var(--text-1)",
@@ -685,7 +714,6 @@ export default function Dashboard() {
                     </p>
                   </div>
 
-                  {/* Valor + Status */}
                   <div style={{
                     display: "flex", flexDirection: "column",
                     alignItems: "flex-end", gap: "4px",

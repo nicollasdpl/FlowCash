@@ -1,6 +1,7 @@
 "use client";
 import { useEffect } from "react";
 import type { Transaction, Category } from "@/context/AppContext";
+import { TrendingUp, Package, Pencil, Trash2 } from "lucide-react";
 
 interface Props {
   tx: Transaction | null;
@@ -93,7 +94,12 @@ export default function TransactionDrawer({ tx, categories, onClose, onStatusCha
               border: isIncome ? "1px solid var(--green-20)" : "1px solid var(--border)",
               display: "flex", alignItems: "center", justifyContent: "center", fontSize: "26px",
             }}>
-              {cat?.icon ?? (isIncome ? "💰" : "📦")}
+              {cat?.icon
+                ? cat.icon
+                : isIncome
+                  ? <TrendingUp size={24} strokeWidth={1.5} color="var(--green)" />
+                  : <Package size={24} strokeWidth={1.5} color="var(--text-3)" />
+              }
             </div>
             <div>
               <div style={{ fontSize: "18px", fontWeight: 700, color: "var(--text-1)", letterSpacing: "-0.02em" }}>
@@ -187,9 +193,10 @@ export default function TransactionDrawer({ tx, categories, onClose, onStatusCha
               flex: 1, padding: "11px", borderRadius: "10px",
               background: "rgba(255,255,255,0.05)", border: "1px solid var(--border)",
               color: "var(--text-2)", fontSize: "13px", fontWeight: 600, cursor: "pointer",
+              display: "flex", alignItems: "center", justifyContent: "center", gap: "6px",
             }}
           >
-            ✏️ Editar
+            <Pencil size={13} strokeWidth={1.5} /> Editar
           </button>
           <button
             onClick={() => { onDelete(tx.id); onClose(); }}
@@ -197,9 +204,10 @@ export default function TransactionDrawer({ tx, categories, onClose, onStatusCha
               padding: "11px 18px", borderRadius: "10px",
               background: "var(--red-10)", border: "1px solid var(--red-20)",
               color: "var(--red)", fontSize: "13px", fontWeight: 600, cursor: "pointer",
+              display: "flex", alignItems: "center", justifyContent: "center", gap: "6px",
             }}
           >
-            🗑️ Excluir
+            <Trash2 size={13} strokeWidth={1.5} /> Excluir
           </button>
         </div>
       </div>

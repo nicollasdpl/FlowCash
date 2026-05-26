@@ -268,6 +268,7 @@ export function getMonthlyProjections(
   accounts: Account[],
   transactions: Transaction[],
   months = 6,
+  installments: CardInstallment[] = [],
 ): MonthlyProjection[] {
   const results: MonthlyProjection[] = [];
   const cm = currentMonth();
@@ -288,9 +289,13 @@ export function getMonthlyProjections(
     const income = monthTxs
       .filter(t => t.type === "income")
       .reduce((s, t) => s + t.amount, 0);
-    const expense = monthTxs
+
+    const txExpense = monthTxs
       .filter(t => t.type === "expense")
       .reduce((s, t) => s + t.amount, 0);
+
+    const cardExpense = getCardCommittedByMonth(installments, month);
+    const expense = txExpense + cardExpense;
 
     runningBalance += income - expense;
 
@@ -354,6 +359,18 @@ export function getOverdueTransactions(transactions: Transaction[]): Transaction
   return transactions.filter(
     t => t.status !== "paid" && t.paymentDate < td,
   );
+}
+
+// ─── COMPROMETIDO COM CARTÃO NO MÊS ─────────────────────────────────────────
+// Parcelas não pagas cuja competência cai no mês informado.
+// NÃO afeta saldo real — é despesa futura comprometida, separada do realizado.
+export function getCardCommittedByMonth(
+  installments: CardInstallment[],
+  month: string,
+): number {
+  return installments
+    .filter(i => i.competenceMonth === month && !i.paid)
+    .reduce((s, i) => s + i.amount, 0);
 }
 
 // ─── GASTOS POR CATEGORIA NO MÊS ─────────────────────────────────────────────

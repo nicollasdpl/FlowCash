@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { useApp, newId } from "@/context/AppContext";
 import type { Transaction } from "@/context/AppContext";
 
@@ -28,7 +29,7 @@ export default function TransactionModal({ transaction, onClose }: Props) {
   );
   const [competenceDate, setCompetenceDate] = useState(transaction?.competenceDate ?? todayStr);
   const [paymentDate, setPaymentDate] = useState(transaction?.paymentDate ?? todayStr);
-  const [status, setStatus] = useState<Transaction["status"]>(transaction?.status ?? "pending");
+  const [status, setStatus] = useState<Transaction["status"]>(transaction?.status ?? "paid");
   const [notes, setNotes] = useState(transaction?.notes ?? "");
   const [error, setError] = useState("");
 
@@ -99,10 +100,12 @@ export default function TransactionModal({ transaction, onClose }: Props) {
               <button
                 className={`type-toggle-btn${txType === "expense" ? " active-expense" : ""}`}
                 onClick={() => setTxType("expense")}
+                style={{ touchAction: "manipulation" }}
               >↓ Despesa</button>
               <button
                 className={`type-toggle-btn${txType === "income" ? " active-income" : ""}`}
                 onClick={() => setTxType("income")}
+                style={{ touchAction: "manipulation" }}
               >↑ Receita</button>
             </div>
           </div>
@@ -153,7 +156,7 @@ export default function TransactionModal({ transaction, onClose }: Props) {
             <label className="form-label">Conta</label>
             {state.accounts.filter(a => a.active).length === 0 ? (
               <p style={{ fontSize: "13px", color: "var(--red)", padding: "12px 0" }}>
-                Nenhuma conta cadastrada. <a href="/contas" style={{ color: "var(--accent)" }}>Criar conta</a>
+                Nenhuma conta cadastrada. <Link href="/contas" style={{ color: "var(--accent)" }}>Criar conta</Link>
               </p>
             ) : (
               <select className="form-input" value={accountId} onChange={e => setAccountId(e.target.value)}>
