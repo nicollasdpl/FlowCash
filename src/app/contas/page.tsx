@@ -37,7 +37,7 @@ function AccountModal({ account, onClose }: { account?: Account; onClose: () => 
       id: account?.id ?? newId(),
       name: name.trim(),
       type,
-      initialBalance: parseFloat(initialBalance) || 0,
+      initialBalance: parseFloat(initialBalance.replace(",", ".")) || 0,
       initialDate,
       color,
       icon,
@@ -85,7 +85,7 @@ function AccountModal({ account, onClose }: { account?: Account; onClose: () => 
 
           <div className="form-group">
             <label className="form-label">Nome da conta</label>
-            <input className="form-input" placeholder="Ex: Nubank, Bradesco, Carteira..." value={name} onChange={e => setName(e.target.value)} />
+            <input className="form-input" type="text" placeholder="Ex: Nubank, Bradesco, Carteira..." value={name} onChange={e => setName(e.target.value)} autoComplete="off" autoCorrect="off" />
           </div>
 
           <div className="form-group">
@@ -98,7 +98,7 @@ function AccountModal({ account, onClose }: { account?: Account; onClose: () => 
           <div className="form-row">
             <div className="form-group" style={{ margin: 0 }}>
               <label className="form-label">Saldo inicial (R$)</label>
-              <input className="form-input mono" type="number" placeholder="0,00" step="0.01" value={initialBalance} onChange={e => setInitialBalance(e.target.value)} />
+              <input className="form-input mono" type="text" inputMode="decimal" pattern="[0-9]*[.,]?[0-9]*" placeholder="0,00" value={initialBalance} onChange={e => setInitialBalance(e.target.value.replace(/[^0-9.,]/g, ""))} autoComplete="off" />
             </div>
             <div className="form-group" style={{ margin: 0 }}>
               <label className="form-label">Data do saldo inicial</label>
@@ -164,7 +164,7 @@ export default function Contas() {
   };
 
   return (
-    <div style={{ padding: "28px", maxWidth: "900px" }}>
+    <div style={{ padding: "20px 16px", maxWidth: "900px" }}>
       {showModal && <AccountModal onClose={() => setShowModal(false)} />}
       {editAccount && <AccountModal account={editAccount} onClose={() => setEditAccount(null)} />}
 
@@ -240,7 +240,7 @@ export default function Contas() {
                 >✏️ Editar</button>
               </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "12px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "10px" }}>
                 {[
                   { label: "Saldo atual", value: current, color: current >= 0 ? "var(--green)" : "var(--red)", help: "Transações pagas" },
                   { label: "Projetado", value: projected, color: projected >= 0 ? "var(--text-1)" : "var(--red)", help: "Com pendentes do mês" },

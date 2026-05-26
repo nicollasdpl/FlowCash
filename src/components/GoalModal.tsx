@@ -33,11 +33,11 @@ export default function GoalModal({ goal, onClose }: Props) {
 
   function handleSave() {
     if (!name.trim()) return setError("Informe o nome da meta.");
-    const ta = parseFloat(targetAmount);
-    if (!targetAmount || ta <= 0) return setError("Informe o valor objetivo.");
+    const ta = parseFloat(targetAmount.replace(",", "."));
+    if (!targetAmount || isNaN(ta) || ta <= 0) return setError("Informe o valor objetivo.");
     setError("");
 
-    const ca = parseFloat(currentAmount) || 0;
+    const ca = parseFloat(currentAmount.replace(",", ".")) || 0;
     const g: Goal = {
       id: goal?.id ?? newId(),
       name: name.trim(),
@@ -91,17 +91,17 @@ export default function GoalModal({ goal, onClose }: Props) {
 
           <div className="form-group">
             <label className="form-label">Nome da meta</label>
-            <input className="form-input" placeholder="Ex: Reserva de emergência, Viagem..." value={name} onChange={e => setName(e.target.value)} />
+            <input className="form-input" type="text" placeholder="Ex: Reserva de emergência, Viagem..." value={name} onChange={e => setName(e.target.value)} autoComplete="off" autoCorrect="off" />
           </div>
 
           <div className="form-row">
             <div className="form-group" style={{ margin: 0 }}>
               <label className="form-label">Valor objetivo (R$)</label>
-              <input className="form-input mono" type="number" placeholder="0,00" min="0" step="0.01" value={targetAmount} onChange={e => setTargetAmount(e.target.value)} />
+              <input className="form-input mono" type="text" inputMode="decimal" pattern="[0-9]*[.,]?[0-9]*" placeholder="0,00" value={targetAmount} onChange={e => setTargetAmount(e.target.value.replace(/[^0-9.,]/g, ""))} autoComplete="off" />
             </div>
             <div className="form-group" style={{ margin: 0 }}>
               <label className="form-label">Já guardado (R$)</label>
-              <input className="form-input mono" type="number" placeholder="0,00" min="0" step="0.01" value={currentAmount} onChange={e => setCurrentAmount(e.target.value)} />
+              <input className="form-input mono" type="text" inputMode="decimal" pattern="[0-9]*[.,]?[0-9]*" placeholder="0,00" value={currentAmount} onChange={e => setCurrentAmount(e.target.value.replace(/[^0-9.,]/g, ""))} autoComplete="off" />
             </div>
           </div>
 

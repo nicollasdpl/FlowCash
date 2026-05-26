@@ -31,7 +31,7 @@ export default function CardModal({ card, onClose }: Props) {
 
   function handleSave() {
     if (!name.trim()) return setError("Informe o nome do cartão.");
-    if (!totalLimit || parseFloat(totalLimit) <= 0) return setError("Informe o limite.");
+    if (!totalLimit || parseFloat(totalLimit.replace(",", ".")) <= 0) return setError("Informe o limite.");
     const cd = parseInt(closingDay);
     const dd = parseInt(dueDay);
     if (!closingDay || cd < 1 || cd > 31) return setError("Dia de fechamento inválido (1–31).");
@@ -43,7 +43,7 @@ export default function CardModal({ card, onClose }: Props) {
       name: name.trim(),
       lastDigits: lastDigits.slice(-4).padStart(4, "0"),
       brand,
-      totalLimit: parseFloat(totalLimit),
+      totalLimit: parseFloat(totalLimit.replace(",", ".")),
       closingDay: cd,
       dueDay: dd,
       paymentAccountId,
@@ -74,13 +74,13 @@ export default function CardModal({ card, onClose }: Props) {
         <div className="modal-body">
           <div className="form-group">
             <label className="form-label">Nome do cartão</label>
-            <input className="form-input" placeholder="Ex: Nubank, Bradesco, Itaú..." value={name} onChange={e => setName(e.target.value)} />
+            <input className="form-input" type="text" placeholder="Ex: Nubank, Bradesco, Itaú..." value={name} onChange={e => setName(e.target.value)} autoComplete="off" autoCorrect="off" />
           </div>
 
           <div className="form-row">
             <div className="form-group" style={{ margin: 0 }}>
               <label className="form-label">Últimos 4 dígitos</label>
-              <input className="form-input mono" placeholder="0000" maxLength={4} value={lastDigits} onChange={e => setLastDigits(e.target.value.replace(/\D/g, ""))} />
+              <input className="form-input mono" type="text" inputMode="numeric" pattern="[0-9]*" placeholder="0000" maxLength={4} value={lastDigits} onChange={e => setLastDigits(e.target.value.replace(/\D/g, ""))} autoComplete="off" />
             </div>
             <div className="form-group" style={{ margin: 0 }}>
               <label className="form-label">Bandeira</label>
@@ -94,17 +94,17 @@ export default function CardModal({ card, onClose }: Props) {
 
           <div className="form-group">
             <label className="form-label">Limite (R$)</label>
-            <input className="form-input mono" type="number" placeholder="0,00" min="0" step="0.01" value={totalLimit} onChange={e => setTotalLimit(e.target.value)} />
+            <input className="form-input mono" type="text" inputMode="decimal" pattern="[0-9]*[.,]?[0-9]*" placeholder="0,00" value={totalLimit} onChange={e => setTotalLimit(e.target.value.replace(/[^0-9.,]/g, ""))} autoComplete="off" />
           </div>
 
           <div className="form-row">
             <div className="form-group" style={{ margin: 0 }}>
               <label className="form-label">Dia de fechamento</label>
-              <input className="form-input mono" type="number" placeholder="10" min="1" max="31" value={closingDay} onChange={e => setClosingDay(e.target.value)} />
+              <input className="form-input mono" type="text" inputMode="numeric" pattern="[0-9]*" placeholder="10" maxLength={2} value={closingDay} onChange={e => setClosingDay(e.target.value.replace(/\D/g, ""))} autoComplete="off" />
             </div>
             <div className="form-group" style={{ margin: 0 }}>
               <label className="form-label">Dia de vencimento</label>
-              <input className="form-input mono" type="number" placeholder="17" min="1" max="31" value={dueDay} onChange={e => setDueDay(e.target.value)} />
+              <input className="form-input mono" type="text" inputMode="numeric" pattern="[0-9]*" placeholder="17" maxLength={2} value={dueDay} onChange={e => setDueDay(e.target.value.replace(/\D/g, ""))} autoComplete="off" />
             </div>
           </div>
 
