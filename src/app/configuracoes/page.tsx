@@ -8,7 +8,6 @@ export default function Configuracoes() {
   const [nameInput, setNameInput] = useState(state.userName ?? "");
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [showPwaGuide, setShowPwaGuide] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   function saveName() {
@@ -49,118 +48,39 @@ export default function Configuracoes() {
         </p>
       </div>
 
-      {/* ── INSTALAR NO CELULAR ── */}
-      <div
-        className="card fade-up-1"
-        style={{
-          overflow: "hidden", marginBottom: "14px",
-          background: "linear-gradient(135deg, rgba(0,229,195,0.08) 0%, rgba(0,229,195,0.03) 100%)",
-          borderColor: "rgba(0,229,195,0.2)",
-        }}
-      >
-        <button
-          onClick={() => setShowPwaGuide(!showPwaGuide)}
-          style={{
-            width: "100%", background: "none", border: "none",
-            cursor: "pointer", fontFamily: "inherit",
-            padding: "16px 18px",
-            display: "flex", alignItems: "center", gap: "12px",
-          }}
-        >
-          <div style={{
-            width: "44px", height: "44px", borderRadius: "12px", flexShrink: 0,
-            background: "var(--accent-10)", border: "1px solid var(--border-accent)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: "22px",
-          }}>
-            📱
-          </div>
-          <div style={{ flex: 1, textAlign: "left" }}>
-            <p style={{ fontSize: "14px", fontWeight: 700, color: "var(--accent)" }}>
-              Instalar na Tela de Início
-            </p>
-            <p style={{ fontSize: "12px", color: "var(--text-3)", marginTop: "2px" }}>
-              Acesse o FlowCash como app nativo
-            </p>
-          </div>
-          <span style={{ color: "var(--accent)", fontSize: "18px", flexShrink: 0 }}>
-            {showPwaGuide ? "↑" : "↓"}
-          </span>
-        </button>
-
-        {showPwaGuide && (
-          <div style={{ borderTop: "1px solid rgba(0,229,195,0.15)", padding: "16px 18px 20px" }}>
-            <p style={{
-              fontSize: "12px", color: "var(--text-2)", marginBottom: "16px", lineHeight: 1.6,
-            }}>
-              Siga os passos abaixo para instalar o FlowCash no seu iPhone 11:
-            </p>
-
-            {[
-              {
-                step: "1",
-                icon: "⬆️",
-                title: 'Toque em "Compartilhar"',
-                desc: 'Na barra inferior do Safari, toque no ícone de compartilhar (quadrado com seta para cima).',
-              },
-              {
-                step: "2",
-                icon: "➕",
-                title: '"Adicionar à Tela de Início"',
-                desc: 'Role a lista de opções e toque em "Adicionar à Tela de Início".',
-              },
-              {
-                step: "3",
-                icon: "💾",
-                title: 'Confirme o nome',
-                desc: 'O nome já vem como "FlowCash". Toque em "Adicionar" no canto superior direito.',
-              },
-              {
-                step: "4",
-                icon: "🚀",
-                title: 'Pronto!',
-                desc: 'O ícone do FlowCash aparece na sua tela de início. Abra e use como app nativo.',
-              },
-            ].map((item) => (
-              <div key={item.step} style={{
-                display: "flex", gap: "12px", marginBottom: "14px",
-                alignItems: "flex-start",
-              }}>
-                <div style={{
-                  width: "32px", height: "32px", borderRadius: "10px", flexShrink: 0,
-                  background: "var(--accent-10)", border: "1px solid var(--border-accent)",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: "16px",
-                }}>
-                  {item.icon}
-                </div>
-                <div>
-                  <p style={{ fontSize: "13px", fontWeight: 700, color: "var(--text-1)" }}>
-                    {item.title}
-                  </p>
-                  <p style={{ fontSize: "12px", color: "var(--text-3)", marginTop: "3px", lineHeight: 1.5 }}>
-                    {item.desc}
-                  </p>
-                </div>
-              </div>
-            ))}
-
+      {/* ── Navegação rápida ── */}
+      <div className="card fade-up-1" style={{ overflow: "hidden", marginBottom: "14px" }}>
+        <div style={{ padding: "13px 16px", borderBottom: "1px solid var(--border)" }}>
+          <p style={{ fontSize: "11px", fontWeight: 700, color: "var(--text-3)", letterSpacing: "0.08em", textTransform: "uppercase" }}>
+            Seções
+          </p>
+        </div>
+        {[
+          { href: "/contas", icon: "🏦", label: "Minhas Contas", desc: `${stats.accounts} conta${stats.accounts !== 1 ? "s" : ""} cadastrada${stats.accounts !== 1 ? "s" : ""}` },
+          { href: "/relatorios", icon: "📊", label: "Relatórios", desc: "Análises e gráficos" },
+        ].map((item, i, arr) => (
+          <a
+            key={item.href}
+            href={item.href}
+            style={{
+              display: "flex", alignItems: "center", gap: "14px",
+              padding: "14px 16px",
+              borderBottom: i < arr.length - 1 ? "1px solid var(--border)" : "none",
+              textDecoration: "none",
+            }}
+          >
             <div style={{
-              background: "rgba(245,158,11,0.08)",
-              border: "1px solid rgba(245,158,11,0.2)",
-              borderRadius: "var(--r-sm)",
-              padding: "12px 14px",
-              marginTop: "4px",
-            }}>
-              <p style={{ fontSize: "12px", color: "var(--amber)", fontWeight: 600 }}>
-                ⚠️ Use apenas no Safari
-              </p>
-              <p style={{ fontSize: "11.5px", color: "var(--text-3)", marginTop: "3px", lineHeight: 1.5 }}>
-                A opção "Adicionar à Tela de Início" só aparece no Safari do iPhone. Não funciona no Chrome ou Firefox.
-              </p>
+              width: "40px", height: "40px", borderRadius: "12px", flexShrink: 0,
+              background: "var(--bg-input)", border: "1px solid var(--border)",
+              display: "flex", alignItems: "center", justifyContent: "center", fontSize: "20px",
+            }}>{item.icon}</div>
+            <div style={{ flex: 1 }}>
+              <p style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-1)" }}>{item.label}</p>
+              <p style={{ fontSize: "11.5px", color: "var(--text-3)", marginTop: "2px" }}>{item.desc}</p>
             </div>
-          </div>
-        )}
+            <span style={{ color: "var(--text-3)", fontSize: "16px" }}>›</span>
+          </a>
+        ))}
       </div>
 
       {/* Perfil */}
