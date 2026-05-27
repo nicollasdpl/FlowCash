@@ -52,6 +52,7 @@ export default function EditarCompra() {
   const hasPaidInstallments = state.installments.some(i => i.purchaseId === purchase.id && i.paid);
 
   function handleSave() {
+    if (!purchase) return;
     if (!description.trim()) return setError("Informe a descrição.");
     const amt = parseFloat(amount.replace(",", "."));
     if (!amount || isNaN(amt) || amt <= 0) return setError("Informe um valor válido.");
