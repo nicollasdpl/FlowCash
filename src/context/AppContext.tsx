@@ -92,6 +92,30 @@ const seed: AppState = {
   budgets: [],
 };
 
+// ─── SEED ICON MIGRATION ──────────────────────────────────────────────────────
+
+function normalizeCatName(name: string): string {
+  return name.toLowerCase().normalize("NFD").replace(/\p{M}/gu, "").trim();
+}
+
+const SEED_ICON_MAP: Record<string, { icon: string; color: string }> = {
+  "alimentacao":   { icon: "UtensilsCrossed", color: "#FF8C42" },
+  "transporte":    { icon: "Car",             color: "#4A9EFF" },
+  "moradia":       { icon: "Home",            color: "#FFB830" },
+  "saude":         { icon: "Heart",           color: "#FF4D6A" },
+  "lazer":         { icon: "Gamepad2",        color: "#A855F7" },
+  "educacao":      { icon: "BookOpen",        color: "#00BCD4" },
+  "vestuario":     { icon: "ShoppingBag",     color: "#E91E63" },
+  "viagem":        { icon: "Plane",           color: "#03A9F4" },
+  "pets":          { icon: "PawPrint",        color: "#8BC34A" },
+  "salario":       { icon: "Wallet",          color: "#00E5A0" },
+  "investimentos": { icon: "TrendingUp",      color: "#00E5A0" },
+  "freelance":     { icon: "Briefcase",       color: "#00E5A0" },
+  "eletronicos":   { icon: "Zap",             color: "#4A9EFF" },
+  "para mim":      { icon: "Star",            color: "#FFB830" },
+  "outros":        { icon: "Tag",             color: "#607D8B" },
+};
+
 // ─── REDUCER ──────────────────────────────────────────────────────────────────
 
 function reducer(state: AppState, action: Action): AppState {
@@ -99,10 +123,15 @@ function reducer(state: AppState, action: Action): AppState {
     case "LOAD": {
       const payloadCats = action.payload.categories;
       const categories = Array.isArray(payloadCats) && payloadCats.length > 0
-        ? payloadCats.map((cat: Category) => ({
-            ...cat,
-            icon: /^[A-Z][A-Za-z0-9]+$/.test(cat.icon ?? "") ? cat.icon : "Tag",
-          }))
+        ? payloadCats.map((cat: Category) => {
+            // Já é um nome Lucide válido (PascalCase) → manter sem tocar
+            if (/^[A-Z][A-Za-z0-9]+$/.test(cat.icon ?? "")) return cat;
+            // Emoji / inválido → tentar mapear pelo nome da categoria
+            const mapped = SEED_ICON_MAP[normalizeCatName(cat.name ?? "")];
+            if (mapped) return { ...cat, icon: mapped.icon, color: mapped.color };
+            // Categoria personalizada sem mapeamento → Tag, manter cor existente
+            return { ...cat, icon: "Tag" };
+          })
         : seed.categories;
       return { ...seed, ...action.payload, categories };
     }
