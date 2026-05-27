@@ -31,7 +31,7 @@ type AICardPurchase = {
   confidence: number;
 };
 
-type AIError   = { intent: "error";   code: string; message: string };
+type AIError   = { intent: "error"; code: string; message: string; retryAfterSec?: number };
 type AIUnknown = { intent: "unknown"; message: string };
 type AIResult  = AITransaction | AICardPurchase | AIError | AIUnknown;
 
@@ -56,12 +56,12 @@ type PurchaseDraft = {
 // ─── Chips de sugestão ────────────────────────────────────────────────────────
 
 const QUICK_CHIPS = [
-  { Icon: Utensils, label: "iFood",    text: "gastei R$  no iFood hoje" },
-  { Icon: Car,      label: "Uber",     text: "paguei Uber R$ " },
-  { Icon: Wallet,   label: "Salário",  text: "recebi salário de R$ " },
-  { Icon: CreditCard, label: "Cartão", text: "comprei no cartão " },
-  { Icon: Fuel,     label: "Gasolina", text: "abasteci R$  de gasolina" },
-  { Icon: Home,     label: "Moradia",  text: "paguei aluguel R$ " },
+  { Icon: Utensils,   label: "iFood",    text: "gastei R$  no iFood hoje" },
+  { Icon: Car,        label: "Uber",     text: "paguei Uber R$ " },
+  { Icon: Wallet,     label: "Salário",  text: "recebi salário de R$ " },
+  { Icon: CreditCard, label: "Cartão",   text: "comprei no cartão " },
+  { Icon: Fuel,       label: "Gasolina", text: "abasteci R$  de gasolina" },
+  { Icon: Home,       label: "Moradia",  text: "paguei aluguel R$ " },
 ];
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -104,13 +104,15 @@ export default function AIPageContent() {
   const [txDraft, setTxDraft]             = useState<TxDraft | null>(null);
   const [purchaseDraft, setPurchaseDraft] = useState<PurchaseDraft | null>(null);
 
-  const inputRef      = useRef<HTMLTextAreaElement>(null);
-  const contentRef    = useRef<HTMLDivElement>(null);
-  const pendingMsg    = useRef<string>("");
-  const retryTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const inputRef       = useRef<HTMLTextAreaElement>(null);
+  const contentRef     = useRef<HTMLDivElement>(null);
+  const pendingMsg     = useRef<string>("");
+  const retryTimerRef  = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
-    return () => { if (retryTimerRef.current) clearInterval(retryTimerRef.current); };
+    return () => {
+      if (retryTimerRef.current) clearInterval(retryTimerRef.current);
+    };
   }, []);
 
   useEffect(() => {
@@ -140,7 +142,8 @@ export default function AIPageContent() {
     }
   }, [result]);
 
-  function startRetry(msg: string, seconds = 10) {
+  // ── Retry automático (429) ─────────────────────────────────────────────────
+  function startRetry(msg: string, seconds = 30) {
     pendingMsg.current = msg;
     setRetryIn(seconds);
     retryTimerRef.current = setInterval(() => {
@@ -157,6 +160,7 @@ export default function AIPageContent() {
     }, 1000);
   }
 
+  // ── Enviar ────────────────────────────────────────────────────────────────
   async function sendMessage(msg: string) {
     setLoading(true);
     setResult(null);
@@ -177,7 +181,8 @@ export default function AIPageContent() {
 
       if (data.intent === "error" && data.code === "HTTP_429") {
         setLoading(false);
-        startRetry(msg, 30);
+        const secs = (data as AIError).retryAfterSec ?? 30;
+        startRetry(msg, secs);
         return;
       }
 
@@ -198,6 +203,7 @@ export default function AIPageContent() {
     sendMessage(msg);
   }
 
+  // ── Confirmar ─────────────────────────────────────────────────────────────
   function handleConfirm() {
     if (!result || result.intent === "unknown" || result.intent === "error") return;
 
@@ -267,22 +273,16 @@ export default function AIPageContent() {
 
   const hasPreview = result?.intent === "transaction" || result?.intent === "card_purchase";
   const hasError   = result?.intent === "error" || result?.intent === "unknown";
+  const isBusy     = loading || retryIn !== null;
 
   return (
     <>
       {/* ── Sticky header ─────────────────────────────────────────────────── */}
       <div style={{
-        position: "sticky",
-        top: 0,
-        zIndex: 10,
-        background: "var(--bg)",
-        borderBottom: "1px solid var(--border)",
-        display: "flex",
-        alignItems: "center",
-        gap: "4px",
-        padding: "0 16px 0 4px",
-        height: "60px",
-        flexShrink: 0,
+        position: "sticky", top: 0, zIndex: 10,
+        background: "var(--bg)", borderBottom: "1px solid var(--border)",
+        display: "flex", alignItems: "center", gap: "4px",
+        padding: "0 16px 0 4px", height: "60px", flexShrink: 0,
       }}>
         <button
           onClick={() => router.back()}
@@ -317,41 +317,34 @@ export default function AIPageContent() {
       </div>
 
       {/* ── Conteúdo principal ────────────────────────────────────────────── */}
-      <div
-        ref={contentRef}
-        style={{ padding: "20px 16px 130px" }}
-      >
+      <div ref={contentRef} style={{ padding: "20px 16px 130px" }}>
 
         {/* Flash de sucesso */}
         {flash && (
           <div style={{
             display: "flex", flexDirection: "column", alignItems: "center",
-            padding: "40px 0",
-            animation: "fadeIn 0.25s ease",
+            padding: "40px 0", animation: "fadeIn 0.25s ease",
           }}>
             <div style={{
               width: "64px", height: "64px", borderRadius: "50%",
               background: "var(--green-10)", border: "2px solid var(--green-20)",
               display: "flex", alignItems: "center", justifyContent: "center",
               fontSize: "28px", marginBottom: "14px",
-              animation: "fadeIn 0.3s ease",
             }}>✓</div>
             <p style={{ fontSize: "16px", fontWeight: 700, color: "var(--green)" }}>Lançado com sucesso!</p>
             <p style={{ fontSize: "12px", color: "var(--text-3)", marginTop: "4px" }}>Voltando...</p>
           </div>
         )}
 
-        {/* Estado inicial — chips */}
+        {/* Estado inicial */}
         {!loading && !result && !flash && (
           <>
             <p style={{ fontSize: "13px", color: "var(--text-3)", marginBottom: "14px", lineHeight: 1.6 }}>
               Diga o que aconteceu financeiramente e eu lanço automaticamente.
             </p>
-
             <p style={{ fontSize: "10px", fontWeight: 700, color: "var(--text-3)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "10px" }}>
               Sugestões rápidas
             </p>
-
             <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginBottom: "20px" }}>
               {QUICK_CHIPS.map(chip => (
                 <button
@@ -360,11 +353,9 @@ export default function AIPageContent() {
                   style={{
                     display: "inline-flex", alignItems: "center", gap: "6px",
                     padding: "9px 14px",
-                    background: "var(--bg-card)",
-                    border: "1px solid var(--border)",
-                    borderRadius: "20px",
-                    fontSize: "13px", fontWeight: 600, color: "var(--text-2)",
-                    cursor: "pointer", fontFamily: "inherit",
+                    background: "var(--bg-card)", border: "1px solid var(--border)",
+                    borderRadius: "20px", fontSize: "13px", fontWeight: 600,
+                    color: "var(--text-2)", cursor: "pointer", fontFamily: "inherit",
                     touchAction: "manipulation",
                   }}
                 >
@@ -373,13 +364,7 @@ export default function AIPageContent() {
                 </button>
               ))}
             </div>
-
-            <div style={{
-              padding: "14px 16px",
-              background: "var(--bg-card)",
-              border: "1px solid var(--border)",
-              borderRadius: "12px",
-            }}>
+            <div style={{ padding: "14px 16px", background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "12px" }}>
               <p style={{ fontSize: "11px", fontWeight: 700, color: "var(--text-3)", marginBottom: "8px", letterSpacing: "0.05em", textTransform: "uppercase" }}>
                 Exemplos
               </p>
@@ -394,12 +379,10 @@ export default function AIPageContent() {
                   onClick={() => handleChip(ex)}
                   style={{
                     display: "block", width: "100%", textAlign: "left",
-                    padding: "8px 0",
-                    background: "none", border: "none",
+                    padding: "8px 0", background: "none", border: "none",
                     borderBottom: "1px solid var(--border)",
                     color: "var(--accent)", fontSize: "13px",
-                    cursor: "pointer", fontFamily: "inherit",
-                    touchAction: "manipulation",
+                    cursor: "pointer", fontFamily: "inherit", touchAction: "manipulation",
                   }}
                 >
                   &quot;{ex}&quot;
@@ -414,25 +397,21 @@ export default function AIPageContent() {
           <div style={{
             display: "flex", alignItems: "center", gap: "14px",
             padding: "20px 18px",
-            background: "rgba(245,158,11,0.06)",
-            border: "1px solid var(--amber-20)",
-            borderRadius: "14px",
-            animation: "fadeIn 0.2s ease",
+            background: "rgba(245,158,11,0.06)", border: "1px solid var(--amber-20)",
+            borderRadius: "14px", animation: "fadeIn 0.2s ease",
           }}>
             <div style={{
               width: "44px", height: "44px", borderRadius: "50%",
-              background: "rgba(245,158,11,0.12)",
-              border: "2px solid var(--amber-20)",
+              background: "rgba(245,158,11,0.12)", border: "2px solid var(--amber-20)",
               display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: "20px", fontWeight: 700, color: "var(--amber)",
-              flexShrink: 0,
+              fontSize: "18px", fontWeight: 700, color: "var(--amber)", flexShrink: 0,
             }}>
               {retryIn}
             </div>
             <div>
-              <p style={{ fontSize: "13px", fontWeight: 700, color: "var(--amber)" }}>Limite atingido</p>
+              <p style={{ fontSize: "13px", fontWeight: 700, color: "var(--amber)" }}>Limite da API atingido</p>
               <p style={{ fontSize: "12px", color: "var(--text-3)", marginTop: "2px", lineHeight: 1.4 }}>
-                Reenviando em {retryIn}s — limite gratuito (15/min)
+                Reenviando automaticamente em {retryIn}s
               </p>
             </div>
           </div>
@@ -442,8 +421,7 @@ export default function AIPageContent() {
         {loading && (
           <div style={{
             display: "flex", alignItems: "center", gap: "14px",
-            padding: "24px 0",
-            animation: "fadeIn 0.2s ease",
+            padding: "24px 0", animation: "fadeIn 0.2s ease",
           }}>
             <div style={{
               width: "40px", height: "40px", borderRadius: "12px",
@@ -464,11 +442,8 @@ export default function AIPageContent() {
         {/* Erro */}
         {hasError && result && !flash && (
           <div style={{
-            padding: "16px",
-            background: "var(--red-10)",
-            border: "1px solid var(--red-20)",
-            borderRadius: "14px",
-            animation: "fadeIn 0.2s ease",
+            padding: "16px", background: "var(--red-10)", border: "1px solid var(--red-20)",
+            borderRadius: "14px", animation: "fadeIn 0.2s ease",
           }}>
             <p style={{ fontSize: "13px", fontWeight: 700, color: "var(--red)", marginBottom: "6px" }}>
               {result.intent === "error" ? `Erro · ${result.code}` : "Não entendi"}
@@ -482,8 +457,7 @@ export default function AIPageContent() {
                 marginTop: "12px", padding: "8px 14px",
                 background: "var(--red-10)", border: "1px solid var(--red-20)",
                 borderRadius: "8px", color: "var(--red)",
-                fontSize: "12px", fontWeight: 700,
-                cursor: "pointer", fontFamily: "inherit",
+                fontSize: "12px", fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
               }}
             >
               Tentar novamente
@@ -494,16 +468,11 @@ export default function AIPageContent() {
         {/* ── Preview card editável ─────────────────────────────────────────── */}
         {hasPreview && result && !flash && (
           <div style={{
-            background: "var(--bg-card)",
-            border: "1px solid var(--border-accent)",
-            borderRadius: "16px",
-            overflow: "hidden",
-            animation: "fadeIn 0.25s ease",
+            background: "var(--bg-card)", border: "1px solid var(--border-accent)",
+            borderRadius: "16px", overflow: "hidden", animation: "fadeIn 0.25s ease",
           }}>
-            {/* Cabeçalho */}
             <div style={{
-              padding: "7px 14px",
-              background: "var(--accent-10)",
+              padding: "7px 14px", background: "var(--accent-10)",
               borderBottom: "1px solid var(--border-accent)",
               display: "flex", alignItems: "center", gap: "6px",
             }}>
@@ -515,23 +484,20 @@ export default function AIPageContent() {
 
             <div style={{ padding: "16px 18px", display: "flex", flexDirection: "column", gap: "14px" }}>
 
-              {/* ── Formulário de TRANSAÇÃO ── */}
+              {/* ── TRANSAÇÃO ── */}
               {result.intent === "transaction" && txDraft && (() => {
                 const editCat = state.categories.find(c => c.id === txDraft.categoryId);
                 const txCategories = state.categories.filter(c => c.type === result.type);
                 const parsedAmount = parseFloat(txDraft.amount.replace(",", "."));
                 const isIncome = result.type === "income";
-
                 return (
                   <>
-                    {/* Resumo visual */}
                     <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
                       <div style={{
                         width: "44px", height: "44px", borderRadius: "13px", flexShrink: 0,
                         background: editCat ? `${editCat.color}18` : "var(--bg-input)",
                         border: `1px solid ${editCat ? editCat.color + "28" : "var(--border)"}`,
-                        display: "flex", alignItems: "center", justifyContent: "center",
-                        fontSize: "20px",
+                        display: "flex", alignItems: "center", justifyContent: "center", fontSize: "20px",
                       }}>
                         {editCat?.icon || <Package size={20} strokeWidth={1.5} color="var(--text-3)" />}
                       </div>
@@ -540,135 +506,89 @@ export default function AIPageContent() {
                           {isIncome ? "↑ Receita" : "↓ Despesa"} · {editCat?.name ?? "—"}
                         </p>
                       </div>
-                      <p className="mono" style={{
-                        fontSize: "20px", fontWeight: 700, flexShrink: 0,
-                        color: isIncome ? "var(--green)" : "var(--text-1)",
-                      }}>
+                      <p className="mono" style={{ fontSize: "20px", fontWeight: 700, flexShrink: 0, color: isIncome ? "var(--green)" : "var(--text-1)" }}>
                         {isIncome ? "+" : "−"}R$ {isNaN(parsedAmount) ? "—" : fmt(parsedAmount)}
                       </p>
                     </div>
 
-                    {/* Descrição */}
                     <div className="form-group" style={{ margin: 0 }}>
                       <label className="form-label">Descrição</label>
-                      <input
-                        className="form-input"
-                        type="text"
-                        value={txDraft.description}
+                      <input className="form-input" type="text" value={txDraft.description}
                         onChange={e => setTxDraft(d => d ? { ...d, description: e.target.value } : d)}
-                        autoComplete="off"
-                        autoCorrect="off"
-                      />
+                        autoComplete="off" autoCorrect="off" />
                     </div>
 
-                    {/* Valor */}
                     <div className="form-group" style={{ margin: 0 }}>
                       <label className="form-label">Valor (R$)</label>
-                      <input
-                        className="form-input mono"
-                        type="text"
-                        inputMode="decimal"
-                        value={txDraft.amount}
+                      <input className="form-input mono" type="text" inputMode="decimal" value={txDraft.amount}
                         onChange={e => setTxDraft(d => d ? { ...d, amount: e.target.value.replace(/[^0-9.,]/g, "") } : d)}
-                        style={{ fontSize: "20px" }}
-                        autoComplete="off"
-                      />
+                        style={{ fontSize: "20px" }} autoComplete="off" />
                     </div>
 
-                    {/* Categoria */}
                     <div className="form-group" style={{ margin: 0 }}>
                       <label className="form-label">Categoria</label>
-                      <select
-                        className="form-input"
-                        value={txDraft.categoryId}
-                        onChange={e => setTxDraft(d => d ? { ...d, categoryId: e.target.value } : d)}
-                      >
-                        {txCategories.map(c => (
-                          <option key={c.id} value={c.id}>{c.icon} {c.name}</option>
-                        ))}
+                      <select className="form-input" value={txDraft.categoryId}
+                        onChange={e => setTxDraft(d => d ? { ...d, categoryId: e.target.value } : d)}>
+                        {txCategories.map(c => <option key={c.id} value={c.id}>{c.icon} {c.name}</option>)}
                       </select>
                     </div>
 
-                    {/* Conta */}
                     <div className="form-group" style={{ margin: 0 }}>
                       <label className="form-label">Conta</label>
-                      <select
-                        className="form-input"
-                        value={txDraft.accountId}
-                        onChange={e => setTxDraft(d => d ? { ...d, accountId: e.target.value } : d)}
-                      >
-                        {state.accounts.filter(a => a.active).map(a => (
-                          <option key={a.id} value={a.id}>{a.icon} {a.name}</option>
-                        ))}
+                      <select className="form-input" value={txDraft.accountId}
+                        onChange={e => setTxDraft(d => d ? { ...d, accountId: e.target.value } : d)}>
+                        {state.accounts.filter(a => a.active).map(a => <option key={a.id} value={a.id}>{a.icon} {a.name}</option>)}
                       </select>
                     </div>
 
-                    {/* Data */}
                     <div className="form-group" style={{ margin: 0 }}>
                       <label className="form-label">Data</label>
-                      <input
-                        className="form-input"
-                        type="date"
-                        value={txDraft.paymentDate}
-                        onChange={e => setTxDraft(d => d ? { ...d, paymentDate: e.target.value } : d)}
-                      />
+                      <input className="form-input" type="date" value={txDraft.paymentDate}
+                        onChange={e => setTxDraft(d => d ? { ...d, paymentDate: e.target.value } : d)} />
                     </div>
 
-                    {/* Status */}
                     <div className="form-group" style={{ margin: 0 }}>
                       <label className="form-label">Status</label>
                       <div style={{ display: "flex", gap: "6px" }}>
-                        <button
-                          onClick={() => setTxDraft(d => d ? { ...d, status: "paid" } : d)}
-                          style={{
-                            flex: 1, padding: "10px", borderRadius: "10px",
-                            background: txDraft.status === "paid" ? "var(--green-10)" : "var(--bg-input)",
-                            border: `1px solid ${txDraft.status === "paid" ? "var(--green-20)" : "var(--border)"}`,
-                            color: txDraft.status === "paid" ? "var(--green)" : "var(--text-3)",
-                            fontWeight: 700, fontSize: "13px", cursor: "pointer",
-                            fontFamily: "inherit", minHeight: "44px",
-                            touchAction: "manipulation", transition: "all 0.15s",
-                          }}
-                        >✓ Pago</button>
-                        <button
-                          onClick={() => setTxDraft(d => d ? { ...d, status: "pending" } : d)}
-                          style={{
-                            flex: 1, padding: "10px", borderRadius: "10px",
-                            background: txDraft.status === "pending" ? "var(--amber-10)" : "var(--bg-input)",
-                            border: `1px solid ${txDraft.status === "pending" ? "var(--amber-20)" : "var(--border)"}`,
-                            color: txDraft.status === "pending" ? "var(--amber)" : "var(--text-3)",
-                            fontWeight: 700, fontSize: "13px", cursor: "pointer",
-                            fontFamily: "inherit", minHeight: "44px",
-                            touchAction: "manipulation", transition: "all 0.15s",
-                          }}
-                        >A pagar</button>
+                        {[
+                          { key: "paid" as const, label: "✓ Pago", bg: "var(--green-10)", border: "var(--green-20)", color: "var(--green)" },
+                          { key: "pending" as const, label: "A pagar", bg: "var(--amber-10)", border: "var(--amber-20)", color: "var(--amber)" },
+                        ].map(opt => (
+                          <button key={opt.key}
+                            onClick={() => setTxDraft(d => d ? { ...d, status: opt.key } : d)}
+                            style={{
+                              flex: 1, padding: "10px", borderRadius: "10px",
+                              background: txDraft.status === opt.key ? opt.bg : "var(--bg-input)",
+                              border: `1px solid ${txDraft.status === opt.key ? opt.border : "var(--border)"}`,
+                              color: txDraft.status === opt.key ? opt.color : "var(--text-3)",
+                              fontWeight: 700, fontSize: "13px", cursor: "pointer",
+                              fontFamily: "inherit", minHeight: "44px",
+                              touchAction: "manipulation", transition: "all 0.15s",
+                            }}
+                          >{opt.label}</button>
+                        ))}
                       </div>
                     </div>
                   </>
                 );
               })()}
 
-              {/* ── Formulário de COMPRA NO CARTÃO ── */}
+              {/* ── COMPRA NO CARTÃO ── */}
               {result.intent === "card_purchase" && purchaseDraft && (() => {
                 const editCat = state.categories.find(c => c.id === purchaseDraft.categoryId);
                 const expenseCategories = state.categories.filter(c => c.type === "expense");
                 const parsedAmount = parseFloat(purchaseDraft.amount.replace(",", "."));
                 const parsedInstallments = Math.max(1, parseInt(purchaseDraft.totalInstallments) || 1);
-                const installmentValue = !isNaN(parsedAmount) && parsedInstallments > 1
-                  ? parsedAmount / parsedInstallments
-                  : null;
+                const installmentValue = !isNaN(parsedAmount) && parsedInstallments > 1 ? parsedAmount / parsedInstallments : null;
                 const editCard = state.cards.find(c => c.id === purchaseDraft.cardId);
-
                 return (
                   <>
-                    {/* Resumo visual */}
                     <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
                       <div style={{
                         width: "44px", height: "44px", borderRadius: "13px", flexShrink: 0,
                         background: editCat ? `${editCat.color}18` : "var(--bg-input)",
                         border: `1px solid ${editCat ? editCat.color + "28" : "var(--border)"}`,
-                        display: "flex", alignItems: "center", justifyContent: "center",
-                        fontSize: "20px",
+                        display: "flex", alignItems: "center", justifyContent: "center", fontSize: "20px",
                       }}>
                         {editCat?.icon || <Package size={20} strokeWidth={1.5} color="var(--text-3)" />}
                       </div>
@@ -689,44 +609,25 @@ export default function AIPageContent() {
                       </div>
                     </div>
 
-                    {/* Descrição */}
                     <div className="form-group" style={{ margin: 0 }}>
                       <label className="form-label">Descrição</label>
-                      <input
-                        className="form-input"
-                        type="text"
-                        value={purchaseDraft.description}
+                      <input className="form-input" type="text" value={purchaseDraft.description}
                         onChange={e => setPurchaseDraft(d => d ? { ...d, description: e.target.value } : d)}
-                        autoComplete="off"
-                        autoCorrect="off"
-                      />
+                        autoComplete="off" autoCorrect="off" />
                     </div>
 
-                    {/* Valor */}
                     <div className="form-group" style={{ margin: 0 }}>
                       <label className="form-label">Valor total (R$)</label>
-                      <input
-                        className="form-input mono"
-                        type="text"
-                        inputMode="decimal"
-                        value={purchaseDraft.amount}
+                      <input className="form-input mono" type="text" inputMode="decimal" value={purchaseDraft.amount}
                         onChange={e => setPurchaseDraft(d => d ? { ...d, amount: e.target.value.replace(/[^0-9.,]/g, "") } : d)}
-                        style={{ fontSize: "20px" }}
-                        autoComplete="off"
-                      />
+                        style={{ fontSize: "20px" }} autoComplete="off" />
                     </div>
 
-                    {/* Parcelas */}
                     <div className="form-group" style={{ margin: 0 }}>
                       <label className="form-label">Parcelas</label>
-                      <input
-                        className="form-input mono"
-                        type="text"
-                        inputMode="numeric"
-                        value={purchaseDraft.totalInstallments}
+                      <input className="form-input mono" type="text" inputMode="numeric" value={purchaseDraft.totalInstallments}
                         onChange={e => setPurchaseDraft(d => d ? { ...d, totalInstallments: e.target.value.replace(/[^0-9]/g, "") } : d)}
-                        autoComplete="off"
-                      />
+                        autoComplete="off" />
                       {installmentValue && (
                         <p style={{ fontSize: "12px", color: "var(--accent)", fontWeight: 600, marginTop: "6px" }}>
                           → {parsedInstallments}x de R$ {fmt(installmentValue)}
@@ -734,74 +635,45 @@ export default function AIPageContent() {
                       )}
                     </div>
 
-                    {/* Categoria */}
                     <div className="form-group" style={{ margin: 0 }}>
                       <label className="form-label">Categoria</label>
-                      <select
-                        className="form-input"
-                        value={purchaseDraft.categoryId}
-                        onChange={e => setPurchaseDraft(d => d ? { ...d, categoryId: e.target.value } : d)}
-                      >
-                        {expenseCategories.map(c => (
-                          <option key={c.id} value={c.id}>{c.icon} {c.name}</option>
-                        ))}
+                      <select className="form-input" value={purchaseDraft.categoryId}
+                        onChange={e => setPurchaseDraft(d => d ? { ...d, categoryId: e.target.value } : d)}>
+                        {expenseCategories.map(c => <option key={c.id} value={c.id}>{c.icon} {c.name}</option>)}
                       </select>
                     </div>
 
-                    {/* Cartão */}
                     <div className="form-group" style={{ margin: 0 }}>
                       <label className="form-label">Cartão</label>
-                      <select
-                        className="form-input"
-                        value={purchaseDraft.cardId}
-                        onChange={e => setPurchaseDraft(d => d ? { ...d, cardId: e.target.value } : d)}
-                      >
-                        {state.cards.map(c => (
-                          <option key={c.id} value={c.id}>{c.name} ({c.brand})</option>
-                        ))}
+                      <select className="form-input" value={purchaseDraft.cardId}
+                        onChange={e => setPurchaseDraft(d => d ? { ...d, cardId: e.target.value } : d)}>
+                        {state.cards.map(c => <option key={c.id} value={c.id}>{c.name} ({c.brand})</option>)}
                       </select>
                     </div>
 
-                    {/* Data da compra */}
                     <div className="form-group" style={{ margin: 0 }}>
                       <label className="form-label">Data da compra</label>
-                      <input
-                        className="form-input"
-                        type="date"
-                        value={purchaseDraft.purchaseDate}
-                        onChange={e => setPurchaseDraft(d => d ? { ...d, purchaseDate: e.target.value } : d)}
-                      />
+                      <input className="form-input" type="date" value={purchaseDraft.purchaseDate}
+                        onChange={e => setPurchaseDraft(d => d ? { ...d, purchaseDate: e.target.value } : d)} />
                     </div>
                   </>
                 );
               })()}
 
-              {/* Botões de ação */}
+              {/* Botões */}
               <div style={{ display: "flex", gap: "8px", paddingTop: "2px" }}>
-                <button
-                  onClick={handleConfirm}
-                  style={{
-                    flex: 1, padding: "14px",
-                    background: "var(--accent)", border: "none",
-                    borderRadius: "12px",
-                    color: "#06100E", fontSize: "14px", fontWeight: 700,
-                    cursor: "pointer", fontFamily: "inherit",
-                    touchAction: "manipulation",
-                  }}
-                >
+                <button onClick={handleConfirm} style={{
+                  flex: 1, padding: "14px", background: "var(--accent)", border: "none",
+                  borderRadius: "12px", color: "#06100E", fontSize: "14px", fontWeight: 700,
+                  cursor: "pointer", fontFamily: "inherit", touchAction: "manipulation",
+                }}>
                   ✓ Confirmar
                 </button>
-                <button
-                  onClick={() => { setResult(null); setMessage(""); inputRef.current?.focus(); }}
-                  style={{
-                    flex: 1, padding: "14px",
-                    background: "var(--bg-input)", border: "1px solid var(--border)",
-                    borderRadius: "12px",
-                    color: "var(--text-2)", fontSize: "14px", fontWeight: 600,
-                    cursor: "pointer", fontFamily: "inherit",
-                    touchAction: "manipulation",
-                  }}
-                >
+                <button onClick={() => { setResult(null); setMessage(""); inputRef.current?.focus(); }} style={{
+                  flex: 1, padding: "14px", background: "var(--bg-input)", border: "1px solid var(--border)",
+                  borderRadius: "12px", color: "var(--text-2)", fontSize: "14px", fontWeight: 600,
+                  cursor: "pointer", fontFamily: "inherit", touchAction: "manipulation",
+                }}>
                   Descartar
                 </button>
               </div>
@@ -812,18 +684,11 @@ export default function AIPageContent() {
 
       {/* ── Input fixo no fundo ────────────────────────────────────────────── */}
       <div style={{
-        position: "fixed",
-        bottom: 0,
-        left: 0,
-        right: 0,
-        zIndex: 50,
-        background: "var(--bg)",
-        borderTop: "1px solid var(--border)",
+        position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 50,
+        background: "var(--bg)", borderTop: "1px solid var(--border)",
         padding: "10px 12px",
         paddingBottom: "calc(10px + env(safe-area-inset-bottom, 0px))",
-        display: "flex",
-        alignItems: "flex-end",
-        gap: "8px",
+        display: "flex", alignItems: "flex-end", gap: "8px",
       }}>
         <textarea
           ref={inputRef}
@@ -835,50 +700,37 @@ export default function AIPageContent() {
           }}
           onKeyDown={handleKey}
           placeholder="Ex: gastei 50 no iFood hoje…"
-          disabled={loading || flash || retryIn !== null}
+          disabled={isBusy || flash}
           rows={1}
           style={{
-            flex: 1,
-            background: "var(--bg-input)",
-            border: "1px solid var(--border)",
-            borderRadius: "14px",
-            padding: "11px 14px",
-            fontSize: "14px",
-            color: "var(--text-1)",
-            fontFamily: "inherit",
-            resize: "none",
-            outline: "none",
-            lineHeight: 1.4,
-            minHeight: "44px",
-            maxHeight: "96px",
-            overflowY: "auto",
-            transition: "border-color 0.2s",
-            WebkitTapHighlightColor: "transparent",
+            flex: 1, background: "var(--bg-input)", border: "1px solid var(--border)",
+            borderRadius: "14px", padding: "11px 14px", fontSize: "14px",
+            color: "var(--text-1)", fontFamily: "inherit", resize: "none", outline: "none",
+            lineHeight: 1.4, minHeight: "44px", maxHeight: "96px", overflowY: "auto",
+            transition: "border-color 0.2s", WebkitTapHighlightColor: "transparent",
+            opacity: isBusy ? 0.5 : 1,
           }}
           onFocus={e => { (e.target as HTMLTextAreaElement).style.borderColor = "var(--accent)"; }}
           onBlur={e => { (e.target as HTMLTextAreaElement).style.borderColor = "var(--border)"; }}
         />
         <button
           onClick={handleSend}
-          disabled={!message.trim() || loading || flash || retryIn !== null}
+          disabled={!message.trim() || isBusy || flash}
           style={{
-            width: "44px", height: "44px", flexShrink: 0,
-            borderRadius: "13px",
-            background: message.trim() && !loading ? "var(--accent)" : "var(--bg-input)",
-            border: `1px solid ${message.trim() && !loading ? "transparent" : "var(--border)"}`,
-            color: message.trim() && !loading ? "#06100E" : "var(--text-3)",
+            width: "44px", height: "44px", flexShrink: 0, borderRadius: "13px",
+            background: message.trim() && !isBusy ? "var(--accent)" : "var(--bg-input)",
+            border: `1px solid ${message.trim() && !isBusy ? "transparent" : "var(--border)"}`,
+            color: message.trim() && !isBusy ? "#06100E" : "var(--text-3)",
             display: "flex", alignItems: "center", justifyContent: "center",
-            cursor: message.trim() && !loading ? "pointer" : "default",
-            transition: "all 0.18s",
-            touchAction: "manipulation",
+            cursor: message.trim() && !isBusy ? "pointer" : "default",
+            transition: "all 0.18s", touchAction: "manipulation",
+            fontSize: "12px", fontWeight: 700, fontFamily: "inherit",
           }}
         >
           {loading ? (
             <div style={{
-              width: "15px", height: "15px",
-              border: "2px solid var(--accent)",
-              borderTopColor: "transparent",
-              borderRadius: "50%",
+              width: "15px", height: "15px", border: "2px solid var(--accent)",
+              borderTopColor: "transparent", borderRadius: "50%",
               animation: "spin 0.7s linear infinite",
             }} />
           ) : (

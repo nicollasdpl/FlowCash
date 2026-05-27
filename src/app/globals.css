@@ -570,7 +570,7 @@ select.form-input {
   cursor: pointer;
   font-family: inherit;
   flex: 1;
-  min-height: 52px;
+  min-height: 48px;
   position: relative;
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
@@ -699,7 +699,7 @@ select.form-input {
   main {
     overscroll-behavior-y: contain;
     -webkit-overflow-scrolling: touch;
-    padding-bottom: calc(52px + env(safe-area-inset-bottom, 0px) + 12px) !important;
+    padding-bottom: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom, 0px)) !important;
   }
 
   /* ── Bottom Nav nativa ── */
@@ -711,7 +711,7 @@ select.form-input {
     right: 0;
     z-index: 200;
     padding-bottom: env(safe-area-inset-bottom, 0px);
-    background: rgba(8, 15, 23, 0.94);
+    background: rgba(8, 15, 23, 0.98);
     border-top: 1px solid var(--border);
     backdrop-filter: blur(28px) saturate(200%);
     -webkit-backdrop-filter: blur(28px) saturate(200%);

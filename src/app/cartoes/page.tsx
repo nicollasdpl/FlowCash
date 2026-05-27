@@ -73,7 +73,7 @@ export default function Cartoes() {
     setPayWarning("");
 
     if (!activeCard.paymentAccountId) {
-      setPayError("Vincule uma conta bancária ao cartão antes de pagar a fatura. Edite o cartão para configurar.");
+      setPayError("Vincule uma conta a este cartão antes de pagar a fatura.");
       return;
     }
 
@@ -91,40 +91,37 @@ export default function Cartoes() {
     }
 
     const todayDate = today();
+    const monthLabel = new Date(selectedMonth + "-15")
+      .toLocaleDateString("pt-BR", { month: "short", year: "2-digit" })
+      .replace(".", "");
+    const invoiceNote = `Fatura ${activeCard.name} ${monthLabel}`;
 
     pendingInsts.forEach(inst => {
+      const purchase = state.purchases.find(p => p.id === inst.purchaseId);
+
+      dispatch({
+        type: "ADD_TX",
+        payload: {
+          id: newId(),
+          accountId: activeCard.paymentAccountId,
+          type: "expense",
+          amount: inst.amount,
+          description: purchase?.description ?? "—",
+          categoryId: purchase?.categoryId ?? "",
+          competenceDate: `${inst.competenceMonth}-01`,
+          paymentDate: todayDate,
+          status: "paid",
+          isRecurring: false,
+          origin: "invoice",
+          notes: invoiceNote,
+          createdAt: new Date().toISOString(),
+        },
+      });
+
       dispatch({
         type: "PAY_INSTALLMENT",
         payload: { installmentId: inst.id, paidAt: todayDate },
       });
-    });
-
-    const cardCategory = state.categories.find(c =>
-      /cart[aã]o|credit/i.test(c.name) && c.type === "expense"
-    );
-    const fallbackCategory = state.categories.find(c => c.type === "expense");
-    const categoryId = cardCategory?.id ?? fallbackCategory?.id ?? "";
-
-    const monthLabel = new Date(selectedMonth + "-15")
-      .toLocaleDateString("pt-BR", { month: "short", year: "2-digit" })
-      .replace(".", "");
-
-    dispatch({
-      type: "ADD_TX",
-      payload: {
-        id: newId(),
-        accountId: activeCard.paymentAccountId,
-        type: "expense",
-        amount: total,
-        description: `Fatura ${activeCard.name} ${monthLabel}`,
-        categoryId,
-        competenceDate: todayDate,
-        paymentDate: todayDate,
-        status: "paid",
-        isRecurring: false,
-        origin: "invoice",
-        createdAt: new Date().toISOString(),
-      },
     });
   }
 
