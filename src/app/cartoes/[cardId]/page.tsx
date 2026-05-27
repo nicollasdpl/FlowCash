@@ -395,17 +395,30 @@ export default function CartaoDetail() {
                           {inst.paid ? "✓ Pago" : "Pagar"}
                         </button>
                         {purchase && (
-                          <button
-                            onClick={() => deletePurchase(purchase.id)}
-                            style={{
-                              width: "30px", height: "30px", borderRadius: "7px", cursor: "pointer",
-                              background: "var(--red-10)", border: "1px solid var(--red-20)",
-                              color: "var(--red)", fontFamily: "inherit",
-                              display: "flex", alignItems: "center", justifyContent: "center",
-                            }}
-                          >
-                            <Trash2 size={12} strokeWidth={1.5} />
-                          </button>
+                          <>
+                            <button
+                              onClick={() => router.push(`/cartoes/${card.id}/compras/${purchase.id}/editar`)}
+                              style={{
+                                width: "30px", height: "30px", borderRadius: "7px", cursor: "pointer",
+                                background: "var(--bg-elevated)", border: "1px solid var(--border)",
+                                color: "var(--text-3)", fontFamily: "inherit",
+                                display: "flex", alignItems: "center", justifyContent: "center",
+                              }}
+                            >
+                              <Pencil size={12} strokeWidth={1.5} />
+                            </button>
+                            <button
+                              onClick={() => deletePurchase(purchase.id)}
+                              style={{
+                                width: "30px", height: "30px", borderRadius: "7px", cursor: "pointer",
+                                background: "var(--red-10)", border: "1px solid var(--red-20)",
+                                color: "var(--red)", fontFamily: "inherit",
+                                display: "flex", alignItems: "center", justifyContent: "center",
+                              }}
+                            >
+                              <Trash2 size={12} strokeWidth={1.5} />
+                            </button>
+                          </>
                         )}
                       </div>
                     </div>
