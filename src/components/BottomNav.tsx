@@ -11,7 +11,7 @@ const NAV = [
   { href: "/configuracoes", label: "Config", Icon: Settings },
 ];
 
-const FORM_ROUTES = ["/nova", "/editar", "/nova-compra", "/assistente", "/depositar"];
+const FORM_ROUTES = ["/nova", "/editar", "/nova-compra", "/assistente", "/depositar", "/cartoes/"];
 
 export default function BottomNav() {
   const pathname = usePathname();

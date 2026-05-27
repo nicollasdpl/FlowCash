@@ -48,7 +48,7 @@ export default function PurchaseFormPage({ card }: Props) {
     };
 
     dispatch({ type: "ADD_PURCHASE", payload: { purchase, card } });
-    router.back();
+    router.push(`/cartoes/${card.id}`);
   }
 
   const expenseCategories = state.categories.filter(c => c.type === "expense");
