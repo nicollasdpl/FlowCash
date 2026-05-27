@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useApp, newId } from "@/context/AppContext";
 import type { Budget } from "@/context/AppContext";
+import { iconLabel } from "@/components/CategoryIcon";
 
 interface Props {
   budget?: Budget;
@@ -117,7 +118,7 @@ export default function BudgetFormPage({ budget, month }: Props) {
             disabled={isEdit}
           >
             {selectableCategories.map(c => (
-              <option key={c.id} value={c.id}>{c.icon} {c.name}</option>
+              <option key={c.id} value={c.id}>{iconLabel(c.icon, c.name)}</option>
             ))}
           </select>
         </div>

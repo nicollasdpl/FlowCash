@@ -2,16 +2,48 @@
 import { useState } from "react";
 import { useApp, newId } from "@/context/AppContext";
 import type { Category } from "@/context/AppContext";
+import {
+  UtensilsCrossed, Coffee, Pizza, ShoppingCart,
+  Car, Bus, Bike, Fuel,
+  Heart, Activity, Pill, Stethoscope,
+  Home, Zap, Wifi, Wrench,
+  Gamepad2, Music, Film, Tv,
+  CreditCard, Wallet, TrendingUp, DollarSign,
+  Tag, Star, Gift, Package,
+  type LucideIcon,
+} from "lucide-react";
 
-const EMOJI_OPTIONS = [
-  "🍔","🛒","🚗","🚌","💊","🏠","📚","👕","📱","🎮","🎬","✈️",
-  "☕","🍕","💪","🐾","🎁","💡","🔧","🧾","💰","💻","📈","💳",
+const ICON_GROUPS: { label: string; icons: [string, LucideIcon][] }[] = [
+  { label: "Alimentação", icons: [["UtensilsCrossed", UtensilsCrossed], ["Coffee", Coffee], ["Pizza", Pizza], ["ShoppingCart", ShoppingCart]] },
+  { label: "Transporte",  icons: [["Car", Car], ["Bus", Bus], ["Bike", Bike], ["Fuel", Fuel]] },
+  { label: "Saúde",       icons: [["Heart", Heart], ["Activity", Activity], ["Pill", Pill], ["Stethoscope", Stethoscope]] },
+  { label: "Moradia",     icons: [["Home", Home], ["Zap", Zap], ["Wifi", Wifi], ["Wrench", Wrench]] },
+  { label: "Lazer",       icons: [["Gamepad2", Gamepad2], ["Music", Music], ["Film", Film], ["Tv", Tv]] },
+  { label: "Finanças",    icons: [["CreditCard", CreditCard], ["Wallet", Wallet], ["TrendingUp", TrendingUp], ["DollarSign", DollarSign]] },
+  { label: "Outros",      icons: [["Tag", Tag], ["Star", Star], ["Gift", Gift], ["Package", Package]] },
 ];
+
+const ICON_MAP: Record<string, LucideIcon> = Object.fromEntries(
+  ICON_GROUPS.flatMap(g => g.icons)
+);
 
 const COLOR_OPTIONS = [
-  "#00E5C3","#21D97A","#4B8BF5","#9B6DFF","#F59E0B",
-  "#FF3D5E","#FF8C42","#6B7FA3","#22D4D4","#E040FB",
+  "#00E5A0","#4A9EFF","#FF4D6A","#FFB830","#A855F7","#FF8C42",
+  "#00BCD4","#E91E63","#8BC34A","#FF5722","#607D8B","#9C27B0",
+  "#03A9F4","#CDDC39","#FF9800","#795548",
 ];
+
+function isLucideName(icon: string): boolean {
+  return icon in ICON_MAP;
+}
+
+function IconPreview({ icon, color, size = 20 }: { icon: string; color: string; size?: number }) {
+  if (isLucideName(icon)) {
+    const Comp = ICON_MAP[icon];
+    return <Comp size={size} strokeWidth={1.5} color={color} />;
+  }
+  return <span style={{ fontSize: size, lineHeight: 1 }}>{icon}</span>;
+}
 
 interface Props {
   category?: Category;
@@ -20,11 +52,22 @@ interface Props {
 
 export default function CategoryModal({ category, onClose }: Props) {
   const { dispatch } = useApp();
-  const [name, setName] = useState(category?.name ?? "");
-  const [emoji, setEmoji] = useState(category?.icon ?? "🍔");
-  const [color, setColor] = useState(category?.color ?? "#00E5C3");
-  const [type, setType] = useState<"expense" | "income">(category?.type ?? "expense");
+  const [name, setName]   = useState(category?.name ?? "");
+  const [icon, setIcon]   = useState(category?.icon ?? "Tag");
+  const [color, setColor] = useState(category?.color ?? "#00E5A0");
+  const [hexInput, setHexInput] = useState(category?.color ?? "#00E5A0");
+  const [type, setType]   = useState<"expense" | "income">(category?.type ?? "expense");
   const [error, setError] = useState("");
+
+  function selectColor(c: string) {
+    setColor(c);
+    setHexInput(c);
+  }
+
+  function handleHexChange(value: string) {
+    setHexInput(value);
+    if (/^#[0-9A-Fa-f]{6}$/.test(value)) setColor(value);
+  }
 
   function handleSave() {
     if (!name.trim()) return setError("Informe o nome da categoria.");
@@ -32,7 +75,7 @@ export default function CategoryModal({ category, onClose }: Props) {
     const cat: Category = {
       id: category?.id ?? newId(),
       name: name.trim(),
-      icon: emoji,
+      icon,
       color,
       type,
     };
@@ -58,6 +101,23 @@ export default function CategoryModal({ category, onClose }: Props) {
         </div>
 
         <div className="modal-body">
+          {/* Preview */}
+          <div style={{ display: "flex", justifyContent: "center", marginBottom: "20px" }}>
+            <div style={{
+              display: "inline-flex", alignItems: "center", gap: "10px",
+              padding: "10px 20px",
+              background: `${color}18`,
+              border: `1px solid ${color}35`,
+              borderRadius: "24px",
+              minWidth: "120px", justifyContent: "center",
+            }}>
+              <IconPreview icon={icon} color={color} size={20} />
+              <span style={{ fontSize: "14px", fontWeight: 700, color }}>
+                {name.trim() || "Categoria"}
+              </span>
+            </div>
+          </div>
+
           {/* Tipo */}
           <div className="form-group">
             <label className="form-label">Tipo</label>
@@ -90,40 +150,40 @@ export default function CategoryModal({ category, onClose }: Props) {
             />
           </div>
 
-          {/* Preview */}
-          {name.trim() && (
-            <div style={{ display: "flex", justifyContent: "center", marginBottom: "20px" }}>
-              <div style={{
-                display: "inline-flex", alignItems: "center", gap: "8px",
-                padding: "8px 16px",
-                background: `${color}12`,
-                border: `1px solid ${color}28`,
-                borderRadius: "20px",
-              }}>
-                <span style={{ fontSize: "16px" }}>{emoji}</span>
-                <span style={{ fontSize: "13px", fontWeight: 700, color }}>{name}</span>
-              </div>
-            </div>
-          )}
-
-          {/* Emoji picker */}
+          {/* Ícone */}
           <div className="form-group">
             <label className="form-label">Ícone</label>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
-              {EMOJI_OPTIONS.map(e => (
-                <button
-                  key={e}
-                  onClick={() => setEmoji(e)}
-                  style={{
-                    width: "44px", height: "44px",
-                    borderRadius: "10px", fontSize: "20px",
-                    border: emoji === e ? `2px solid ${color}` : "1px solid var(--border)",
-                    background: emoji === e ? `${color}15` : "var(--bg-input)",
-                    cursor: "pointer",
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    transition: "all 0.12s",
-                  }}
-                >{e}</button>
+            <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+              {ICON_GROUPS.map(group => (
+                <div key={group.label}>
+                  <p style={{ fontSize: "11px", color: "var(--text-3)", marginBottom: "6px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                    {group.label}
+                  </p>
+                  <div style={{ display: "flex", gap: "8px" }}>
+                    {group.icons.map(([name, Comp]) => {
+                      const selected = icon === name;
+                      return (
+                        <button
+                          key={name}
+                          onClick={() => setIcon(name)}
+                          style={{
+                            width: "48px", height: "48px",
+                            borderRadius: "12px",
+                            border: selected ? `2px solid ${color}` : "1px solid var(--border)",
+                            background: selected ? `${color}18` : "var(--bg-input)",
+                            cursor: "pointer",
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                            color: selected ? color : "var(--text-3)",
+                            transition: "all 0.12s",
+                            flexShrink: 0,
+                          }}
+                        >
+                          <Comp size={20} strokeWidth={1.5} />
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
               ))}
             </div>
           </div>
@@ -131,19 +191,35 @@ export default function CategoryModal({ category, onClose }: Props) {
           {/* Cor */}
           <div className="form-group" style={{ marginBottom: 0 }}>
             <label className="form-label">Cor</label>
-            <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginBottom: "12px" }}>
               {COLOR_OPTIONS.map(c => (
                 <button
                   key={c}
-                  onClick={() => setColor(c)}
+                  onClick={() => selectColor(c)}
                   style={{
-                    width: "36px", height: "36px", borderRadius: "50%",
-                    background: c, border: "none", cursor: "pointer",
+                    width: "34px", height: "34px", borderRadius: "50%",
+                    background: c, border: "none", cursor: "pointer", flexShrink: 0,
                     boxShadow: color === c ? `0 0 0 3px var(--bg), 0 0 0 5px ${c}` : "none",
                     transition: "box-shadow 0.12s",
                   }}
                 />
               ))}
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <div style={{
+                width: "34px", height: "34px", borderRadius: "8px",
+                background: color, flexShrink: 0,
+                border: "1px solid var(--border)",
+              }} />
+              <input
+                className="form-input mono"
+                type="text"
+                placeholder="#000000"
+                value={hexInput}
+                onChange={e => handleHexChange(e.target.value)}
+                maxLength={7}
+                style={{ flex: 1, fontSize: "13px", height: "34px", padding: "0 10px" }}
+              />
             </div>
           </div>
 

@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useApp, newId } from "@/context/AppContext";
 import type { Transaction, CardPurchase } from "@/context/AppContext";
 import { Utensils, Car, Wallet, CreditCard, Fuel, Home, Package } from "lucide-react";
+import { iconLabel } from "@/components/CategoryIcon";
 
 // ─── Tipos ───────────────────────────────────────────────────────────────────
 
@@ -529,7 +530,7 @@ export default function AIPageContent() {
                       <label className="form-label">Categoria</label>
                       <select className="form-input" value={txDraft.categoryId}
                         onChange={e => setTxDraft(d => d ? { ...d, categoryId: e.target.value } : d)}>
-                        {txCategories.map(c => <option key={c.id} value={c.id}>{c.icon} {c.name}</option>)}
+                        {txCategories.map(c => <option key={c.id} value={c.id}>{iconLabel(c.icon, c.name)}</option>)}
                       </select>
                     </div>
 
@@ -639,7 +640,7 @@ export default function AIPageContent() {
                       <label className="form-label">Categoria</label>
                       <select className="form-input" value={purchaseDraft.categoryId}
                         onChange={e => setPurchaseDraft(d => d ? { ...d, categoryId: e.target.value } : d)}>
-                        {expenseCategories.map(c => <option key={c.id} value={c.id}>{c.icon} {c.name}</option>)}
+                        {expenseCategories.map(c => <option key={c.id} value={c.id}>{iconLabel(c.icon, c.name)}</option>)}
                       </select>
                     </div>
 

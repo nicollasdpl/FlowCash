@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useApp } from "@/context/AppContext";
 import type { Category } from "@/context/AppContext";
 import CategoryModal from "@/components/CategoryModal";
+import CategoryIcon from "@/components/CategoryIcon";
 import { Landmark, BarChart2, TrendingUp, ArrowUpDown, CreditCard, Target } from "lucide-react";
 
 export default function Configuracoes() {
@@ -263,7 +264,7 @@ export default function Configuracoes() {
                 fontFamily: "inherit",
               }}
             >
-              <span style={{ fontSize: "12px" }}>{cat.icon}</span>
+              <CategoryIcon icon={cat.icon} color={cat.color} size={13} />
               <span style={{ fontSize: "11.5px", fontWeight: 600, color: cat.color }}>{cat.name}</span>
             </button>
           ))}

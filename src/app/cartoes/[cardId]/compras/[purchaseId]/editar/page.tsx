@@ -3,6 +3,7 @@ import { useState, useMemo } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { useApp } from "@/context/AppContext";
 import type { CardPurchase } from "@/context/AppContext";
+import { iconLabel } from "@/components/CategoryIcon";
 
 export default function EditarCompra() {
   const { cardId, purchaseId } = useParams<{ cardId: string; purchaseId: string }>();
@@ -197,7 +198,7 @@ export default function EditarCompra() {
             onChange={e => setCategoryId(e.target.value)}
           >
             {expenseCategories.map(c => (
-              <option key={c.id} value={c.id}>{c.icon} {c.name}</option>
+              <option key={c.id} value={c.id}>{iconLabel(c.icon, c.name)}</option>
             ))}
           </select>
         </div>

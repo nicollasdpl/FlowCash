@@ -2,6 +2,7 @@
 import { useEffect } from "react";
 import type { Transaction, Category } from "@/context/AppContext";
 import { TrendingUp, Package, Pencil, Trash2 } from "lucide-react";
+import CategoryIcon from "@/components/CategoryIcon";
 
 interface Props {
   tx: Transaction | null;
@@ -95,7 +96,7 @@ export default function TransactionDrawer({ tx, categories, onClose, onStatusCha
               display: "flex", alignItems: "center", justifyContent: "center", fontSize: "26px",
             }}>
               {cat?.icon
-                ? cat.icon
+                ? <CategoryIcon icon={cat.icon} color={cat?.color} size={24} />
                 : isIncome
                   ? <TrendingUp size={24} strokeWidth={1.5} color="var(--green)" />
                   : <Package size={24} strokeWidth={1.5} color="var(--text-3)" />

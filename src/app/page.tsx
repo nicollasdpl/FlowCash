@@ -12,6 +12,7 @@ import {
 } from "@/engine/financialEngine";
 import { computeInvoice } from "@/engine/invoiceEngine";
 import { AlertTriangle, Bell, CreditCard, Wallet, TrendingUp, Package } from "lucide-react";
+import CategoryIcon from "@/components/CategoryIcon";
 
 const MONTH_NAMES = [
   "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
@@ -694,7 +695,7 @@ export default function Dashboard() {
                     fontSize: "17px",
                   }}>
                     {cat?.icon
-                      ? cat.icon
+                      ? <CategoryIcon icon={cat.icon} color={cat.color} size={17} />
                       : tx.type === "income"
                         ? <TrendingUp size={17} strokeWidth={1.5} color="var(--green)" />
                         : <Package size={17} strokeWidth={1.5} color="var(--text-3)" />

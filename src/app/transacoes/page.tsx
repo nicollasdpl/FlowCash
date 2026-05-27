@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useApp } from "@/context/AppContext";
 import { currentMonth, addMonths, fmt } from "@/engine/financialEngine";
 import { Search, TrendingUp, Package, RefreshCw, Pencil, Trash2 } from "lucide-react";
+import CategoryIcon from "@/components/CategoryIcon";
 
 const MONTH_NAMES = [
   "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
@@ -210,7 +211,7 @@ export default function Transacoes() {
                       fontSize: "17px",
                     }}>
                       {cat?.icon
-                        ? cat.icon
+                        ? <CategoryIcon icon={cat.icon} color={cat.color} size={17} />
                         : tx.type === "income"
                           ? <TrendingUp size={17} strokeWidth={1.5} color="var(--green)" />
                           : <Package size={17} strokeWidth={1.5} color="var(--text-3)" />

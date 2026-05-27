@@ -3,6 +3,7 @@ import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useApp, newId } from "@/context/AppContext";
 import type { CreditCard, CardPurchase } from "@/context/AppContext";
+import { iconLabel } from "@/components/CategoryIcon";
 
 interface Props {
   card: CreditCard;
@@ -158,7 +159,7 @@ export default function PurchaseFormPage({ card }: Props) {
           <label className="form-label">Categoria</label>
           <select className="form-input" value={categoryId} onChange={e => setCategoryId(e.target.value)}>
             {expenseCategories.map(c => (
-              <option key={c.id} value={c.id}>{c.icon} {c.name}</option>
+              <option key={c.id} value={c.id}>{iconLabel(c.icon, c.name)}</option>
             ))}
           </select>
         </div>

@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useApp, newId } from "@/context/AppContext";
 import type { Budget } from "@/context/AppContext";
 import { currentMonth } from "@/engine/financialEngine";
+import { iconLabel } from "@/components/CategoryIcon";
 
 interface Props {
   budget?: Budget;
@@ -70,7 +71,7 @@ export default function BudgetModal({ budget, month, onClose }: Props) {
               disabled={!!budget}
             >
               {expenseCategories.map(c => (
-                <option key={c.id} value={c.id}>{c.icon} {c.name}</option>
+                <option key={c.id} value={c.id}>{iconLabel(c.icon, c.name)}</option>
               ))}
             </select>
           </div>

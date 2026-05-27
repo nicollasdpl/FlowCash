@@ -4,6 +4,7 @@ import { useApp } from "@/context/AppContext";
 import { addMonths, currentMonth, getCardCommittedByMonth } from "@/engine/financialEngine";
 import { getCardExpensesByCategory } from "@/engine/invoiceEngine";
 import { BarChart2, CreditCard } from "lucide-react";
+import CategoryIcon from "@/components/CategoryIcon";
 
 function fmt(v: number) {
   return v.toLocaleString("pt-BR", { minimumFractionDigits: 2 });
@@ -248,7 +249,7 @@ export default function Relatorios() {
                   }}>
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                        {cat.icon && <span style={{ fontSize: "16px" }}>{cat.icon}</span>}
+                        {cat.icon && <CategoryIcon icon={cat.icon} color={cat.color} size={16} />}
                         <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-1)" }}>{cat.name}</span>
                       </div>
                       <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>

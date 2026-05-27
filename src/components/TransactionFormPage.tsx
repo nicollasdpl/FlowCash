@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useApp, newId } from "@/context/AppContext";
 import type { Transaction } from "@/context/AppContext";
+import { iconLabel } from "@/components/CategoryIcon";
 
 interface Props {
   transaction?: Transaction;
@@ -174,7 +175,7 @@ export default function TransactionFormPage({ transaction }: Props) {
           <label className="form-label">Categoria</label>
           <select className="form-input" value={categoryId} onChange={e => setCategory(e.target.value)}>
             {currentCategories.map(c => (
-              <option key={c.id} value={c.id}>{c.icon} {c.name}</option>
+              <option key={c.id} value={c.id}>{iconLabel(c.icon, c.name)}</option>
             ))}
           </select>
         </div>
