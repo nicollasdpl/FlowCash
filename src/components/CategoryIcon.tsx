@@ -1,7 +1,5 @@
 import * as LucideIcons from "lucide-react";
-import type { LucideIcon } from "lucide-react";
-
-const icons = LucideIcons as unknown as Record<string, LucideIcon>;
+import type { ElementType } from "react";
 
 interface Props {
   icon: string;
@@ -10,13 +8,19 @@ interface Props {
 }
 
 export default function CategoryIcon({ icon, color = "currentColor", size = 18 }: Props) {
-  const Comp = icons[icon];
-  if (typeof Comp === "function") {
-    return <Comp size={size} strokeWidth={1.5} color={color} />;
+  const IconComponent = LucideIcons[icon as keyof typeof LucideIcons] as ElementType<{
+    size?: number;
+    strokeWidth?: number;
+    color?: string;
+  }> | undefined;
+
+  if (IconComponent) {
+    return <IconComponent size={size} strokeWidth={1.5} color={color} />;
   }
   return <span style={{ fontSize: size, lineHeight: 1 }}>{icon}</span>;
 }
 
 export function iconLabel(icon: string, name: string): string {
-  return typeof icons[icon] === "function" ? name : `${icon} ${name}`;
+  const comp = LucideIcons[icon as keyof typeof LucideIcons];
+  return comp !== undefined ? name : `${icon} ${name}`;
 }
