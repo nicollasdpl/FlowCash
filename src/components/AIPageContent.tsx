@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useApp, newId } from "@/context/AppContext";
 import type { Transaction, CardPurchase } from "@/context/AppContext";
 import { Utensils, Car, Wallet, CreditCard, Fuel, Home, Package } from "lucide-react";
-import { iconLabel } from "@/components/CategoryIcon";
+import CategoryIcon, { iconLabel } from "@/components/CategoryIcon";
 
 // ─── Tipos ───────────────────────────────────────────────────────────────────
 
@@ -498,9 +498,11 @@ export default function AIPageContent() {
                         width: "44px", height: "44px", borderRadius: "13px", flexShrink: 0,
                         background: editCat ? `${editCat.color}18` : "var(--bg-input)",
                         border: `1px solid ${editCat ? editCat.color + "28" : "var(--border)"}`,
-                        display: "flex", alignItems: "center", justifyContent: "center", fontSize: "20px",
+                        display: "flex", alignItems: "center", justifyContent: "center",
                       }}>
-                        {editCat?.icon || <Package size={20} strokeWidth={1.5} color="var(--text-3)" />}
+                        {editCat?.icon
+                          ? <CategoryIcon icon={editCat.icon} color={editCat.color} size={20} />
+                          : <Package size={20} strokeWidth={1.5} color="var(--text-3)" />}
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <p style={{ fontSize: "11px", color: "var(--text-3)", fontWeight: 600 }}>
@@ -589,9 +591,11 @@ export default function AIPageContent() {
                         width: "44px", height: "44px", borderRadius: "13px", flexShrink: 0,
                         background: editCat ? `${editCat.color}18` : "var(--bg-input)",
                         border: `1px solid ${editCat ? editCat.color + "28" : "var(--border)"}`,
-                        display: "flex", alignItems: "center", justifyContent: "center", fontSize: "20px",
+                        display: "flex", alignItems: "center", justifyContent: "center",
                       }}>
-                        {editCat?.icon || <Package size={20} strokeWidth={1.5} color="var(--text-3)" />}
+                        {editCat?.icon
+                          ? <CategoryIcon icon={editCat.icon} color={editCat.color} size={20} />
+                          : <Package size={20} strokeWidth={1.5} color="var(--text-3)" />}
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <p style={{ fontSize: "11px", color: "var(--text-3)", fontWeight: 600 }}>
