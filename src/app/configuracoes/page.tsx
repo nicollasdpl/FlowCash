@@ -1,20 +1,18 @@
 "use client";
 import { useState, useRef } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useApp } from "@/context/AppContext";
-import type { Category } from "@/context/AppContext";
-import CategoryModal from "@/components/CategoryModal";
 import CategoryIcon from "@/components/CategoryIcon";
 import { Landmark, BarChart2, TrendingUp, ArrowUpDown, CreditCard, Target } from "lucide-react";
 
 export default function Configuracoes() {
   const { state, dispatch, user, signOut } = useApp();
+  const router = useRouter();
   const [editingName, setEditingName] = useState(false);
   const [nameInput, setNameInput] = useState(state.userName ?? "");
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [showCatModal, setShowCatModal] = useState(false);
-  const [editCat, setEditCat] = useState<Category | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   function saveName() {
@@ -57,8 +55,6 @@ export default function Configuracoes() {
 
   return (
     <div style={{ padding: "16px", maxWidth: "640px", margin: "0 auto" }}>
-      {showCatModal && <CategoryModal onClose={() => setShowCatModal(false)} />}
-      {editCat && <CategoryModal category={editCat} onClose={() => setEditCat(null)} />}
 
       {/* Header */}
       <div className="fade-up-1" style={{ marginBottom: "20px" }}>
@@ -240,7 +236,7 @@ export default function Configuracoes() {
             Categorias ({state.categories.length})
           </p>
           <button
-            onClick={() => setShowCatModal(true)}
+            onClick={() => router.push("/configuracoes/categorias/nova")}
             style={{
               background: "var(--accent-10)", border: "1px solid var(--border-accent)",
               borderRadius: "8px", color: "var(--accent)", fontWeight: 700,
@@ -253,7 +249,7 @@ export default function Configuracoes() {
           {state.categories.map(cat => (
             <button
               key={cat.id}
-              onClick={() => setEditCat(cat)}
+              onClick={() => router.push(`/configuracoes/categorias/${cat.id}/editar`)}
               style={{
                 display: "inline-flex", alignItems: "center", gap: "5px",
                 padding: "6px 10px",

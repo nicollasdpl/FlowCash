@@ -64,19 +64,21 @@ type Action =
 // ─── SEED ─────────────────────────────────────────────────────────────────────
 
 const SEED_CATEGORIES: Category[] = [
-  { id: "cat_alimentacao", name: "Alimentação",   type: "expense", color: "#00E5C3", icon: "🍔" },
-  { id: "cat_transporte",  name: "Transporte",    type: "expense", color: "#4B8BF5", icon: "🚗" },
-  { id: "cat_lazer",       name: "Lazer",         type: "expense", color: "#9B6DFF", icon: "🎮" },
-  { id: "cat_saude",       name: "Saúde",         type: "expense", color: "#22D47A", icon: "💊" },
-  { id: "cat_moradia",     name: "Moradia",       type: "expense", color: "#F5A623", icon: "🏠" },
-  { id: "cat_educacao",    name: "Educação",      type: "expense", color: "#FF8C42", icon: "📚" },
-  { id: "cat_vestuario",   name: "Vestuário",     type: "expense", color: "#FF4D6A", icon: "👕" },
-  { id: "cat_eletronicos", name: "Eletrônicos",   type: "expense", color: "#4B8BF5", icon: "📱" },
-  { id: "cat_outros",      name: "Outros",        type: "expense", color: "#6B7FA3", icon: "📦" },
-  { id: "cat_salario",     name: "Salário",       type: "income",  color: "#22D47A", icon: "💰" },
-  { id: "cat_freelance",   name: "Freelance",     type: "income",  color: "#00E5C3", icon: "💻" },
-  { id: "cat_investimento",name: "Investimentos", type: "income",  color: "#F5A623", icon: "📈" },
+  { id: "cat_alimentacao", name: "Alimentação",   type: "expense", color: "#FF8C42", icon: "UtensilsCrossed" },
+  { id: "cat_transporte",  name: "Transporte",    type: "expense", color: "#4A9EFF", icon: "Car" },
+  { id: "cat_lazer",       name: "Lazer",         type: "expense", color: "#A855F7", icon: "Gamepad2" },
+  { id: "cat_saude",       name: "Saúde",         type: "expense", color: "#FF4D6A", icon: "Heart" },
+  { id: "cat_moradia",     name: "Moradia",       type: "expense", color: "#FFB830", icon: "Home" },
+  { id: "cat_educacao",    name: "Educação",      type: "expense", color: "#00BCD4", icon: "BookOpen" },
+  { id: "cat_vestuario",   name: "Vestuário",     type: "expense", color: "#E91E63", icon: "ShoppingBag" },
+  { id: "cat_eletronicos", name: "Viagem",        type: "expense", color: "#03A9F4", icon: "Plane" },
+  { id: "cat_outros",      name: "Outros",        type: "expense", color: "#607D8B", icon: "Tag" },
+  { id: "cat_salario",     name: "Salário",       type: "income",  color: "#00E5A0", icon: "Wallet" },
+  { id: "cat_freelance",   name: "Pets",          type: "expense", color: "#8BC34A", icon: "PawPrint" },
+  { id: "cat_investimento",name: "Investimentos", type: "income",  color: "#00E5A0", icon: "TrendingUp" },
 ];
+
+export const SEED_CATEGORY_IDS = new Set(SEED_CATEGORIES.map(c => c.id));
 
 const seed: AppState = {
   userName: "",
@@ -94,8 +96,16 @@ const seed: AppState = {
 
 function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
-    case "LOAD":
-      return { ...seed, ...action.payload };
+    case "LOAD": {
+      const payloadCats = action.payload.categories;
+      const categories = Array.isArray(payloadCats) && payloadCats.length > 0
+        ? payloadCats.map((cat: Category) => ({
+            ...cat,
+            icon: /^[A-Z][A-Za-z0-9]+$/.test(cat.icon ?? "") ? cat.icon : "Tag",
+          }))
+        : seed.categories;
+      return { ...seed, ...action.payload, categories };
+    }
     case "SET_USER_NAME":
       return { ...state, userName: action.payload };
 
