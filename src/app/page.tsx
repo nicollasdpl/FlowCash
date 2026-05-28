@@ -163,18 +163,20 @@ export default function Dashboard() {
   const totalIncomePending  = useMemo(() => incomePending.reduce((s, t) => s + t.amount, 0), [incomePending]);
 
   const cardInvoices = useMemo(() => {
+    const cm = currentMonth();
     return state.cards.filter(c => c.active).flatMap(card => {
       const allMonths = [...new Set(
         state.installments
           .filter(i => i.cardId === card.id)
           .map(i => i.competenceMonth),
       )].sort();
-      // Only show closed or overdue invoices — open invoices are still accumulating
       const targetMonth = allMonths.find(m => {
         const hasUnpaid = state.installments.some(i => i.cardId === card.id && i.competenceMonth === m && !i.paid);
         if (!hasUnpaid) return false;
         const inv = computeInvoice(card, state.installments, m);
-        return inv.status === "closed" || inv.status === "overdue";
+        if (inv.status === "closed" || inv.status === "overdue") return true;
+        if (inv.status === "open") return inv.dueDate.substring(0, 7) <= cm;
+        return false;
       });
       if (!targetMonth) return [];
       const invoice = computeInvoice(card, state.installments, targetMonth);
