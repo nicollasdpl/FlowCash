@@ -21,9 +21,11 @@ export function getCompetenceMonth(purchaseDate: string, closingDay: number): st
 }
 
 // ─── DATAS DE FECHAMENTO E VENCIMENTO DA FATURA ──────────────────────────────
-// Ambas as datas são no próprio competenceMonth, clampadas ao último dia do mês.
-// Ex: competenceMonth 2026-06, closingDay 10, dueDay 17
-//     → closingDate 2026-06-10, dueDate 2026-06-17
+// closingDate: sempre no próprio competenceMonth, clampado ao último dia.
+// dueDate: no próprio competenceMonth se dueDay > closingDay,
+//          no mês seguinte se dueDay <= closingDay.
+// Ex: fecha 10, vence 17 → 17 > 10 → vence no mesmo mês
+//     fecha 25, vence  5 →  5 ≤ 25 → vence no mês seguinte
 export function getInvoiceDates(
   competenceMonth: string,
   closingDay: number,
@@ -33,7 +35,16 @@ export function getInvoiceDates(
   const lastDay = new Date(y, m, 0).getDate();
 
   const closingDate = `${competenceMonth}-${String(Math.min(closingDay, lastDay)).padStart(2, "0")}`;
-  const dueDate     = `${competenceMonth}-${String(Math.min(dueDay,     lastDay)).padStart(2, "0")}`;
+
+  let dueDate: string;
+  if (dueDay > closingDay) {
+    dueDate = `${competenceMonth}-${String(Math.min(dueDay, lastDay)).padStart(2, "0")}`;
+  } else {
+    const nextMonth = addMonths(competenceMonth, 1);
+    const [ny, nm] = nextMonth.split("-").map(Number);
+    const lastDayNext = new Date(ny, nm, 0).getDate();
+    dueDate = `${nextMonth}-${String(Math.min(dueDay, lastDayNext)).padStart(2, "0")}`;
+  }
 
   return { closingDate, dueDate };
 }

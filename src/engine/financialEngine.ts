@@ -126,7 +126,14 @@ export function getProjectedBalance(
       const [y, m] = month.split("-").map(Number);
       const lastDay = new Date(y, m, 0).getDate();
       const closingDate = `${month}-${String(Math.min(card.closingDay, lastDay)).padStart(2, "0")}`;
-      const dueDate     = `${month}-${String(Math.min(card.dueDay,     lastDay)).padStart(2, "0")}`;
+      let dueDate: string;
+      if (card.dueDay > card.closingDay) {
+        dueDate = `${month}-${String(Math.min(card.dueDay, lastDay)).padStart(2, "0")}`;
+      } else {
+        const nextMonth = addMonths(month, 1);
+        const [ny, nm] = nextMonth.split("-").map(Number);
+        dueDate = `${nextMonth}-${String(Math.min(card.dueDay, new Date(ny, nm, 0).getDate())).padStart(2, "0")}`;
+      }
       if (dueDate > upToDate) continue;
       if (tdStr < closingDate) continue; // still open — not yet a firm liability
       balance -= unpaidTotal;
