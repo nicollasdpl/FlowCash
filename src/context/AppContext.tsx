@@ -15,6 +15,7 @@ import type {
   Goal, Category, Budget,
 } from "@/types/financial";
 import { generateInstallments, generateSubscriptionInstallment, getCompetenceMonth } from "@/engine/invoiceEngine";
+import { addMonths } from "@/engine/financialEngine";
 
 export type {
   Account, Transaction, CreditCard, CardPurchase, CardInstallment,
@@ -183,8 +184,10 @@ function reducer(state: AppState, action: Action): AppState {
       const { purchase, card } = action.payload;
       let newInstallments: CardInstallment[];
       if (purchase.isSubscription) {
-        const cm = getCompetenceMonth(purchase.purchaseDate, card.closingDay);
-        newInstallments = [generateSubscriptionInstallment(purchase, card, cm)];
+        const firstCm = getCompetenceMonth(purchase.purchaseDate, card.closingDay);
+        newInstallments = Array.from({ length: 12 }, (_, i) =>
+          generateSubscriptionInstallment(purchase, card, addMonths(firstCm, i))
+        );
       } else {
         newInstallments = generateInstallments(purchase, card, state.installments);
       }
@@ -196,12 +199,15 @@ function reducer(state: AppState, action: Action): AppState {
     }
     case "DEL_PURCHASE": {
       const purchaseId = action.payload;
+      const purchase = state.purchases.find(p => p.id === purchaseId);
       return {
         ...state,
         purchases: state.purchases.filter(p => p.id !== purchaseId),
-        installments: state.installments.filter(
-          i => i.purchaseId !== purchaseId && !i.id.startsWith(`${purchaseId}_inst_`)
-        ),
+        installments: state.installments.filter(i => {
+          if (i.purchaseId !== purchaseId) return true;
+          if (purchase?.isSubscription) return i.paid; // keep paid history
+          return false;
+        }),
       };
     }
 
@@ -367,7 +373,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => clearTimeout(timer);
   }, [state, user, isReady]);
 
-  // ── Auto-gerar parcelas de assinaturas para o mês atual ───────────────────
+  // ── Auto-gerar parcelas de assinaturas para os próximos 12 meses ─────────
   useEffect(() => {
     if (!user || !isReady) return;
     const subscriptions = state.purchases.filter(p => p.isSubscription);
@@ -377,10 +383,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     for (const purchase of subscriptions) {
       const card = state.cards.find(c => c.id === purchase.cardId);
       if (!card) continue;
-      const cm = getCompetenceMonth(todayDate, card.closingDay);
-      const instId = `${purchase.id}_sub_${cm}`;
-      if (!state.installments.some(i => i.id === instId)) {
-        toAdd.push(generateSubscriptionInstallment(purchase, card, cm));
+      const startCm = getCompetenceMonth(todayDate, card.closingDay);
+      for (let i = 0; i < 12; i++) {
+        const cm = addMonths(startCm, i);
+        const instId = `${purchase.id}_sub_${cm}`;
+        if (!state.installments.some(inst => inst.id === instId)) {
+          toAdd.push(generateSubscriptionInstallment(purchase, card, cm));
+        }
       }
     }
     if (toAdd.length > 0) {
