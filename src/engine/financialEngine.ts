@@ -77,12 +77,14 @@ export function getCurrentBalance(account: Account, transactions: Transaction[])
 }
 
 // ─── SALDO PROJETADO ─────────────────────────────────────────────────────────
-// Saldo real + todos os pendentes até `upToDate` (inclusive).
-// Responsável por responder: "quanto terei no final do mês?"
+// Saldo real + pendentes até `upToDate` - faturas closed/overdue vencendo no período.
+// cards + installments são opcionais: omitir mantém comportamento anterior.
 export function getProjectedBalance(
   account: Account,
   transactions: Transaction[],
   upToDate: string,
+  cards: CreditCard[] = [],
+  installments: CardInstallment[] = [],
 ): number {
   let balance = getCurrentBalance(account, transactions);
 
@@ -108,6 +110,33 @@ export function getProjectedBalance(
   );
   for (const t of pendingTransfersIn) balance += t.amount;
 
+  // Subtract unpaid invoices (closed or overdue) whose dueDate falls within the period.
+  // dueDate is always in the month after competenceMonth (standard Brazilian billing cycle).
+  const tdStr = today();
+  for (const card of cards) {
+    if (card.paymentAccountId !== account.id) continue;
+    const cardInst = installments.filter(i => i.cardId === card.id);
+    const months = new Set(cardInst.map(i => i.competenceMonth));
+    for (const month of months) {
+      const monthInst = cardInst.filter(i => i.competenceMonth === month);
+      if (monthInst.every(i => i.paid)) continue;
+      const unpaidTotal = monthInst.filter(i => !i.paid).reduce((s, i) => s + i.amount, 0);
+      if (unpaidTotal <= 0) continue;
+      // Compute dueDate (next month after competenceMonth, clamped to month length)
+      const nextMonth = addMonths(month, 1);
+      const [ny, nm] = nextMonth.split("-").map(Number);
+      const lastDayNext = new Date(ny, nm, 0).getDate();
+      const dueDate = `${nextMonth}-${String(Math.min(card.dueDay, lastDayNext)).padStart(2, "0")}`;
+      if (dueDate > upToDate) continue;
+      // Compute closingDate to confirm invoice has closed
+      const [y, m] = month.split("-").map(Number);
+      const lastDay = new Date(y, m, 0).getDate();
+      const closingDate = `${month}-${String(Math.min(card.closingDay, lastDay)).padStart(2, "0")}`;
+      if (tdStr < closingDate) continue; // still open — not yet a firm liability
+      balance -= unpaidTotal;
+    }
+  }
+
   return balance;
 }
 
@@ -118,8 +147,10 @@ export function getAvailableBalance(
   transactions: Transaction[],
   goals: Goal[],
   upToDate: string,
+  cards: CreditCard[] = [],
+  installments: CardInstallment[] = [],
 ): number {
-  const projected = getProjectedBalance(account, transactions, upToDate);
+  const projected = getProjectedBalance(account, transactions, upToDate, cards, installments);
   const reserved = goals
     .filter(g => g.accountId === account.id && !g.completed)
     .reduce((s, g) => s + g.currentAmount, 0);

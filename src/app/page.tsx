@@ -114,8 +114,8 @@ export default function Dashboard() {
   );
 
   const totalProjected = useMemo(() =>
-    state.accounts.filter(a => a.active).reduce((s, a) => s + getProjectedBalance(a, state.transactions, eom), 0),
-    [state.accounts, state.transactions, eom]
+    state.accounts.filter(a => a.active).reduce((s, a) => s + getProjectedBalance(a, state.transactions, eom, state.cards, state.installments), 0),
+    [state.accounts, state.transactions, state.cards, state.installments, eom]
   );
 
   const monthTxs = useMemo(() =>

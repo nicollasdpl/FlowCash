@@ -34,8 +34,8 @@ export default function Contas() {
     [state.accounts, state.transactions]
   );
   const totalProjected = useMemo(() =>
-    state.accounts.filter(a => a.active).reduce((s, a) => s + getProjectedBalance(a, state.transactions, eom), 0),
-    [state.accounts, state.transactions, eom]
+    state.accounts.filter(a => a.active).reduce((s, a) => s + getProjectedBalance(a, state.transactions, eom, state.cards, state.installments), 0),
+    [state.accounts, state.transactions, state.cards, state.installments, eom]
   );
 
   return (
@@ -96,8 +96,8 @@ export default function Contas() {
       <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
         {state.accounts.map((acc, i) => {
           const current   = getCurrentBalance(acc, state.transactions);
-          const projected = getProjectedBalance(acc, state.transactions, eom);
-          const available = getAvailableBalance(acc, state.transactions, state.goals, eom);
+          const projected = getProjectedBalance(acc, state.transactions, eom, state.cards, state.installments);
+          const available = getAvailableBalance(acc, state.transactions, state.goals, eom, state.cards, state.installments);
           const reserved  = projected - available;
           return (
             <div key={acc.id} className={`card fade-up-${Math.min(i + 2, 6)}`} style={{ padding: "22px" }}>
