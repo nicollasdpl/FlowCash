@@ -9,16 +9,15 @@ import type {
 import { currentMonth, addMonths } from "./financialEngine";
 
 // ─── QUAL FATURA UMA COMPRA ENTRA ────────────────────────────────────────────
-// REGRA: purchaseDate.day >= closingDay → próxima fatura (dia de fechamento é exclusivo)
-//        purchaseDate.day < closingDay  → fatura atual
-// Ex: fechamento dia 10 → compra no dia 10 já vai para a próxima fatura.
+// REGRA: purchaseDate < fechamento do mês da compra → fatura do mês atual
+//        purchaseDate >= fechamento do mês da compra → fatura do mês seguinte
+// O fechamento é clampado ao último dia do mês (ex: fechamento dia 30 em fevereiro = dia 28).
 export function getCompetenceMonth(purchaseDate: string, closingDay: number): string {
-  const [, , day] = purchaseDate.split("-").map(Number);
-  const monthBase = purchaseDate.substring(0, 7); // YYYY-MM
-  if (day >= closingDay) {
-    return addMonths(monthBase, 1);
-  }
-  return monthBase;
+  const purchaseMonth = purchaseDate.substring(0, 7);
+  const [y, m] = purchaseDate.split("-").map(Number);
+  const lastDay = new Date(y, m, 0).getDate();
+  const closingDate = `${purchaseMonth}-${String(Math.min(closingDay, lastDay)).padStart(2, "0")}`;
+  return purchaseDate < closingDate ? purchaseMonth : addMonths(purchaseMonth, 1);
 }
 
 // ─── DATAS DE FECHAMENTO E VENCIMENTO DA FATURA ──────────────────────────────
