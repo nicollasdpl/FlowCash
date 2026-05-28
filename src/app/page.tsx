@@ -163,20 +163,24 @@ export default function Dashboard() {
   const totalIncomePending  = useMemo(() => incomePending.reduce((s, t) => s + t.amount, 0), [incomePending]);
 
   const cardInvoices = useMemo(() => {
-    return state.cards.filter(c => c.active).map(card => {
-      // Search ALL months (including future) so subscriptions closing next month are found
+    return state.cards.filter(c => c.active).flatMap(card => {
       const allMonths = [...new Set(
         state.installments
           .filter(i => i.cardId === card.id)
           .map(i => i.competenceMonth),
       )].sort();
-      const unpaidMonth = allMonths.find(m =>
-        state.installments.some(i => i.cardId === card.id && i.competenceMonth === m && !i.paid),
-      );
-      const invoice = computeInvoice(card, state.installments, unpaidMonth ?? selectedMonth);
-      return { card, invoice };
-    }).filter(({ invoice }) => invoice.totalAmount > 0);
-  }, [state.cards, state.installments, selectedMonth]);
+      // Only show closed or overdue invoices — open invoices are still accumulating
+      const targetMonth = allMonths.find(m => {
+        const hasUnpaid = state.installments.some(i => i.cardId === card.id && i.competenceMonth === m && !i.paid);
+        if (!hasUnpaid) return false;
+        const inv = computeInvoice(card, state.installments, m);
+        return inv.status === "closed" || inv.status === "overdue";
+      });
+      if (!targetMonth) return [];
+      const invoice = computeInvoice(card, state.installments, targetMonth);
+      return [{ card, invoice }];
+    });
+  }, [state.cards, state.installments]);
 
   // Donut: despesas pagas + parcelas do mês selecionado
   const catSlices = useMemo(() =>
