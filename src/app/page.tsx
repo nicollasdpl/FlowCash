@@ -12,9 +12,10 @@ import {
 import { computeInvoice } from "@/engine/invoiceEngine";
 import {
   AlertTriangle, CreditCard, Wallet, TrendingUp, Package, RefreshCw,
-  ArrowDown, ArrowUp, ChevronDown, ChevronUp, BarChart3,
+  ArrowDown, ArrowUp, ChevronDown, ChevronUp,
 } from "lucide-react";
 import CategoryIcon from "@/components/CategoryIcon";
+import { CategoryDonutSection, buildCatSlices } from "@/components/CategoryDonutSection";
 
 const MONTH_NAMES = [
   "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
@@ -176,6 +177,18 @@ export default function Dashboard() {
       return { card, invoice };
     }).filter(({ invoice }) => invoice.totalAmount > 0);
   }, [state.cards, state.installments]);
+
+  // Donut: despesas pagas + parcelas do mês selecionado
+  const catSlices = useMemo(() =>
+    buildCatSlices(
+      state.transactions,
+      state.installments,
+      state.purchases,
+      state.categories,
+      selectedMonth,
+    ),
+    [state.transactions, state.installments, state.purchases, state.categories, selectedMonth]
+  );
 
   // Máximo 3 lançamentos recentes
   const recentTxs = useMemo(() =>
@@ -726,38 +739,27 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* ── 8. Gráfico de pizza (placeholder) ── */}
-        <div className="card fade-up-5" style={{ overflow: "hidden", marginBottom: "12px" }}>
-          <div style={{
-            padding: "12px 14px 10px",
-            borderBottom: "1px solid var(--border)",
-            display: "flex", justifyContent: "space-between", alignItems: "center",
-          }}>
-            <p style={{
-              fontSize: "11px", fontWeight: 700, color: "var(--text-3)",
-              letterSpacing: "0.07em", textTransform: "uppercase",
-            }}>
-              Gastos por Categoria
-            </p>
-            <Link href="/relatorios" style={{ fontSize: "11.5px", color: "var(--accent)", textDecoration: "none", fontWeight: 600 }}>
-              Relatórios →
-            </Link>
-          </div>
-          <div style={{ padding: "28px 16px", textAlign: "center" }}>
+        {/* ── 8. Gastos por Categoria (donut) ── */}
+        {catSlices.length > 0 && (
+          <div className="card fade-up-5" style={{ overflow: "hidden", marginBottom: "12px" }}>
             <div style={{
-              width: "48px", height: "48px", borderRadius: "14px",
-              background: "rgba(255,255,255,0.04)", border: "1px solid var(--border)",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              margin: "0 auto 10px",
+              padding: "12px 14px 10px",
+              borderBottom: "1px solid var(--border)",
+              display: "flex", justifyContent: "space-between", alignItems: "center",
             }}>
-              <BarChart3 size={22} strokeWidth={1} color="var(--text-3)" />
+              <p style={{
+                fontSize: "11px", fontWeight: 700, color: "var(--text-3)",
+                letterSpacing: "0.07em", textTransform: "uppercase",
+              }}>
+                Gastos por Categoria
+              </p>
+              <Link href="/relatorios" style={{ fontSize: "11.5px", color: "var(--accent)", textDecoration: "none", fontWeight: 600 }}>
+                Relatórios →
+              </Link>
             </div>
-            <p style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-2)" }}>Gráfico em breve</p>
-            <p style={{ fontSize: "11px", color: "var(--text-3)", marginTop: "4px" }}>
-              Visualização por categoria — Sessão C
-            </p>
+            <CategoryDonutSection key={selectedMonth} slices={catSlices} />
           </div>
-        </div>
+        )}
 
         {/* ── 9. Lançamentos recentes (máx 3) ── */}
         <div className="card fade-up-6" style={{ overflow: "hidden", marginBottom: "16px" }}>
