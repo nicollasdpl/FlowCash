@@ -22,6 +22,19 @@ function formatDate(d: string) {
   return `${day}/${m}/${y}`;
 }
 
+const MONTHS_LONG  = ["janeiro","fevereiro","março","abril","maio","junho","julho","agosto","setembro","outubro","novembro","dezembro"];
+const MONTHS_SHORT = ["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
+
+function invoiceLabel(yyyymm: string) {
+  const [y, m] = yyyymm.split("-").map(Number);
+  return `Fatura ${MONTHS_LONG[m - 1]} de ${y}`;
+}
+
+function monthTabLabel(yyyymm: string) {
+  const [y, m] = yyyymm.split("-").map(Number);
+  return `${MONTHS_SHORT[m - 1]}/${String(y).slice(2)}`;
+}
+
 export default function CartaoDetail() {
   const { cardId } = useParams<{ cardId: string }>();
   const router = useRouter();
@@ -97,9 +110,7 @@ export default function CartaoDetail() {
     }
 
     const todayDate = today();
-    const monthLabel = new Date(selectedMonth + "-15")
-      .toLocaleDateString("pt-BR", { month: "short", year: "2-digit" })
-      .replace(".", "");
+    const monthLabel = monthTabLabel(selectedMonth);
     const invoiceNote = `Fatura ${card.name} ${monthLabel}`;
 
     pendingInsts.forEach(inst => {
@@ -261,7 +272,7 @@ export default function CartaoDetail() {
                 onClick={() => setSelectedMonth(m)}
                 style={{ fontSize: "11.5px", padding: "7px 12px", flexShrink: 0 }}
               >
-                {new Date(m + "-15").toLocaleDateString("pt-BR", { month: "short", year: "2-digit" }).replace(".", "")}
+                {monthTabLabel(m)}
               </button>
             ))}
           </div>
@@ -278,7 +289,7 @@ export default function CartaoDetail() {
           }}>
             <div>
               <p style={{ fontSize: "13px", fontWeight: 700, color: "var(--text-1)" }}>
-                Fatura {new Date(selectedMonth + "-15").toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}
+                {invoiceLabel(selectedMonth)}
               </p>
               {currentInvoice && (
                 <p style={{ fontSize: "11px", color: "var(--text-3)", marginTop: "3px" }}>

@@ -724,8 +724,9 @@ export default function Dashboard() {
                     {card.name}
                   </p>
                   <p style={{ fontSize: "11px", color: "var(--text-3)", marginTop: "2px" }}>
-                    Vence {fmtDate(invoice.dueDate)} · {{ paid: "Paga", closed: "Fechada", overdue: "Vencida", open: "Em aberto" }[invoice.status]}
-                    {` · Ref. ${shortMonthLabel(invoice.competenceMonth)}/${invoice.competenceMonth.split("-")[0].slice(2)}`}
+                    {`Fatura ${fullMonthLabel(invoice.competenceMonth)} · `}
+                    {{ paid: "Paga", closed: "Fechada", overdue: "Vencida", open: "Em aberto" }[invoice.status]}
+                    {` · Fecha ${fmtDate(invoice.closingDate)}`}
                   </p>
                 </div>
                 <p className="mono" style={{
