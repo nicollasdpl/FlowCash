@@ -67,8 +67,8 @@ export default function CartaoDetail() {
 
   const limitSummary = useMemo(() => {
     if (!card) return null;
-    return getCardLimitSummary(card, state.installments);
-  }, [card, state.installments]);
+    return getCardLimitSummary(card, state.installments, state.purchases);
+  }, [card, state.installments, state.purchases]);
 
   function payInstallment(inst: CardInstallment) {
     dispatch({

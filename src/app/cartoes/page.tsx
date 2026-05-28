@@ -54,7 +54,7 @@ export default function Cartoes() {
       {/* Card list */}
       <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
         {state.cards.map((card, i) => {
-          const summary = getCardLimitSummary(card, state.installments);
+          const summary = getCardLimitSummary(card, state.installments, state.purchases);
           const usedPct = summary.totalLimit > 0
             ? Math.min((summary.usedLimit / summary.totalLimit) * 100, 100)
             : 0;

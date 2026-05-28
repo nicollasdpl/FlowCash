@@ -5,7 +5,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import type {
-  Account, Transaction, CreditCard, CardInstallment, Goal,
+  Account, Transaction, CreditCard, CardInstallment, CardPurchase, Goal,
   AccountBalance, NetWorthSnapshot, CashFlowEntry, MonthlyProjection, CardLimitSummary,
 } from "@/types/financial";
 
@@ -349,21 +349,26 @@ export function getMonthlyProjections(
 }
 
 // ─── LIMITE DO CARTÃO ────────────────────────────────────────────────────────
-// Limite CONSUMIDO = todas as parcelas futuras não pagas.
-// Não apenas a fatura atual — todas as parcelas futuras bloqueiam limite.
+// Limite CONSUMIDO = todas as parcelas futuras não pagas de compras normais
+// + apenas o mês atual de assinaturas (meses futuros de assinatura não bloqueiam limite).
 export function getCardLimitSummary(
   card: CreditCard,
   installments: CardInstallment[],
+  purchases: CardPurchase[] = [],
 ): CardLimitSummary {
   const cardInstallments = installments.filter(i => i.cardId === card.id);
+  const cm = currentMonth();
+  const subscriptionPurchaseIds = new Set(
+    purchases.filter(p => p.isSubscription).map(p => p.id)
+  );
 
-  // Limite usado: TODAS parcelas não pagas (presentes e futuras)
+  // Subscriptions: only current month counts against limit; future months are pre-generated for display only
   const usedLimit = cardInstallments
     .filter(i => !i.paid)
+    .filter(i => !subscriptionPurchaseIds.has(i.purchaseId) || i.competenceMonth <= cm)
     .reduce((s, i) => s + i.amount, 0);
 
   // Fatura do mês atual
-  const cm = currentMonth();
   const currentInvoiceAmount = cardInstallments
     .filter(i => i.competenceMonth === cm)
     .reduce((s, i) => s + i.amount, 0);
