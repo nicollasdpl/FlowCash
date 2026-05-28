@@ -64,7 +64,7 @@ const RESPONSE_SCHEMA = {
     totalInstallments: { type: "integer" },
     message: { type: "string" },
   },
-  required: ["intent"],
+  required: ["intent", "amount"],
 };
 
 // ─── Keywords por categoria (contexto semântico para o modelo) ───────────────
@@ -163,12 +163,17 @@ export async function POST(req: NextRequest) {
     .map(c => `  id="${c.id}" | ${c.name} (${c.brand})`)
     .join("\n") || "  (nenhum)";
 
-  const prompt = `Assistente financeiro pessoal brasileiro. Extraia dados da mensagem.
-
+  const prompt = `Você é um assistente financeiro pessoal brasileiro. Extraia dados financeiros de mensagens informais.
 Hoje: ${today} | Ontem: ${yesterday}
 
 CATEGORIAS:
 ${categoriesList}
+
+Keywords fixas por categoria personalizada:
+- "Corre" (expense) → corre, baseado, beck, erva, verde, fumei, fumar, fuminho, bagulho, skank
+- "Para Mim" (expense) → comprei pra mim, presente pra mim, mimo, roupa pra mim, tênis, perfume, compra pessoal
+- "Assinatura" (expense) → netflix, spotify, amazon prime, youtube premium, chatgpt, discord nitro, mensalidade, plano, recorrente, renovação
+- "Bebida" (expense) → cerveja, heineken, budweiser, drinks, bar, boteco, cachaça, vinho, whisky, vodka, gelada, latinha
 
 CONTAS:
 ${accountsList}
@@ -179,16 +184,29 @@ ${cardsList}
 MENSAGEM: "${message.trim()}"
 
 REGRAS:
-- Menciona cartão/bandeira → card_purchase
-- Parcelado/"em X vezes" → card_purchase, totalInstallments=X
+- Menciona bandeira (Visa/Mastercard/Elo/Amex) ou palavra "cartão" → card_purchase
+- Parcelado/"em X vezes"/"X parcelas" → card_purchase, totalInstallments=X
+- Banco (Bradesco/Nubank/Itaú/Inter/C6) sem "cartão" → transaction com accountId
 - Gasto sem cartão → transaction, type=expense
-- Receita/salário → transaction, type=income
+- Receita/salário/freela/pix recebido → transaction, type=income
 - Ambíguo → unknown
-- "hoje"→${today} | "ontem"→${yesterday} | sem data→${today}
-- Status padrão: "paid" | "vou pagar"/"pendente" → "pending"
-- Sem conta especificada → primeiro id da lista de contas
-- Sem cartão especificado → primeiro id da lista de cartões
-- categoryId: use as keywords como referência semântica; categorias sem keywords (personalizadas) use o nome como contexto`;
+- "hoje" → ${today} | "ontem" → ${yesterday} | sem data → ${today}
+- Status padrão: "paid" | "vou pagar"/"pendente"/"devo" → "pending"
+- Sem conta → primeiro id da lista | Sem cartão → primeiro id da lista
+- VALOR: converta para número decimal. "49,75"→49.75 | "R$50"→50 | "1.200,00"→1200 | "mil reais"→1000 | "cinquenta"→50
+
+EXEMPLOS:
+"passei 30 no mercadão" → Alimentação, expense, 30
+"paguei o ifood" → Alimentação, expense
+"uber até o trabalho" → Transporte, expense
+"comprei um beck" → Bebida, expense
+"boteco ontem, 80 conto" → Bebida, expense, 80, ontem
+"renovação do spotify" → Assinatura, expense
+"comprei um tênis pra mim" → Para Mim, expense
+"academia esse mês" → Saúde, expense
+"salário caiu" → Salário, income
+"recebi freela" → Freelance, income
+"paguei aluguel" → Moradia, expense`;
 
   // ── 5. Chamar Gemini ─────────────────────────────────────────────────────────
   let geminiRes: Response;
@@ -291,6 +309,21 @@ REGRAS:
     parsed.totalInstallments ??= 1;
     parsed.purchaseDate      ??= today;
     parsed.confidence        ??= 0.8;
+  }
+
+  // Sanitiza amount — Gemini pode retornar string com vírgula ou omitir o campo
+  if (parsed.intent === "transaction" || parsed.intent === "card_purchase") {
+    if (typeof parsed.amount === "string") {
+      const n = parseFloat((parsed.amount as string).replace(/\./g, "").replace(",", "."));
+      parsed.amount = isNaN(n) ? undefined : n;
+    }
+    if (typeof parsed.amount !== "number" || isNaN(parsed.amount as number) || (parsed.amount as number) <= 0) {
+      return NextResponse.json({
+        intent: "error",
+        code: "MISSING_AMOUNT",
+        message: "Não consegui identificar o valor. Tente incluir o valor de forma mais clara, ex: 'gastei R$49,75'.",
+      });
+    }
   }
 
   return NextResponse.json(parsed);

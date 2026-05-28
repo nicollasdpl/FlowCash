@@ -25,11 +25,19 @@ function fmtDate(d: string) {
 type FilterKey = "Todos" | "A pagar" | "Pago" | "Vencido" | "Receitas";
 const FILTERS: FilterKey[] = ["Todos", "A pagar", "Pago", "Vencido", "Receitas"];
 
-const statusMap = {
-  paid: { cls: "badge badge-pago", label: "Pago" },
-  pending: { cls: "badge badge-pagar", label: "A pagar" },
-  overdue: { cls: "badge badge-vencido", label: "Vencido" },
-};
+function getStatusLabel(type: string, status: string): string {
+  if (status === "paid") return type === "income" ? "Recebido" : "Pago";
+  if (status === "pending") return type === "income" ? "A receber" : "A pagar";
+  return "Vencido";
+}
+
+function getStatusStyle(type: string, status: string) {
+  if (status === "overdue") return { color: "var(--red)", bg: "var(--red-10)", border: "var(--red-20)" };
+  if (status === "paid" && type === "income") return { color: "var(--accent)", bg: "var(--accent-10)", border: "var(--border-accent)" };
+  if (status === "paid") return { color: "var(--text-2)", bg: "rgba(255,255,255,0.04)", border: "var(--border)" };
+  if (status === "pending" && type === "income") return { color: "#4A9EFF", bg: "rgba(74,158,255,0.1)", border: "rgba(74,158,255,0.2)" };
+  return { color: "var(--amber)", bg: "var(--amber-10)", border: "var(--amber-20)" };
+}
 
 export default function Transacoes() {
   const router = useRouter();
@@ -155,6 +163,7 @@ export default function Transacoes() {
         WebkitOverflowScrolling: "touch",
         msOverflowStyle: "none",
         scrollbarWidth: "none",
+        touchAction: "pan-x",
       }}>
         {FILTERS.map(f => (
           <button
@@ -188,7 +197,7 @@ export default function Transacoes() {
             </div>
             {filtered.map((tx) => {
               const cat = state.categories.find(c => c.id === tx.categoryId);
-              const s = statusMap[tx.status];
+              const sStyle = getStatusStyle(tx.type, tx.status);
               const menuOpen = openMenuId === tx.id;
               return (
                 <div key={tx.id} style={{ borderTop: "1px solid var(--border)" }}>
@@ -242,7 +251,9 @@ export default function Transacoes() {
                       }}>
                         {tx.type === "income" ? "+" : "-"}R$ {fmt(tx.amount)}
                       </p>
-                      <span className={s.cls}>{s.label}</span>
+                      <span className="badge" style={{ color: sStyle.color, background: sStyle.bg, border: `1px solid ${sStyle.border}` }}>
+                        {getStatusLabel(tx.type, tx.status)}
+                      </span>
                     </div>
 
                     <button

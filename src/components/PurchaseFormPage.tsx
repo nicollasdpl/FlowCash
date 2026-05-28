@@ -19,6 +19,7 @@ export default function PurchaseFormPage({ card }: Props) {
   const [categoryId, setCategoryId] = useState(state.categories.find(c => c.type === "expense")?.id ?? "");
   const [purchaseDate, setPurchaseDate] = useState(todayStr);
   const [totalInstallments, setTotalInstallments] = useState("1");
+  const [isSubscription, setIsSubscription] = useState(false);
   const [error, setError] = useState("");
 
   const installmentPreview = useMemo(() => {
@@ -33,8 +34,11 @@ export default function PurchaseFormPage({ card }: Props) {
     if (!description.trim()) return setError("Informe a descrição.");
     const amt = parseFloat(amount.replace(",", "."));
     if (!amount || isNaN(amt) || amt <= 0) return setError("Informe um valor válido.");
-    const inst = parseInt(totalInstallments);
-    if (!inst || inst < 1 || inst > 60) return setError("Parcelas inválidas (1–60).");
+    let inst = 1;
+    if (!isSubscription) {
+      inst = parseInt(totalInstallments);
+      if (!inst || inst < 1 || inst > 60) return setError("Parcelas inválidas (1–60).");
+    }
     setError("");
 
     const purchase: CardPurchase = {
@@ -45,6 +49,7 @@ export default function PurchaseFormPage({ card }: Props) {
       categoryId,
       purchaseDate,
       totalInstallments: inst,
+      isSubscription: isSubscription || undefined,
       createdAt: new Date().toISOString(),
     };
 
@@ -110,7 +115,39 @@ export default function PurchaseFormPage({ card }: Props) {
           />
         </div>
 
-        {/* Parcelas */}
+        {/* Assinatura mensal */}
+        <div className="form-group">
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", minHeight: "44px" }}>
+            <span style={{ fontSize: "12px", fontWeight: 700, color: "var(--text-3)", letterSpacing: "0.05em", textTransform: "uppercase" }}>
+              Assinatura mensal
+            </span>
+            <button
+              onClick={() => setIsSubscription(v => !v)}
+              style={{
+                width: "44px", height: "24px", borderRadius: "12px", flexShrink: 0,
+                background: isSubscription ? "var(--accent)" : "rgba(255,255,255,0.12)",
+                border: "none", cursor: "pointer", position: "relative",
+                transition: "background 0.2s",
+                touchAction: "manipulation", WebkitTapHighlightColor: "transparent",
+              }}
+            >
+              <span style={{
+                position: "absolute", top: "2px",
+                left: isSubscription ? "22px" : "2px",
+                width: "20px", height: "20px", borderRadius: "50%",
+                background: "#fff", transition: "left 0.2s",
+              }} />
+            </button>
+          </div>
+          {isSubscription && (
+            <p style={{ fontSize: "11px", color: "var(--text-3)", marginTop: "6px", lineHeight: 1.5 }}>
+              Cobrada todo mês. Compromete o limite apenas do mês atual.
+            </p>
+          )}
+        </div>
+
+        {/* Parcelas — oculto quando for assinatura */}
+        {!isSubscription && (
         <div className="form-group">
           <label className="form-label">Parcelas</label>
           <input
@@ -125,9 +162,10 @@ export default function PurchaseFormPage({ card }: Props) {
             autoComplete="off"
           />
         </div>
+        )}
 
         {/* Preview de parcela */}
-        {installmentPreview && (
+        {!isSubscription && installmentPreview && (
           <div style={{
             padding: "12px 16px", marginBottom: "16px",
             background: "var(--accent-10)", border: "1px solid var(--border-accent)",

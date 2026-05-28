@@ -349,7 +349,7 @@ export function getDueThisWeek(transactions: Transaction[]): Transaction[] {
   const from = t.toISOString().split("T")[0];
   const to = new Date(t.getTime() + 7 * 86400000).toISOString().split("T")[0];
   return transactions.filter(
-    tx => tx.status === "pending" && tx.paymentDate >= from && tx.paymentDate <= to,
+    tx => tx.type === "expense" && tx.status === "pending" && tx.paymentDate >= from && tx.paymentDate <= to,
   );
 }
 

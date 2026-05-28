@@ -4,7 +4,31 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useApp, newId } from "@/context/AppContext";
 import type { Transaction } from "@/context/AppContext";
+import type { RecurringFrequency } from "@/types/financial";
 import { iconLabel } from "@/components/CategoryIcon";
+import { RefreshCw } from "lucide-react";
+
+function addFrequency(dateStr: string, freq: RecurringFrequency): string {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  switch (freq) {
+    case "weekly": {
+      const dt = new Date(y, m - 1, d + 7);
+      return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
+    }
+    case "monthly": {
+      const nm = m === 12 ? 1 : m + 1;
+      const ny = m === 12 ? y + 1 : y;
+      const lastDay = new Date(ny, nm, 0).getDate();
+      return `${ny}-${String(nm).padStart(2, "0")}-${String(Math.min(d, lastDay)).padStart(2, "0")}`;
+    }
+    case "yearly": {
+      const lastDay = new Date(y + 1, m, 0).getDate();
+      return `${y + 1}-${String(m).padStart(2, "0")}-${String(Math.min(d, lastDay)).padStart(2, "0")}`;
+    }
+    default:
+      return dateStr;
+  }
+}
 
 interface Props {
   transaction?: Transaction;
@@ -28,6 +52,9 @@ export default function TransactionFormPage({ transaction }: Props) {
   const [status, setStatus] = useState<Transaction["status"]>(transaction?.status ?? "paid");
   const [notes, setNotes]   = useState(transaction?.notes ?? "");
   const [error, setError]   = useState("");
+  const [isRecurring, setIsRecurring]           = useState(transaction?.isRecurring ?? false);
+  const [recurringFrequency, setFrequency]      = useState<RecurringFrequency>("monthly");
+  const [recurringEndDate, setRecurringEndDate] = useState("");
 
   // Atualiza categoria quando o tipo muda (nova transação)
   useEffect(() => {
@@ -46,8 +73,12 @@ export default function TransactionFormPage({ transaction }: Props) {
     if (!accountId) return setError("Selecione uma conta.");
     setError("");
 
-    const tx: Transaction = {
-      id: transaction?.id ?? newId(),
+    const baseId = transaction?.id ?? newId();
+    const now = new Date().toISOString();
+    const recurring = !isEdit && isRecurring;
+
+    const baseTx: Transaction = {
+      id: baseId,
       accountId,
       type: txType,
       amount: amt,
@@ -56,14 +87,36 @@ export default function TransactionFormPage({ transaction }: Props) {
       competenceDate,
       paymentDate,
       status,
-      isRecurring: transaction?.isRecurring ?? false,
+      isRecurring: recurring,
       recurringRuleId: transaction?.recurringRuleId,
       origin: "manual",
       notes: notes.trim() || undefined,
-      createdAt: transaction?.createdAt ?? new Date().toISOString(),
+      createdAt: transaction?.createdAt ?? now,
     };
 
-    dispatch({ type: transaction ? "UPD_TX" : "ADD_TX", payload: tx });
+    if (isEdit || !isRecurring) {
+      dispatch({ type: isEdit ? "UPD_TX" : "ADD_TX", payload: baseTx });
+    } else {
+      const occurrences: Transaction[] = [baseTx];
+      let prevComp = competenceDate;
+      let prevPay  = paymentDate;
+      for (let i = 1; i < 12; i++) {
+        prevComp = addFrequency(prevComp, recurringFrequency);
+        prevPay  = addFrequency(prevPay, recurringFrequency);
+        if (recurringEndDate && prevPay > recurringEndDate) break;
+        occurrences.push({
+          ...baseTx,
+          id: newId(),
+          competenceDate: prevComp,
+          paymentDate: prevPay,
+          status: "pending",
+          recurringRuleId: baseId,
+          origin: "recurring",
+        });
+      }
+      dispatch({ type: "BULK_ADD_TX", payload: occurrences });
+    }
+
     router.back();
   }
 
@@ -213,9 +266,9 @@ export default function TransactionFormPage({ transaction }: Props) {
           <label className="form-label">Status</label>
           <div style={{ display: "flex", gap: "8px" }}>
             {([
-              { key: "paid" as const,    label: "Pago",     color: "var(--green)", bg: "var(--green-10)", border: "var(--green-20)" },
-              { key: "pending" as const, label: "A pagar",  color: "var(--amber)", bg: "var(--amber-10)", border: "var(--amber-20)" },
-              { key: "overdue" as const, label: "Vencido",  color: "var(--red)",   bg: "var(--red-10)",   border: "var(--red-20)"   },
+              { key: "paid" as const,    label: txType === "income" ? "Recebido" : "Pago",      color: txType === "income" ? "var(--accent)" : "var(--text-2)", bg: txType === "income" ? "var(--accent-10)" : "rgba(255,255,255,0.04)", border: txType === "income" ? "var(--border-accent)" : "var(--border)" },
+              { key: "pending" as const, label: txType === "income" ? "A receber" : "A pagar",  color: txType === "income" ? "#4A9EFF" : "var(--amber)",         bg: txType === "income" ? "rgba(74,158,255,0.1)" : "var(--amber-10)",   border: txType === "income" ? "rgba(74,158,255,0.2)" : "var(--amber-20)" },
+              { key: "overdue" as const, label: "Vencido",                                       color: "var(--red)",                                             bg: "var(--red-10)",                                                   border: "var(--red-20)" },
             ]).map(opt => (
               <button
                 key={opt.key}
@@ -232,6 +285,74 @@ export default function TransactionFormPage({ transaction }: Props) {
             ))}
           </div>
         </div>
+
+        {/* Recorrência */}
+        {!isEdit && (
+          <div className="form-group">
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", minHeight: "44px" }}>
+              <span style={{ fontSize: "12px", fontWeight: 700, color: "var(--text-3)", letterSpacing: "0.05em", textTransform: "uppercase", display: "flex", alignItems: "center", gap: "6px" }}>
+                <RefreshCw size={11} strokeWidth={2} />
+                Recorrente
+              </span>
+              <button
+                onClick={() => setIsRecurring(v => !v)}
+                style={{
+                  width: "44px", height: "24px", borderRadius: "12px", flexShrink: 0,
+                  background: isRecurring ? "var(--accent)" : "rgba(255,255,255,0.12)",
+                  border: "none", cursor: "pointer", position: "relative",
+                  transition: "background 0.2s",
+                  touchAction: "manipulation", WebkitTapHighlightColor: "transparent",
+                }}
+              >
+                <span style={{
+                  position: "absolute", top: "2px",
+                  left: isRecurring ? "22px" : "2px",
+                  width: "20px", height: "20px", borderRadius: "50%",
+                  background: "#fff", transition: "left 0.2s",
+                }} />
+              </button>
+            </div>
+            {isRecurring && (
+              <div style={{ marginTop: "12px", display: "flex", flexDirection: "column", gap: "12px" }}>
+                <div>
+                  <label className="form-label">Frequência</label>
+                  <div style={{ display: "flex", gap: "8px" }}>
+                    {([
+                      { key: "monthly" as const, label: "Mensal"  },
+                      { key: "weekly"  as const, label: "Semanal" },
+                      { key: "yearly"  as const, label: "Anual"   },
+                    ]).map(opt => (
+                      <button
+                        key={opt.key}
+                        onClick={() => setFrequency(opt.key)}
+                        style={{
+                          flex: 1, padding: "10px 4px", borderRadius: "10px", cursor: "pointer",
+                          fontSize: "12px", fontWeight: 700, fontFamily: "inherit",
+                          background: recurringFrequency === opt.key ? "var(--accent-10)" : "transparent",
+                          color: recurringFrequency === opt.key ? "var(--accent)" : "var(--text-3)",
+                          border: recurringFrequency === opt.key ? "1px solid var(--border-accent)" : "1px solid var(--border)",
+                          minHeight: "44px", touchAction: "manipulation",
+                        }}
+                      >{opt.label}</button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <label className="form-label">Término (opcional)</label>
+                  <input
+                    className="form-input"
+                    type="date"
+                    value={recurringEndDate}
+                    onChange={e => setRecurringEndDate(e.target.value)}
+                  />
+                </div>
+                <p style={{ fontSize: "11px", color: "var(--text-3)", lineHeight: 1.5 }}>
+                  Serão geradas até 12 ocorrências com status pendente.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Observação */}
         <div className="form-group" style={{ marginBottom: 0 }}>

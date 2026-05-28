@@ -3,7 +3,8 @@ import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useApp } from "@/context/AppContext";
 import { currentMonth, addMonths } from "@/engine/financialEngine";
-import { AlertTriangle, BarChart2, Trash2 } from "lucide-react";
+import { AlertTriangle, BarChart2, Trash2, Package } from "lucide-react";
+import CategoryIcon from "@/components/CategoryIcon";
 
 const MONTH_NAMES = [
   "Janeiro","Fevereiro","Março","Abril","Maio","Junho",
@@ -156,7 +157,9 @@ export default function Orcamentos() {
                     border: `1px solid ${cat?.color ?? "var(--border)"}30`,
                     display: "flex", alignItems: "center", justifyContent: "center", fontSize: "18px",
                   }}>
-                    {cat?.icon ?? "—"}
+                    {cat?.icon
+                      ? <CategoryIcon icon={cat.icon} color={cat.color} size={18} />
+                      : <Package size={18} strokeWidth={1.5} color="var(--text-3)" />}
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <p style={{ fontSize: "14px", fontWeight: 700, color: "var(--text-1)" }}>

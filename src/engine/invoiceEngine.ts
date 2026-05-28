@@ -4,17 +4,18 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import type {
-  CreditCard, CardPurchase, CardInstallment, Invoice,
+  CreditCard, CardPurchase, CardInstallment, Invoice, InvoiceStatus,
 } from "@/types/financial";
 import { currentMonth, addMonths } from "./financialEngine";
 
 // ─── QUAL FATURA UMA COMPRA ENTRA ────────────────────────────────────────────
-// REGRA: purchaseDate.day > closingDay → próxima fatura
-//        purchaseDate.day <= closingDay → fatura atual
+// REGRA: purchaseDate.day >= closingDay → próxima fatura (dia de fechamento é exclusivo)
+//        purchaseDate.day < closingDay  → fatura atual
+// Ex: fechamento dia 10 → compra no dia 10 já vai para a próxima fatura.
 export function getCompetenceMonth(purchaseDate: string, closingDay: number): string {
   const [, , day] = purchaseDate.split("-").map(Number);
   const monthBase = purchaseDate.substring(0, 7); // YYYY-MM
-  if (day > closingDay) {
+  if (day >= closingDay) {
     return addMonths(monthBase, 1);
   }
   return monthBase;
@@ -111,11 +112,13 @@ export function computeInvoice(
   const allPaid = cardInstallments.length > 0 && cardInstallments.every(i => i.paid);
   const { closingDate, dueDate } = getInvoiceDates(competenceMonth, card.closingDay, card.dueDay);
 
-  const cm = currentMonth();
-  let status: "open" | "closed" | "paid";
+  const today = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
+  let status: InvoiceStatus;
   if (allPaid && cardInstallments.length > 0) {
     status = "paid";
-  } else if (competenceMonth < cm) {
+  } else if (today >= dueDate) {
+    status = "overdue";
+  } else if (today >= closingDate) {
     status = "closed";
   } else {
     status = "open";
@@ -198,6 +201,25 @@ export function getCardExpensesByCategory(
       result[purchase.categoryId] = (result[purchase.categoryId] ?? 0) + i.amount;
     });
   return result;
+}
+
+// ─── PARCELA DE ASSINATURA (mensal, gerada sob demanda) ──────────────────────
+// ID determinístico por mês garante idempotência — nunca duplica.
+export function generateSubscriptionInstallment(
+  purchase: CardPurchase,
+  _card: CreditCard,
+  competenceMonth: string,
+): CardInstallment {
+  return {
+    id: `${purchase.id}_sub_${competenceMonth}`,
+    purchaseId: purchase.id,
+    cardId: purchase.cardId,
+    installmentNumber: 1,
+    totalInstallments: 1,
+    amount: purchase.amount,
+    competenceMonth,
+    paid: false,
+  };
 }
 
 // ─── VALOR TOTAL DE UMA COMPRA PARCELADA ────────────────────────────────────

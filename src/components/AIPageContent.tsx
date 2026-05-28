@@ -703,6 +703,15 @@ export default function AIPageContent() {
             e.target.style.height = "auto";
             e.target.style.height = Math.min(e.target.scrollHeight, 96) + "px";
           }}
+          onPaste={() => {
+            setTimeout(() => {
+              if (!inputRef.current) return;
+              const val = inputRef.current.value;
+              setMessage(val);
+              inputRef.current.style.height = "auto";
+              inputRef.current.style.height = Math.min(inputRef.current.scrollHeight, 96) + "px";
+            }, 0);
+          }}
           onKeyDown={handleKey}
           placeholder="Ex: gastei 50 no iFood hoje…"
           disabled={isBusy || flash}

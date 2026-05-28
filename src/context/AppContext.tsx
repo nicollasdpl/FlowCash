@@ -1,20 +1,20 @@
 "use client";
 import {
   createContext, useContext, useReducer, useEffect,
-  useState, ReactNode,
+  useState, useRef, ReactNode,
 } from "react";
 import type { User } from "firebase/auth";
 import {
   onAuthStateChanged, signInWithPopup,
   GoogleAuthProvider, signOut as fbSignOut,
 } from "firebase/auth";
-import { doc, getDoc, setDoc } from "firebase/firestore";
+import { doc, onSnapshot, setDoc } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import type {
   Account, Transaction, CreditCard, CardPurchase, CardInstallment,
   Goal, Category, Budget,
 } from "@/types/financial";
-import { generateInstallments } from "@/engine/invoiceEngine";
+import { generateInstallments, generateSubscriptionInstallment, getCompetenceMonth } from "@/engine/invoiceEngine";
 
 export type {
   Account, Transaction, CreditCard, CardPurchase, CardInstallment,
@@ -59,7 +59,9 @@ type Action =
   | { type: "DEL_BUDGET"; payload: string }
   | { type: "ADD_CATEGORY"; payload: Category }
   | { type: "UPD_CATEGORY"; payload: Category }
-  | { type: "DEL_CATEGORY"; payload: string };
+  | { type: "DEL_CATEGORY"; payload: string }
+  | { type: "BULK_ADD_TX"; payload: Transaction[] }
+  | { type: "ADD_INSTALLMENTS"; payload: CardInstallment[] };
 
 // ─── SEED ─────────────────────────────────────────────────────────────────────
 
@@ -145,6 +147,12 @@ function reducer(state: AppState, action: Action): AppState {
     case "DEL_ACCOUNT":
       return { ...state, accounts: state.accounts.filter(a => a.id !== action.payload) };
 
+    case "BULK_ADD_TX":
+      return { ...state, transactions: [...action.payload, ...state.transactions] };
+
+    case "ADD_INSTALLMENTS":
+      return { ...state, installments: [...state.installments, ...action.payload] };
+
     case "ADD_TX":
       return { ...state, transactions: [action.payload, ...state.transactions] };
     case "UPD_TX":
@@ -173,7 +181,13 @@ function reducer(state: AppState, action: Action): AppState {
 
     case "ADD_PURCHASE": {
       const { purchase, card } = action.payload;
-      const newInstallments = generateInstallments(purchase, card, state.installments);
+      let newInstallments: CardInstallment[];
+      if (purchase.isSubscription) {
+        const cm = getCompetenceMonth(purchase.purchaseDate, card.closingDay);
+        newInstallments = [generateSubscriptionInstallment(purchase, card, cm)];
+      } else {
+        newInstallments = generateInstallments(purchase, card, state.installments);
+      }
       return {
         ...state,
         purchases: [...state.purchases, purchase],
@@ -249,61 +263,131 @@ const Ctx = createContext<CtxType | null>(null);
 
 const FIRESTORE_DOC = (uid: string) => doc(db, "users", uid, "app", "state");
 
+// Formato persistido — AppState + campo de versionamento (nunca entra no reducer)
+type PersistedState = AppState & { updatedAt?: number };
+
 export function AppProvider({ children }: { children: ReactNode }) {
-  const [state, dispatch] = useReducer(reducer, seed);
+  const [state, rawDispatch] = useReducer(reducer, seed);
   const [user, setUser]   = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [isReady, setIsReady]         = useState(false);
 
-  // ── Auth listener + initial load ──────────────────────────────────────────
+  // Timestamp do dado que está no estado agora (para comparar com Firestore)
+  const loadedAtRef  = useRef<number>(0);
+  // Timestamp do nosso último write no Firestore (para ignorar o echo do onSnapshot)
+  const ownSaveTsRef = useRef<number>(0);
+  // True somente quando o usuário fez uma mudança real — evita salvar dados de localStorage no Firestore
+  const needsFirestoreSyncRef = useRef<boolean>(false);
+
+  // dispatch público: marca needsFirestoreSync em ações do usuário (não em LOADs de storage)
+  const dispatch = (action: Action): void => {
+    if (action.type !== "LOAD") needsFirestoreSyncRef.current = true;
+    rawDispatch(action);
+  };
+
+  // ── Auth listener ─────────────────────────────────────────────────────────
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
+    const unsubAuth = onAuthStateChanged(auth, (firebaseUser) => {
       setUser(firebaseUser);
-
-      if (firebaseUser) {
-        try {
-          const snap = await getDoc(FIRESTORE_DOC(firebaseUser.uid));
-          if (snap.exists()) {
-            dispatch({ type: "LOAD", payload: snap.data() as AppState });
-          } else {
-            try {
-              const local = localStorage.getItem("flowcash_v2");
-              if (local) dispatch({ type: "LOAD", payload: JSON.parse(local) });
-            } catch {}
-          }
-        } catch {
-          try {
-            const local = localStorage.getItem("flowcash_v2");
-            if (local) dispatch({ type: "LOAD", payload: JSON.parse(local) });
-          } catch {}
-        }
-      } else {
+      if (!firebaseUser) {
         dispatch({ type: "LOAD", payload: seed });
+        loadedAtRef.current         = 0;
+        ownSaveTsRef.current        = 0;
+        needsFirestoreSyncRef.current = false;
+        setAuthLoading(false);
+        setIsReady(false);
+      } else {
+        setAuthLoading(false);
       }
-
-      setAuthLoading(false);
-      setIsReady(true);
     });
-
-    return () => unsub();
+    return () => unsubAuth();
   }, []);
 
-  // ── Auto-save to Firestore (debounced 1.5s) ───────────────────────────────
+  // ── Load imediato do localStorage + listener em tempo real do Firestore ───
+  useEffect(() => {
+    if (!user) return;
+
+    // 1. Exibe localStorage imediatamente — sem esperar o Firestore
+    try {
+      const raw = localStorage.getItem("flowcash_v2");
+      if (raw) {
+        const local = JSON.parse(raw) as PersistedState;
+        loadedAtRef.current = local.updatedAt ?? 0;
+        dispatch({ type: "LOAD", payload: local });
+      }
+    } catch {}
+
+    setIsReady(true);
+
+    // 2. Listener em tempo real — sincroniza outros dispositivos
+    const unsubSnapshot = onSnapshot(
+      FIRESTORE_DOC(user.uid),
+      (snap) => {
+        if (!snap.exists()) return;
+        const remote = snap.data() as PersistedState;
+        const remoteTs = remote.updatedAt ?? 0;
+        // Ignora o echo do nosso próprio write recente
+        if (remoteTs <= ownSaveTsRef.current) return;
+        // Ignora se já temos dado igual ou mais novo
+        if (remoteTs <= loadedAtRef.current) return;
+        // Dado mais recente vindo de outro dispositivo — aplicar
+        loadedAtRef.current = remoteTs;
+        needsFirestoreSyncRef.current = false; // remoto é autoritativo; não reescrever de volta
+        try { localStorage.setItem("flowcash_v2", JSON.stringify(remote)); } catch {}
+        dispatch({ type: "LOAD", payload: remote });
+      },
+      (err) => console.error("Firestore snapshot error:", err),
+    );
+
+    return () => unsubSnapshot();
+  }, [user]);
+
+  // ── Salva localStorage imediatamente a cada dispatch ──────────────────────
+  useEffect(() => {
+    if (!user) return;
+    const toSave: PersistedState = { ...state, updatedAt: Date.now() };
+    try { localStorage.setItem("flowcash_v2", JSON.stringify(toSave)); } catch {}
+  }, [state, user]);
+
+  // ── Salva no Firestore com debounce de 1.5s (apenas mudanças do usuário) ──
   useEffect(() => {
     if (!isReady || !user) return;
-
+    if (!needsFirestoreSyncRef.current) return; // não salvar carregamentos de storage
     const timer = setTimeout(async () => {
+      const ts = Date.now();
+      const toSave: PersistedState = { ...state, updatedAt: ts };
+      ownSaveTsRef.current = ts; // marca antes do await para ganhar corrida com onSnapshot
       try {
-        await setDoc(FIRESTORE_DOC(user.uid), state);
-        localStorage.setItem("flowcash_v2", JSON.stringify(state));
+        await setDoc(FIRESTORE_DOC(user.uid), toSave);
       } catch (err) {
         console.error("Firestore save error:", err);
-        localStorage.setItem("flowcash_v2", JSON.stringify(state));
+        ownSaveTsRef.current = 0; // reset para que o próximo snapshot possa recuperar
       }
     }, 1500);
-
     return () => clearTimeout(timer);
   }, [state, user, isReady]);
+
+  // ── Auto-gerar parcelas de assinaturas para o mês atual ───────────────────
+  useEffect(() => {
+    if (!user || !isReady) return;
+    const subscriptions = state.purchases.filter(p => p.isSubscription);
+    if (subscriptions.length === 0) return;
+    const todayDate = new Date().toISOString().split("T")[0];
+    const toAdd: CardInstallment[] = [];
+    for (const purchase of subscriptions) {
+      const card = state.cards.find(c => c.id === purchase.cardId);
+      if (!card) continue;
+      const cm = getCompetenceMonth(todayDate, card.closingDay);
+      const instId = `${purchase.id}_sub_${cm}`;
+      if (!state.installments.some(i => i.id === instId)) {
+        toAdd.push(generateSubscriptionInstallment(purchase, card, cm));
+      }
+    }
+    if (toAdd.length > 0) {
+      dispatch({ type: "ADD_INSTALLMENTS", payload: toAdd });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.purchases, state.cards, state.installments, user, isReady]);
 
   // ── Auth actions ──────────────────────────────────────────────────────────
   function signIn(): Promise<void> {
@@ -314,7 +398,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   async function signOut() {
     await fbSignOut(auth);
     setIsReady(false);
+    needsFirestoreSyncRef.current = false;
     dispatch({ type: "LOAD", payload: seed });
+    // onAuthStateChanged dispara em seguida e reseta os refs
   }
 
   return (

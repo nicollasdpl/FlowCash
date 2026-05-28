@@ -13,11 +13,21 @@ interface Props {
   onEdit?: (tx: Transaction) => void;
 }
 
-const STATUS_OPTIONS: { key: Transaction["status"]; label: string; color: string; bg: string; border: string }[] = [
-  { key: "paid", label: "Pago", color: "var(--green)", bg: "var(--green-10)", border: "var(--green-20)" },
-  { key: "pending", label: "A pagar", color: "var(--amber)", bg: "var(--amber-10)", border: "var(--amber-20)" },
-  { key: "overdue", label: "Vencido", color: "var(--red)", bg: "var(--red-10)", border: "var(--red-20)" },
-];
+function getStatusLabel(type: string, status: string): string {
+  if (status === "paid") return type === "income" ? "Recebido" : "Pago";
+  if (status === "pending") return type === "income" ? "A receber" : "A pagar";
+  return "Vencido";
+}
+
+function getStatusStyle(type: string, status: string) {
+  if (status === "overdue") return { color: "var(--red)", bg: "var(--red-10)", border: "var(--red-20)" };
+  if (status === "paid" && type === "income") return { color: "var(--accent)", bg: "var(--accent-10)", border: "var(--border-accent)" };
+  if (status === "paid") return { color: "var(--text-2)", bg: "rgba(255,255,255,0.04)", border: "var(--border)" };
+  if (status === "pending" && type === "income") return { color: "#4A9EFF", bg: "rgba(74,158,255,0.1)", border: "rgba(74,158,255,0.2)" };
+  return { color: "var(--amber)", bg: "var(--amber-10)", border: "var(--amber-20)" };
+}
+
+const STATUS_KEYS: Transaction["status"][] = ["paid", "pending", "overdue"];
 
 function fmt(v: number) {
   return v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -39,7 +49,7 @@ export default function TransactionDrawer({ tx, categories, onClose, onStatusCha
   if (!tx) return null;
 
   const cat = categories.find(c => c.id === tx.categoryId);
-  const currentStatus = STATUS_OPTIONS.find(s => s.key === tx.status) ?? STATUS_OPTIONS[1];
+  const currentStatusStyle = getStatusStyle(tx.type, tx.status);
   const isIncome = tx.type === "income";
 
   return (
@@ -135,7 +145,7 @@ export default function TransactionDrawer({ tx, categories, onClose, onStatusCha
               { label: "Competência", value: formatDate(tx.competenceDate) },
               { label: "Pagamento", value: formatDate(tx.paymentDate) },
               { label: "Categoria", value: cat?.name ?? "—" },
-              { label: "Status", value: currentStatus.label, color: currentStatus.color },
+              { label: "Status", value: getStatusLabel(tx.type, tx.status), color: currentStatusStyle.color },
             ].map((info, i) => (
               <div key={i} style={{
                 background: "rgba(255,255,255,0.03)", border: "1px solid var(--border)",
@@ -164,21 +174,22 @@ export default function TransactionDrawer({ tx, categories, onClose, onStatusCha
               Alterar status
             </p>
             <div style={{ display: "flex", gap: "8px" }}>
-              {STATUS_OPTIONS.map(opt => {
-                const active = tx.status === opt.key;
+              {STATUS_KEYS.map(key => {
+                const active = tx.status === key;
+                const s = getStatusStyle(tx.type, key);
                 return (
                   <button
-                    key={opt.key}
-                    onClick={() => onStatusChange(tx.id, opt.key)}
+                    key={key}
+                    onClick={() => onStatusChange(tx.id, key)}
                     style={{
                       flex: 1, padding: "9px 6px", borderRadius: "10px", cursor: "pointer",
                       fontSize: "12px", fontWeight: 700, transition: "all 0.15s ease",
-                      background: active ? opt.bg : "transparent",
-                      color: active ? opt.color : "var(--text-3)",
-                      border: active ? `1px solid ${opt.border}` : "1px solid var(--border)",
+                      background: active ? s.bg : "transparent",
+                      color: active ? s.color : "var(--text-3)",
+                      border: active ? `1px solid ${s.border}` : "1px solid var(--border)",
                     }}
                   >
-                    {opt.label}
+                    {getStatusLabel(tx.type, key)}
                   </button>
                 );
               })}

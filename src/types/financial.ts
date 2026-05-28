@@ -8,7 +8,7 @@ export type TransactionType = "income" | "expense" | "transfer";
 export type TransactionStatus = "pending" | "paid" | "overdue";
 export type TransactionOrigin = "manual" | "invoice" | "recurring" | "import";
 export type RecurringFrequency = "daily" | "weekly" | "monthly" | "yearly";
-export type InvoiceStatus = "open" | "closed" | "paid";
+export type InvoiceStatus = "open" | "closed" | "overdue" | "paid";
 
 // ─── CONTA BANCÁRIA ───────────────────────────────────────────────────────────
 // Onde o dinheiro EXISTE fisicamente.
@@ -87,6 +87,7 @@ export interface CardPurchase {
   categoryId: string;
   purchaseDate: string;           // YYYY-MM-DD
   totalInstallments: number;      // 1 = à vista
+  isSubscription?: boolean;       // true = cobrança mensal recorrente
   createdAt: string;
 }
 

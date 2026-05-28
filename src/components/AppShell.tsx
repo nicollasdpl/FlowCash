@@ -55,13 +55,19 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   if (!user)       return <LoginScreen />;
 
   return (
-    <>
+    <div style={{
+      height: "100dvh",
+      display: "flex",
+      flexDirection: "row",
+      overflow: "hidden",
+      flex: 1,
+    }}>
       <Sidebar />
-      <main style={{ flex: 1, overflowY: "auto", background: "var(--bg)" }}>
+      <main style={{ flex: 1, overflowY: "auto", background: "var(--bg)", minWidth: 0 }}>
         {children}
       </main>
       <BottomNav />
       <AIAssistant />
-    </>
+    </div>
   );
 }

@@ -71,8 +71,11 @@
   --safe-right: env(safe-area-inset-right, 0px);
 
   /* ── Bottom nav ── */
-  --bottom-nav-h: 48px;
+  --bottom-nav-h: 56px;
   --bottom-nav-total: calc(var(--bottom-nav-h) + var(--safe-bottom));
+
+  /* ── FAB sobre o BottomNav (desktop: sem nav, apenas safe-area) ── */
+  --fab-bottom: calc(20px + env(safe-area-inset-bottom, 0px));
 
   /* ── Raios de borda ── */
   --r-sm: 10px;
@@ -102,7 +105,6 @@
 
 html {
   height: 100%;
-  overflow-x: hidden;
   touch-action: manipulation;
 }
 
@@ -115,7 +117,7 @@ body {
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
   overflow-x: hidden;
-  min-height: 100%;
+  height: 100%;
 }
 
 /* ── Scrollbar ── */
@@ -570,7 +572,7 @@ select.form-input {
   cursor: pointer;
   font-family: inherit;
   flex: 1;
-  min-height: 48px;
+  min-height: 56px;
   position: relative;
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
@@ -695,6 +697,9 @@ select.form-input {
   /* ── Esconde sidebar ── */
   aside { display: none !important; }
 
+  /* ── FAB: fica acima do BottomNav no mobile ── */
+  --fab-bottom: calc(var(--bottom-nav-h) + 20px + env(safe-area-inset-bottom, 0px));
+
   /* ── Scroll principal ── */
   main {
     overscroll-behavior-y: contain;
@@ -710,6 +715,7 @@ select.form-input {
     left: 0;
     right: 0;
     z-index: 200;
+    height: calc(56px + env(safe-area-inset-bottom, 0px));
     padding-bottom: env(safe-area-inset-bottom, 0px);
     background: rgba(8, 15, 23, 0.98);
     border-top: 1px solid var(--border);

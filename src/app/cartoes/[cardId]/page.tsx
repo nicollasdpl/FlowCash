@@ -10,6 +10,7 @@ import {
   getCardInvoices, getInstallmentsByMonth,
 } from "@/engine/invoiceEngine";
 import { Pencil, Package, Plus, Trash2 } from "lucide-react";
+import CategoryIcon from "@/components/CategoryIcon";
 
 function fmt(v: number) {
   return v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -201,7 +202,7 @@ export default function CartaoDetail() {
       </div>
 
       {/* ── Content ── */}
-      <div style={{ padding: "16px 16px 96px" }}>
+      <div style={{ padding: "16px 16px 80px" }}>
 
         {/* ── Resumo do limite ── */}
         {limitSummary && (
@@ -251,6 +252,7 @@ export default function CartaoDetail() {
             display: "flex", gap: "6px",
             overflowX: "auto", paddingBottom: "2px",
             WebkitOverflowScrolling: "touch", scrollbarWidth: "none",
+            touchAction: "pan-x",
           }}>
             {months.map(m => (
               <button
@@ -288,11 +290,14 @@ export default function CartaoDetail() {
               {currentInvoice && (
                 <span style={{
                   fontSize: "11px", fontWeight: 700, padding: "4px 10px", borderRadius: "6px",
-                  background: currentInvoice.status === "paid" ? "var(--green-10)" : currentInvoice.status === "closed" ? "var(--red-10)" : "var(--amber-10)",
-                  color: currentInvoice.status === "paid" ? "var(--green)" : currentInvoice.status === "closed" ? "var(--red)" : "var(--amber)",
-                  border: `1px solid ${currentInvoice.status === "paid" ? "var(--green-20)" : currentInvoice.status === "closed" ? "var(--red-20)" : "var(--amber-20)"}`,
+                  ...({
+                    paid:    { background: "var(--green-10)",        color: "var(--green)", border: "1px solid var(--green-20)"        },
+                    closed:  { background: "rgba(255,140,66,0.10)",  color: "#FF8C42",      border: "1px solid rgba(255,140,66,0.30)" },
+                    overdue: { background: "var(--red-10)",          color: "var(--red)",   border: "1px solid var(--red-20)"         },
+                    open:    { background: "var(--amber-10)",        color: "var(--amber)", border: "1px solid var(--amber-20)"       },
+                  }[currentInvoice.status]),
                 }}>
-                  {currentInvoice.status === "paid" ? "Paga" : currentInvoice.status === "closed" ? "Fechada" : "Em aberto"}
+                  {{ paid: "Paga", closed: "Fechada", overdue: "Vencida", open: "Em aberto" }[currentInvoice.status]}
                 </span>
               )}
               <p className="mono" style={{ fontSize: "20px", fontWeight: 700, color: "var(--text-1)", letterSpacing: "-0.02em" }}>
@@ -358,7 +363,9 @@ export default function CartaoDetail() {
                       background: cat ? `${cat.color}18` : "rgba(255,255,255,0.06)",
                       display: "flex", alignItems: "center", justifyContent: "center", fontSize: "16px",
                     }}>
-                      {cat?.icon || <Package size={16} strokeWidth={1.5} color="var(--text-3)" />}
+                      {cat?.icon
+                        ? <CategoryIcon icon={cat.icon} color={cat.color} size={16} />
+                        : <Package size={16} strokeWidth={1.5} color="var(--text-3)" />}
                     </div>
 
                     {/* Descrição */}
@@ -370,8 +377,15 @@ export default function CartaoDetail() {
                       }}>
                         {purchase?.description ?? "—"}
                       </p>
-                      <p style={{ fontSize: "10.5px", color: "var(--text-3)", marginTop: "2px" }}>
-                        {cat?.name ?? "—"} · {inst.installmentNumber}/{inst.totalInstallments}x
+                      <p style={{ fontSize: "10.5px", color: "var(--text-3)", marginTop: "2px", display: "flex", alignItems: "center", gap: "5px" }}>
+                        {cat?.name ?? "—"} ·{" "}
+                        {purchase?.isSubscription ? (
+                          <span style={{
+                            fontSize: "9px", fontWeight: 700, padding: "1px 5px", borderRadius: "4px",
+                            background: "rgba(155,109,255,0.15)", color: "#9B6DFF",
+                            border: "1px solid rgba(155,109,255,0.25)", letterSpacing: "0.05em",
+                          }}>ASSINATURA</span>
+                        ) : `${inst.installmentNumber}/${inst.totalInstallments}x`}
                       </p>
                     </div>
 
@@ -430,22 +444,35 @@ export default function CartaoDetail() {
         </div>
       </div>
 
-      {/* ── CTA fixo no fundo ── */}
-      <div style={{
-        position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 50,
-        background: "var(--bg)", borderTop: "1px solid var(--border)",
-        padding: "12px 16px",
-        paddingBottom: "calc(12px + env(safe-area-inset-bottom, 0px))",
-      }}>
-        <button
-          className="btn-primary"
-          onClick={() => router.push(`/cartoes/${card.id}/nova-compra`)}
-          style={{ width: "100%", justifyContent: "center", gap: "8px" }}
-        >
-          <Plus size={16} strokeWidth={2} />
-          Nova Compra
-        </button>
-      </div>
+      {/* ── FAB Nova Compra ── */}
+      <button
+        onClick={() => router.push(`/cartoes/${card.id}/nova-compra`)}
+        style={{
+          position: "fixed",
+          bottom: "var(--fab-bottom)",
+          right: "20px",
+          zIndex: 50,
+          height: "48px",
+          padding: "0 20px",
+          borderRadius: "24px",
+          background: card.color,
+          color: "#fff",
+          border: "none",
+          cursor: "pointer",
+          fontFamily: "inherit",
+          fontSize: "14px",
+          fontWeight: 700,
+          display: "flex",
+          alignItems: "center",
+          gap: "7px",
+          boxShadow: `0 4px 16px ${card.color}66`,
+          touchAction: "manipulation",
+          WebkitTapHighlightColor: "transparent",
+        }}
+      >
+        <Plus size={17} strokeWidth={2.5} />
+        Nova Compra
+      </button>
     </>
   );
 }

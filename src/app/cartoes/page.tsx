@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useApp } from "@/context/AppContext";
 import { getCardLimitSummary } from "@/engine/financialEngine";
@@ -60,11 +61,11 @@ export default function Cartoes() {
           const overLimit = usedPct > 80;
 
           return (
-            <div
+            <Link
               key={card.id}
+              href={`/cartoes/${card.id}`}
               className={`card fade-up-${Math.min(i + 2, 5)}`}
-              onClick={() => router.push(`/cartoes/${card.id}`)}
-              style={{ padding: "18px", cursor: "pointer", transition: "opacity 0.15s" }}
+              style={{ padding: "18px", cursor: "pointer", transition: "opacity 0.15s", display: "block", textDecoration: "none" }}
             >
               {/* Nome + fatura atual */}
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "14px" }}>
@@ -130,7 +131,7 @@ export default function Cartoes() {
                   </p>
                 </div>
               </div>
-            </div>
+            </Link>
           );
         })}
       </div>

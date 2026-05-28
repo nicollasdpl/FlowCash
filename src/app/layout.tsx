@@ -64,7 +64,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body
         style={{
           display: "flex",
-          height: "100dvh",
+          height: "100%",
           overflow: "hidden",
           background: "var(--bg)",
         }}
