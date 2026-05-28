@@ -163,20 +163,20 @@ export default function Dashboard() {
   const totalIncomePending  = useMemo(() => incomePending.reduce((s, t) => s + t.amount, 0), [incomePending]);
 
   const cardInvoices = useMemo(() => {
-    const cm = currentMonth();
     return state.cards.filter(c => c.active).map(card => {
-      const pastAndCurrentMonths = [...new Set(
+      // Search ALL months (including future) so subscriptions closing next month are found
+      const allMonths = [...new Set(
         state.installments
-          .filter(i => i.cardId === card.id && i.competenceMonth <= cm)
+          .filter(i => i.cardId === card.id)
           .map(i => i.competenceMonth),
       )].sort();
-      const unpaidMonth = pastAndCurrentMonths.find(m =>
+      const unpaidMonth = allMonths.find(m =>
         state.installments.some(i => i.cardId === card.id && i.competenceMonth === m && !i.paid),
       );
-      const invoice = computeInvoice(card, state.installments, unpaidMonth ?? cm);
+      const invoice = computeInvoice(card, state.installments, unpaidMonth ?? selectedMonth);
       return { card, invoice };
     }).filter(({ invoice }) => invoice.totalAmount > 0);
-  }, [state.cards, state.installments]);
+  }, [state.cards, state.installments, selectedMonth]);
 
   // Donut: despesas pagas + parcelas do mês selecionado
   const catSlices = useMemo(() =>
