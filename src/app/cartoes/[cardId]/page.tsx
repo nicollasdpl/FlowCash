@@ -7,7 +7,7 @@ import {
   getCardLimitSummary, getCurrentBalance, currentMonth, addMonths, today,
 } from "@/engine/financialEngine";
 import {
-  getCardInvoices, getInstallmentsByMonth,
+  getCardInvoices, getInstallmentsByMonth, getInvoiceDates,
 } from "@/engine/invoiceEngine";
 import { Pencil, Package, Plus, Trash2 } from "lucide-react";
 import CategoryIcon from "@/components/CategoryIcon";
@@ -22,16 +22,17 @@ function formatDate(d: string) {
   return `${day}/${m}/${y}`;
 }
 
-const MONTHS_LONG  = ["janeiro","fevereiro","março","abril","maio","junho","julho","agosto","setembro","outubro","novembro","dezembro"];
-const MONTHS_SHORT = ["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
+const MONTHS_LONG  = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+const MONTHS_SHORT = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
 
-function invoiceLabel(yyyymm: string) {
-  const [y, m] = yyyymm.split("-").map(Number);
-  return `Fatura ${MONTHS_LONG[m - 1]} de ${y}`;
+// Labels are derived from dueDate month, not competenceMonth
+function invoiceLabel(dueDate: string) {
+  const [y, m] = dueDate.split("-").map(Number);
+  return `Fatura ${MONTHS_LONG[m - 1]} ${y}`;
 }
 
-function monthTabLabel(yyyymm: string) {
-  const [y, m] = yyyymm.split("-").map(Number);
+function monthTabLabel(dueDate: string) {
+  const [y, m] = dueDate.split("-").map(Number);
   return `${MONTHS_SHORT[m - 1]}/${String(y).slice(2)}`;
 }
 
@@ -110,8 +111,8 @@ export default function CartaoDetail() {
     }
 
     const todayDate = today();
-    const monthLabel = monthTabLabel(selectedMonth);
-    const invoiceNote = `Fatura ${card.name} ${monthLabel}`;
+    const { dueDate: noteDueDate } = getInvoiceDates(selectedMonth, card.closingDay, card.dueDay);
+    const invoiceNote = `Fatura ${card.name} ${monthTabLabel(noteDueDate)}`;
 
     pendingInsts.forEach(inst => {
       const purchase = state.purchases.find(p => p.id === inst.purchaseId);
@@ -265,16 +266,19 @@ export default function CartaoDetail() {
             WebkitOverflowScrolling: "touch", scrollbarWidth: "none",
             touchAction: "pan-x",
           }}>
-            {months.map(m => (
-              <button
-                key={m}
-                className={`filter-btn${selectedMonth === m ? " active" : ""}`}
-                onClick={() => setSelectedMonth(m)}
-                style={{ fontSize: "11.5px", padding: "7px 12px", flexShrink: 0 }}
-              >
-                {monthTabLabel(m)}
-              </button>
-            ))}
+            {months.map(m => {
+              const { dueDate } = getInvoiceDates(m, card.closingDay, card.dueDay);
+              return (
+                <button
+                  key={m}
+                  className={`filter-btn${selectedMonth === m ? " active" : ""}`}
+                  onClick={() => setSelectedMonth(m)}
+                  style={{ fontSize: "11.5px", padding: "7px 12px", flexShrink: 0 }}
+                >
+                  {monthTabLabel(dueDate)}
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -289,7 +293,7 @@ export default function CartaoDetail() {
           }}>
             <div>
               <p style={{ fontSize: "13px", fontWeight: 700, color: "var(--text-1)" }}>
-                {invoiceLabel(selectedMonth)}
+                {currentInvoice ? invoiceLabel(currentInvoice.dueDate) : invoiceLabel(getInvoiceDates(selectedMonth, card.closingDay, card.dueDay).dueDate)}
               </p>
               {currentInvoice && (
                 <p style={{ fontSize: "11px", color: "var(--text-3)", marginTop: "3px" }}>

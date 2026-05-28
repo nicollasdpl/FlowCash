@@ -724,7 +724,7 @@ export default function Dashboard() {
                     {card.name}
                   </p>
                   <p style={{ fontSize: "11px", color: "var(--text-3)", marginTop: "2px" }}>
-                    {`Fatura ${fullMonthLabel(invoice.competenceMonth)} · `}
+                    {`Fatura ${fullMonthLabel(invoice.dueDate.substring(0, 7))} · `}
                     {{ paid: "Paga", closed: "Fechada", overdue: "Vencida", open: "Em aberto" }[invoice.status]}
                     {` · Fecha ${fmtDate(invoice.closingDate)}`}
                   </p>
