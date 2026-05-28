@@ -163,7 +163,6 @@ export default function Dashboard() {
   const totalIncomePending  = useMemo(() => incomePending.reduce((s, t) => s + t.amount, 0), [incomePending]);
 
   const cardInvoices = useMemo(() => {
-    const cm = currentMonth();
     return state.cards.filter(c => c.active).flatMap(card => {
       const allMonths = [...new Set(
         state.installments
@@ -175,14 +174,14 @@ export default function Dashboard() {
         if (!hasUnpaid) return false;
         const inv = computeInvoice(card, state.installments, m);
         if (inv.status === "closed" || inv.status === "overdue") return true;
-        if (inv.status === "open") return inv.dueDate.substring(0, 7) <= cm;
+        if (inv.status === "open") return inv.dueDate.substring(0, 7) === selectedMonth;
         return false;
       });
       if (!targetMonth) return [];
       const invoice = computeInvoice(card, state.installments, targetMonth);
       return [{ card, invoice }];
     });
-  }, [state.cards, state.installments]);
+  }, [state.cards, state.installments, selectedMonth]);
 
   // Donut: despesas pagas + parcelas do mês selecionado
   const catSlices = useMemo(() =>
