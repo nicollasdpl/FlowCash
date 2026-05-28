@@ -698,7 +698,9 @@ select.form-input {
   aside { display: none !important; }
 
   /* ── FAB: fica acima do BottomNav no mobile ── */
-  --fab-bottom: calc(var(--bottom-nav-h) + 20px + env(safe-area-inset-bottom, 0px));
+  :root {
+    --fab-bottom: calc(var(--bottom-nav-h) + 20px + env(safe-area-inset-bottom, 0px));
+  }
 
   /* ── Scroll principal ── */
   main {
