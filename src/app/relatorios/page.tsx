@@ -1,93 +1,108 @@
 "use client";
-import { useState, useMemo } from "react";
+import { useState, useMemo, type ReactNode } from "react";
 import { useApp } from "@/context/AppContext";
-import { addMonths, currentMonth, getCardCommittedByMonth } from "@/engine/financialEngine";
-import { getCardExpensesByCategory } from "@/engine/invoiceEngine";
-import {
-  BarChart2, CreditCard,
-  ChevronLeft, ChevronRight,
-} from "lucide-react";
+import { addMonths, currentMonth, fmt, today } from "@/engine/financialEngine";
+import { getSpentByCategory } from "@/engine/budgetEngine";
+import { auth } from "@/lib/firebase";
+import DonutChart, { type Segment } from "@/components/DonutChart";
 import CategoryIcon from "@/components/CategoryIcon";
-import { CategoryDonutSection, buildCatSlices } from "@/components/CategoryDonutSection";
+import {
+  ChevronLeft, ChevronRight, BarChart2, AlertTriangle, TrendingUp,
+  TrendingDown, Sparkles, Package,
+} from "lucide-react";
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
-function fmt(v: number) {
-  return v.toLocaleString("pt-BR", { minimumFractionDigits: 2 });
-}
+// ─── Constantes / helpers de mês ─────────────────────────────────────────────
 
 const MONTH_SHORT: Record<string, string> = {
   "01": "Jan", "02": "Fev", "03": "Mar", "04": "Abr",
   "05": "Mai", "06": "Jun", "07": "Jul", "08": "Ago",
   "09": "Set", "10": "Out", "11": "Nov", "12": "Dez",
 };
-
-const FULL_MONTH_NAMES = [
+const MONTH_NAMES = [
   "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
   "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
 ];
 
-function shortMonth(yyyymm: string) {
+function shortMonth(yyyymm: string): string {
   const [, m] = yyyymm.split("-");
   return MONTH_SHORT[m] ?? yyyymm;
 }
-
-function fullMonth(yyyymm: string) {
-  const [y, m] = yyyymm.split("-");
-  return `${FULL_MONTH_NAMES[parseInt(m) - 1]} ${y}`;
+function fullMonth(yyyymm: string): string {
+  const [y, m] = yyyymm.split("-").map(Number);
+  return `${MONTH_NAMES[m - 1]} ${y}`;
+}
+function daysInMonth(yyyymm: string): number {
+  const [y, m] = yyyymm.split("-").map(Number);
+  return new Date(y, m, 0).getDate();
+}
+function fmtShort(v: number): string {
+  if (v >= 1000) return `${(v / 1000).toFixed(v >= 10000 ? 0 : 1)}k`;
+  return v.toFixed(0);
 }
 
-// ─── Página ───────────────────────────────────────────────────────────────────
+// ─── Markdown mínimo (mesma regra do AIPageContent.tsx) ──────────────────────
+
+function renderInline(text: string): ReactNode {
+  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  return parts.map((p, i) => {
+    if (p.startsWith("**") && p.endsWith("**") && p.length > 4) {
+      return <strong key={i} style={{ color: "var(--text-1)" }}>{p.slice(2, -2)}</strong>;
+    }
+    return <span key={i}>{p}</span>;
+  });
+}
+
+function Markdown({ text }: { text: string }) {
+  type Block = { kind: "p" | "ul"; lines: string[] };
+  const blocks: Block[] = [];
+  let current: Block | null = null;
+  for (const raw of text.split("\n")) {
+    const line = raw.trimEnd();
+    if (!line.trim()) {
+      if (current) { blocks.push(current); current = null; }
+      continue;
+    }
+    const listMatch = /^\s*-\s+(.*)$/.exec(line);
+    if (listMatch) {
+      if (current?.kind !== "ul") {
+        if (current) blocks.push(current);
+        current = { kind: "ul", lines: [] };
+      }
+      current.lines.push(listMatch[1]);
+    } else {
+      if (current?.kind !== "p") {
+        if (current) blocks.push(current);
+        current = { kind: "p", lines: [] };
+      }
+      current.lines.push(line);
+    }
+  }
+  if (current) blocks.push(current);
+  return (
+    <>
+      {blocks.map((b, i) => b.kind === "ul" ? (
+        <ul key={i} style={{ margin: "6px 0 0", paddingLeft: "18px", display: "flex", flexDirection: "column", gap: "3px" }}>
+          {b.lines.map((l, j) => <li key={j} style={{ lineHeight: 1.5 }}>{renderInline(l)}</li>)}
+        </ul>
+      ) : (
+        <p key={i} style={{ margin: i === 0 ? 0 : "8px 0 0", lineHeight: 1.5 }}>{renderInline(b.lines.join(" "))}</p>
+      ))}
+    </>
+  );
+}
+
+// ─── Página ──────────────────────────────────────────────────────────────────
 
 export default function Relatorios() {
   const { state } = useApp();
   const [selectedMonth, setSelectedMonth] = useState(() => currentMonth());
 
-  // 6 meses para barra e tabela
-  const months = useMemo(() => {
-    const cm = currentMonth();
-    return Array.from({ length: 6 }, (_, i) => addMonths(cm, i - 5));
-  }, []);
+  const [insights, setInsights]               = useState<string>("");
+  const [insightsLoading, setInsightsLoading] = useState(false);
+  const [insightsError, setInsightsError]     = useState<string>("");
 
-  const monthData = useMemo(() =>
-    months.map(month => {
-      const txs     = state.transactions.filter(t => t.competenceDate.startsWith(month));
-      const income  = txs.filter(t => t.type === "income").reduce((s, t) => s + t.amount, 0);
-      const expense = txs.filter(t => t.type === "expense").reduce((s, t) => s + t.amount, 0);
-      const cardCommitted = getCardCommittedByMonth(state.installments, month);
-      return { month, income, expense, cardCommitted, balance: income - expense };
-    }),
-    [months, state.transactions, state.installments]
-  );
-
-  const maxVal     = Math.max(...monthData.map(d => Math.max(d.income, d.expense, d.cardCommitted)), 1);
-  const hasAnyData = monthData.some(d => d.income > 0 || d.expense > 0 || d.cardCommitted > 0);
-
-  // Slices do donut: despesas pagas + parcelas no mês selecionado
-  const catSlices = useMemo(() =>
-    buildCatSlices(
-      state.transactions,
-      state.installments,
-      state.purchases,
-      state.categories,
-      selectedMonth,
-    ),
-    [state.transactions, state.installments, state.purchases, state.categories, selectedMonth]
-  );
-
-  // Comprometido com cartão (6 meses) — mantido separado
-  const cardByCategory = useMemo(() => {
-    const relevant = state.installments.filter(i => months.some(m => i.competenceMonth === m));
-    const catMap   = getCardExpensesByCategory(relevant, state.purchases);
-    return Object.entries(catMap)
-      .map(([catId, amount]) => {
-        const cat = state.categories.find(c => c.id === catId);
-        return { name: cat?.name ?? "Outros", amount, color: cat?.color ?? "#6B7FA3", icon: cat?.icon ?? "" };
-      })
-      .sort((a, b) => b.amount - a.amount);
-  }, [state.installments, state.purchases, state.categories, months]);
-
-  const totalCardCommitted = cardByCategory.reduce((s, c) => s + c.amount, 0);
+  const atCurrentMonth = selectedMonth === currentMonth();
+  const todayStr       = today();
 
   function changeMonth(delta: number) {
     const next = addMonths(selectedMonth, delta);
@@ -95,237 +110,641 @@ export default function Relatorios() {
     setSelectedMonth(next);
   }
 
-  const atCurrentMonth = selectedMonth >= currentMonth();
+  // ── Janela de 3 meses (selecionado + 2 anteriores) ───────────────────────
+  const months = useMemo(
+    () => [addMonths(selectedMonth, -2), addMonths(selectedMonth, -1), selectedMonth],
+    [selectedMonth],
+  );
+
+  // ── Dados por mês (paymentDate p/ resumo, competenceDate p/ categoria) ───
+  const monthData = useMemo(() => months.map(month => {
+    const paidIncome = state.transactions
+      .filter(t => t.type === "income" && t.status === "paid" && t.paymentDate.startsWith(month))
+      .reduce((s, t) => s + t.amount, 0);
+    const paidExpense = state.transactions
+      .filter(t => t.type === "expense" && t.status === "paid" && t.paymentDate.startsWith(month))
+      .reduce((s, t) => s + t.amount, 0);
+    return { month, income: paidIncome, expense: paidExpense };
+  }), [months, state.transactions]);
+
+  const selectedData = monthData[2];
+  const balance      = selectedData.income - selectedData.expense;
+  const maxChartVal  = Math.max(...monthData.flatMap(d => [d.income, d.expense]), 1);
+
+  // ── Maior gasto (categoria) no mês selecionado — competenceDate ──────────
+  // Inclui transactions de despesa + parcelas de cartão com competência no mês.
+  const spentByCatSelected = useMemo(
+    () => getSpentByCategory(selectedMonth, state.transactions, state.installments, state.purchases),
+    [selectedMonth, state.transactions, state.installments, state.purchases],
+  );
+  const spentByCatPrev = useMemo(
+    () => getSpentByCategory(months[1], state.transactions, state.installments, state.purchases),
+    [months, state.transactions, state.installments, state.purchases],
+  );
+
+  const biggestCategory = useMemo(() => {
+    let topId = ""; let topVal = 0;
+    for (const [catId, amount] of Object.entries(spentByCatSelected)) {
+      if (amount > topVal) { topId = catId; topVal = amount; }
+    }
+    const cat = state.categories.find(c => c.id === topId);
+    return cat ? { name: cat.name, amount: topVal, color: cat.color } : null;
+  }, [spentByCatSelected, state.categories]);
+
+  // ── Projeção (só mês corrente) ───────────────────────────────────────────
+  const projection = useMemo(() => {
+    if (!atCurrentMonth) return null;
+    const dim = daysInMonth(selectedMonth);
+    const todayDay = parseInt(todayStr.slice(8, 10), 10);
+    const elapsed = Math.max(1, Math.min(todayDay, dim));
+
+    const expensesSoFar = state.transactions
+      .filter(t =>
+        t.type === "expense" &&
+        t.status === "paid" &&
+        t.paymentDate.startsWith(selectedMonth) &&
+        t.paymentDate <= todayStr,
+      )
+      .reduce((s, t) => s + t.amount, 0);
+
+    const projected = (expensesSoFar / elapsed) * dim;
+    const income    = selectedData.income;
+    return { projected, income, expensesSoFar, elapsed, dim, danger: projected > income && income > 0 };
+  }, [atCurrentMonth, selectedMonth, state.transactions, todayStr, selectedData.income]);
+
+  // ── Donut + lista de categorias (mês selecionado vs anterior) ────────────
+  type CatRow = { id: string; name: string; color: string; icon: string; spent: number; prevSpent: number; pct: number; variation: number | null };
+  const catRows: CatRow[] = useMemo(() => {
+    const totalSpent = Object.values(spentByCatSelected).reduce((s, v) => s + v, 0);
+    return Object.entries(spentByCatSelected)
+      .map(([catId, spent]) => {
+        const cat       = state.categories.find(c => c.id === catId);
+        const prevSpent = spentByCatPrev[catId] ?? 0;
+        const variation = prevSpent > 0 ? ((spent - prevSpent) / prevSpent) * 100 : null;
+        const pct       = totalSpent > 0 ? (spent / totalSpent) * 100 : 0;
+        return {
+          id:    catId,
+          name:  cat?.name  ?? "—",
+          color: cat?.color ?? "#6B7FA3",
+          icon:  cat?.icon  ?? "",
+          spent, prevSpent, pct, variation,
+        };
+      })
+      .sort((a, b) => b.spent - a.spent);
+  }, [spentByCatSelected, spentByCatPrev, state.categories]);
+
+  const donutTotal = catRows.reduce((s, r) => s + r.spent, 0);
+
+  // DonutChart consome percentages somando ~100. Arredonda mas joga o resto
+  // no maior segmento pra não sobrar gap fantasma.
+  const donutSegments: Segment[] = useMemo(() => {
+    if (catRows.length === 0 || donutTotal === 0) return [];
+    const rounded = catRows.map(r => ({
+      name: r.name,
+      color: r.color,
+      amount: r.spent,
+      percentage: Math.round((r.spent / donutTotal) * 100),
+    }));
+    const sum  = rounded.reduce((s, r) => s + r.percentage, 0);
+    const drift = 100 - sum;
+    if (drift !== 0 && rounded.length > 0) rounded[0].percentage += drift;
+    return rounded;
+  }, [catRows, donutTotal]);
+
+  // ── Orçamentos do mês ────────────────────────────────────────────────────
+  const budgetsThisMonth = useMemo(
+    () => state.budgets.filter(b => b.month === selectedMonth),
+    [state.budgets, selectedMonth],
+  );
+
+  // ── Insights IA ──────────────────────────────────────────────────────────
+  async function fetchInsights() {
+    setInsightsLoading(true);
+    setInsightsError("");
+
+    const user = auth.currentUser;
+    if (!user) {
+      setInsightsLoading(false);
+      setInsightsError("Faça login para gerar insights.");
+      return;
+    }
+    let idToken: string;
+    try { idToken = await user.getIdToken(); }
+    catch {
+      setInsightsLoading(false);
+      setInsightsError("Não consegui validar sua sessão.");
+      return;
+    }
+
+    // Monta texto dos 3 meses dentro da pergunta. Evita "R$" e verbos monetários
+    // pra que detectIntent classifique como "question" (heurística pelo fallback).
+    const linesPorMes = monthData.map(d => {
+      const m = fullMonth(d.month);
+      const cats = Object.entries(getSpentByCategory(d.month, state.transactions, state.installments, state.purchases))
+        .map(([catId, amount]) => {
+          const cat = state.categories.find(c => c.id === catId);
+          return { name: cat?.name ?? "—", amount };
+        })
+        .sort((a, b) => b.amount - a.amount)
+        .slice(0, 5);
+      const catsStr = cats.length === 0
+        ? "sem despesas"
+        : cats.map(c => `${c.name} ${c.amount.toFixed(2)}`).join(", ");
+      return `- ${m}: receitas ${d.income.toFixed(2)}, despesas ${d.expense.toFixed(2)}, categorias ${catsStr}`;
+    }).join("\n");
+
+    const message =
+      `Analise meus últimos 3 meses financeiros e me dê 3 insights práticos e objetivos. ` +
+      `Aponte o maior problema e uma ação concreta para corrigir.\n\n` +
+      `Histórico:\n${linesPorMes}`;
+
+    try {
+      const res = await fetch("/api/ai", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({
+          message,
+          categories: state.categories,
+          accounts: state.accounts.filter(a => a.active),
+          cards: state.cards,
+        }),
+      });
+      const data = await res.json();
+      if (data.intent === "question" && typeof data.answer === "string" && data.answer.trim()) {
+        setInsights(data.answer.trim());
+      } else if (data.intent === "error") {
+        setInsightsError(data.message || "Erro ao gerar insights.");
+      } else if (data.intent === "unknown") {
+        setInsightsError(data.message || "Não consegui gerar insights com os dados disponíveis.");
+      } else {
+        setInsightsError("Resposta inesperada da IA.");
+      }
+    } catch {
+      setInsightsError("Sem conexão. Verifique sua internet.");
+    } finally {
+      setInsightsLoading(false);
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Render
+  // ─────────────────────────────────────────────────────────────────────────
 
   return (
-    <div style={{ padding: "20px 16px", maxWidth: "860px", margin: "0 auto" }}>
+    <div style={{ padding: "20px 16px", maxWidth: "680px", margin: "0 auto" }}>
 
-      <div className="fade-up-1" style={{ marginBottom: "24px" }}>
-        <h1 style={{ fontSize: "22px", fontWeight: 700, color: "var(--text-1)", letterSpacing: "-0.03em" }}>Relatórios</h1>
-        <p style={{ fontSize: "13px", color: "var(--text-2)", marginTop: "3px" }}>Últimos 6 meses</p>
+      {/* ── Header com nav de mês ────────────────────────────────────────── */}
+      <div className="fade-up-1" style={{ marginBottom: "20px" }}>
+        <h1 style={{ fontSize: "22px", fontWeight: 700, color: "var(--text-1)", letterSpacing: "-0.03em", marginBottom: "12px" }}>
+          Relatórios
+        </h1>
+        <div style={{
+          display: "flex", alignItems: "center", justifyContent: "center",
+          background: "var(--bg-card)", border: "1px solid var(--border)",
+          borderRadius: "var(--r-lg)", padding: "4px",
+        }}>
+          <button
+            onClick={() => changeMonth(-1)}
+            aria-label="Mês anterior"
+            style={{
+              background: "none", border: "none", color: "var(--text-2)", cursor: "pointer",
+              padding: "8px 14px", minHeight: "44px", minWidth: "44px",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              touchAction: "manipulation", WebkitTapHighlightColor: "transparent",
+            }}
+          >
+            <ChevronLeft size={18} strokeWidth={1.5} />
+          </button>
+          <p style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-1)", flex: 1, textAlign: "center" }}>
+            {fullMonth(selectedMonth)}
+          </p>
+          <button
+            onClick={() => changeMonth(1)}
+            disabled={atCurrentMonth}
+            aria-label="Próximo mês"
+            style={{
+              background: "none", border: "none",
+              color: atCurrentMonth ? "var(--text-3)" : "var(--text-2)",
+              cursor: atCurrentMonth ? "default" : "pointer",
+              opacity: atCurrentMonth ? 0.4 : 1,
+              padding: "8px 14px", minHeight: "44px", minWidth: "44px",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              touchAction: "manipulation", WebkitTapHighlightColor: "transparent",
+            }}
+          >
+            <ChevronRight size={18} strokeWidth={1.5} />
+          </button>
+        </div>
       </div>
 
-      {!hasAnyData ? (
-        <div className="card" style={{ padding: "48px", textAlign: "center" }}>
-          <div style={{ display: "flex", justifyContent: "center", marginBottom: "16px", color: "var(--text-3)" }}>
-            <BarChart2 size={48} strokeWidth={1.5} />
-          </div>
-          <p style={{ color: "var(--text-2)", fontSize: "15px", fontWeight: 600 }}>Sem dados ainda</p>
-          <p style={{ color: "var(--text-3)", fontSize: "13px", marginTop: "6px" }}>
-            Adicione transações para ver seus relatórios aqui.
+      {/* ── SEÇÃO 1: Resumo do mês (2x2) ────────────────────────────────── */}
+      <div className="fade-up-2" style={{
+        display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "16px",
+      }}>
+        <SummaryCard
+          label="Receitas" value={`R$ ${fmt(selectedData.income)}`}
+          valueColor="var(--green)"
+        />
+        <SummaryCard
+          label="Despesas" value={`R$ ${fmt(selectedData.expense)}`}
+          valueColor="var(--red)"
+        />
+        <SummaryCard
+          label="Saldo líquido"
+          value={`${balance < 0 ? "−" : ""}R$ ${fmt(Math.abs(balance))}`}
+          valueColor={balance < 0 ? "var(--red)" : "var(--accent)"}
+        />
+        <SummaryCard
+          label="Maior gasto"
+          value={biggestCategory ? `R$ ${fmt(biggestCategory.amount)}` : "—"}
+          valueColor={biggestCategory?.color ?? "var(--text-3)"}
+          subtitle={biggestCategory?.name}
+        />
+      </div>
+
+      {/* ── SEÇÃO 2: Projeção (só mês corrente) ─────────────────────────── */}
+      {projection && (
+        <div className="card fade-up-3" style={{ padding: "16px 18px", marginBottom: "16px" }}>
+          <p style={{ fontSize: "10px", fontWeight: 700, color: "var(--text-3)", letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: "8px" }}>
+            Projeção de fechamento
           </p>
-        </div>
-      ) : (
-        <>
-          {/* ── Gráfico de barras ── */}
-          <div className="card fade-up-2" style={{ padding: "20px", marginBottom: "16px" }}>
-            <h2 style={{
-              fontSize: "13px", fontWeight: 700, color: "var(--text-3)",
-              letterSpacing: "0.05em", textTransform: "uppercase", marginBottom: "20px",
+          <div style={{ display: "flex", alignItems: "baseline", gap: "12px", marginBottom: "10px", flexWrap: "wrap" }}>
+            <p className="mono" style={{
+              fontSize: "22px", fontWeight: 700,
+              color: projection.danger ? "var(--red)" : "var(--text-1)",
             }}>
-              Receitas vs Despesas vs Cartão
-            </h2>
-            <div style={{ display: "flex", alignItems: "flex-end", gap: "10px", height: "140px" }}>
-              {monthData.map(({ month, income, expense, cardCommitted }) => (
-                <div key={month} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: "6px" }}>
-                  <div style={{ display: "flex", gap: "2px", alignItems: "flex-end", width: "100%", height: "120px" }}>
-                    <div style={{
-                      flex: 1, borderRadius: "4px 4px 0 0", minHeight: "3px",
-                      height: income > 0 ? `${(income / maxVal) * 120}px` : "3px",
-                      background: income > 0 ? "var(--green)" : "rgba(255,255,255,0.06)",
-                      transition: "height 0.6s ease",
-                    }} />
-                    <div style={{
-                      flex: 1, borderRadius: "4px 4px 0 0", minHeight: "3px",
-                      height: expense > 0 ? `${(expense / maxVal) * 120}px` : "3px",
-                      background: expense > 0 ? "var(--red)" : "rgba(255,255,255,0.06)",
-                      transition: "height 0.6s ease",
-                    }} />
-                    <div style={{
-                      flex: 1, borderRadius: "4px 4px 0 0", minHeight: "3px",
-                      height: cardCommitted > 0 ? `${(cardCommitted / maxVal) * 120}px` : "3px",
-                      background: cardCommitted > 0 ? "var(--amber)" : "rgba(255,255,255,0.06)",
-                      opacity: cardCommitted > 0 ? 0.85 : 0.3,
-                      transition: "height 0.6s ease",
-                    }} />
-                  </div>
-                  <span style={{ fontSize: "11px", color: "var(--text-3)", fontWeight: 600 }}>{shortMonth(month)}</span>
-                </div>
-              ))}
-            </div>
-            <div style={{
-              display: "flex", gap: "16px", marginTop: "14px",
-              paddingTop: "14px", borderTop: "1px solid var(--border)", flexWrap: "wrap",
-            }}>
-              {[
-                { color: "var(--green)", label: "Receitas" },
-                { color: "var(--red)",   label: "Despesas" },
-                { color: "var(--amber)", label: "Cartão" },
-              ].map(({ color, label }) => (
-                <div key={label} style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                  <div style={{ width: "10px", height: "10px", borderRadius: "2px", background: color }} />
-                  <span style={{ fontSize: "12px", color: "var(--text-2)" }}>{label}</span>
-                </div>
-              ))}
-            </div>
+              R$ {fmt(projection.projected)}
+            </p>
+            <p style={{ fontSize: "11.5px", color: "var(--text-3)" }}>
+              estimado até o fim do mês
+            </p>
           </div>
-
-          {/* ── Resumo mensal ── */}
-          <div className="card fade-up-3" style={{ overflow: "hidden", marginBottom: "16px" }}>
-            <div style={{ padding: "14px 18px", borderBottom: "1px solid var(--border)" }}>
-              <h2 style={{ fontSize: "13px", fontWeight: 700, color: "var(--text-3)", letterSpacing: "0.05em", textTransform: "uppercase" }}>
-                Resumo Mensal
-              </h2>
-            </div>
+          <p style={{ fontSize: "12px", color: "var(--text-3)", lineHeight: 1.5 }}>
+            Baseado em <span style={{ color: "var(--text-2)", fontWeight: 600 }}>R$ {fmt(projection.expensesSoFar)}</span> gastos em <span style={{ color: "var(--text-2)", fontWeight: 600 }}>{projection.elapsed}</span> dia{projection.elapsed > 1 ? "s" : ""}.
+            Receita do mês: <span style={{ color: "var(--green)", fontWeight: 600 }}>R$ {fmt(projection.income)}</span>.
+          </p>
+          {projection.danger && (
             <div style={{
-              display: "grid", gridTemplateColumns: "58px 1fr 1fr 1fr",
-              padding: "10px 18px", fontSize: "10px", fontWeight: 700,
-              color: "var(--text-3)", letterSpacing: "0.07em", textTransform: "uppercase",
-              borderBottom: "1px solid var(--border)",
-            }}>
-              <span>Mês</span>
-              <span style={{ textAlign: "right" }}>Receitas</span>
-              <span style={{ textAlign: "right" }}>Despesas</span>
-              <span style={{ textAlign: "right" }}>Saldo</span>
-            </div>
-            {monthData.filter(d => d.income > 0 || d.expense > 0 || d.cardCommitted > 0).map(({ month, income, expense, cardCommitted, balance }) => (
-              <div key={month} style={{
-                display: "grid", gridTemplateColumns: "58px 1fr 1fr 1fr",
-                padding: "12px 18px", borderBottom: "1px solid var(--border)", alignItems: "start",
-              }}>
-                <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-2)", paddingTop: "2px" }}>{shortMonth(month)}</span>
-                <span className="mono" style={{ fontSize: "13px", fontWeight: 700, color: "var(--green)", textAlign: "right" }}>
-                  R$ {fmt(income)}
-                </span>
-                <div style={{ textAlign: "right" }}>
-                  <p className="mono" style={{ fontSize: "13px", fontWeight: 700, color: "var(--red)" }}>
-                    R$ {fmt(expense)}
-                  </p>
-                  {cardCommitted > 0 && (
-                    <p className="mono" style={{
-                      fontSize: "10.5px", fontWeight: 700, color: "var(--amber)", marginTop: "3px",
-                      display: "flex", alignItems: "center", justifyContent: "flex-end", gap: "4px",
-                    }}>
-                      <CreditCard size={10} strokeWidth={1.5} />
-                      {fmt(cardCommitted)}
-                    </p>
-                  )}
-                </div>
-                <span className="mono" style={{
-                  fontSize: "13px", fontWeight: 700,
-                  color: balance >= 0 ? "var(--accent)" : "var(--red)",
-                  textAlign: "right", paddingTop: "2px",
-                }}>
-                  {balance >= 0 ? "+" : ""}R$ {fmt(balance)}
-                </span>
-              </div>
-            ))}
-          </div>
-
-          {/* ── Gastos por Categoria (donut + detalhe) ── */}
-          <div className="card fade-up-4" style={{ overflow: "hidden", marginBottom: "16px" }}>
-
-            {/* Header com seletor de mês */}
-            <div style={{
-              padding: "12px 18px",
-              borderBottom: "1px solid var(--border)",
+              marginTop: "12px",
+              padding: "10px 12px",
+              background: "var(--red-10)", border: "1px solid var(--red-20)",
+              borderRadius: "10px",
               display: "flex", alignItems: "center", gap: "10px",
             }}>
-              <h2 style={{
-                fontSize: "13px", fontWeight: 700, color: "var(--text-3)",
-                letterSpacing: "0.05em", textTransform: "uppercase", flex: 1,
-              }}>
-                Gastos por Categoria
-              </h2>
-              <button
-                onClick={() => changeMonth(-1)}
-                style={{
-                  background: "none", border: "none", cursor: "pointer",
-                  color: "var(--text-2)", padding: "4px", borderRadius: "6px",
-                  display: "flex", alignItems: "center", touchAction: "manipulation",
-                }}
-              >
-                <ChevronLeft size={16} strokeWidth={1.5} />
-              </button>
-              <span style={{
-                fontSize: "13px", fontWeight: 700, color: "var(--text-1)",
-                minWidth: "110px", textAlign: "center",
-              }}>
-                {fullMonth(selectedMonth)}
-              </span>
-              <button
-                onClick={() => changeMonth(1)}
-                disabled={atCurrentMonth}
-                style={{
-                  background: "none", border: "none",
-                  cursor: atCurrentMonth ? "default" : "pointer",
-                  color: atCurrentMonth ? "var(--text-4)" : "var(--text-2)",
-                  padding: "4px", borderRadius: "6px",
-                  display: "flex", alignItems: "center", touchAction: "manipulation",
-                }}
-              >
-                <ChevronRight size={16} strokeWidth={1.5} />
-              </button>
-            </div>
-
-            {/* Donut + legenda + painel de detalhe */}
-            <CategoryDonutSection
-              key={selectedMonth}
-              slices={catSlices}
-              emptyMessage={`Sem despesas em ${fullMonth(selectedMonth)}`}
-            />
-          </div>
-
-          {/* ── Comprometido com cartão por categoria ── */}
-          {cardByCategory.length > 0 && (
-            <div className="card fade-up-5" style={{ overflow: "hidden" }}>
-              <div style={{
-                padding: "14px 18px", borderBottom: "1px solid var(--amber-20)",
-                background: "rgba(245,158,11,0.06)",
-                display: "flex", alignItems: "center", gap: "8px",
-              }}>
-                <CreditCard size={14} strokeWidth={1.5} color="var(--amber)" />
-                <div>
-                  <h2 style={{
-                    fontSize: "13px", fontWeight: 700, color: "var(--amber)",
-                    letterSpacing: "0.05em", textTransform: "uppercase",
-                  }}>
-                    Comprometido com Cartão
-                  </h2>
-                  <p style={{ fontSize: "11px", color: "var(--text-3)", marginTop: "2px" }}>
-                    Parcelas em aberto · total R$ {fmt(totalCardCommitted)}
-                  </p>
-                </div>
-              </div>
-              {cardByCategory.map((cat, i) => {
-                const pct = totalCardCommitted > 0 ? Math.round((cat.amount / totalCardCommitted) * 100) : 0;
-                return (
-                  <div key={cat.name} style={{
-                    padding: "14px 18px",
-                    borderBottom: i < cardByCategory.length - 1 ? "1px solid var(--border)" : "none",
-                  }}>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                        {cat.icon && <CategoryIcon icon={cat.icon} color={cat.color} size={16} />}
-                        <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-1)" }}>{cat.name}</span>
-                      </div>
-                      <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                        <span style={{ fontSize: "11.5px", color: "var(--text-3)" }}>{pct}%</span>
-                        <span className="mono" style={{ fontSize: "13px", fontWeight: 700, color: "var(--amber)" }}>
-                          R$ {fmt(cat.amount)}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="progress-bar-bg">
-                      <div className="progress-bar-fill" style={{ width: `${pct}%`, background: "var(--amber)" }} />
-                    </div>
-                  </div>
-                );
-              })}
+              <AlertTriangle size={16} strokeWidth={1.5} color="var(--red)" />
+              <p style={{ fontSize: "12.5px", color: "var(--red)", fontWeight: 600, lineHeight: 1.4 }}>
+                Você pode fechar o mês no negativo.
+              </p>
             </div>
           )}
-        </>
+        </div>
       )}
+
+      {/* ── SEÇÃO 3: Evolução mensal (bar + line) ───────────────────────── */}
+      <div className="card fade-up-4" style={{ padding: "16px 18px", marginBottom: "16px" }}>
+        <p style={{ fontSize: "10px", fontWeight: 700, color: "var(--text-3)", letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: "14px" }}>
+          Evolução mensal · 3 meses
+        </p>
+
+        <BarLineChart data={monthData} max={maxChartVal} />
+
+        <div style={{
+          display: "flex", gap: "14px", marginTop: "12px",
+          paddingTop: "12px", borderTop: "1px solid var(--border)",
+        }}>
+          <Legend color="var(--red)"   label="Despesas" shape="bar"  />
+          <Legend color="var(--green)" label="Receitas" shape="line" />
+        </div>
+      </div>
+
+      {/* ── SEÇÃO 4: Categorias (donut + lista com variação) ────────────── */}
+      <div className="card fade-up-5" style={{ overflow: "hidden", marginBottom: "16px" }}>
+        <div style={{ padding: "14px 18px", borderBottom: "1px solid var(--border)" }}>
+          <p style={{ fontSize: "10px", fontWeight: 700, color: "var(--text-3)", letterSpacing: "0.07em", textTransform: "uppercase" }}>
+            Gastos por categoria
+          </p>
+        </div>
+
+        {donutSegments.length === 0 ? (
+          <div style={{ padding: "32px 18px", textAlign: "center" }}>
+            <p style={{ fontSize: "13px", color: "var(--text-3)" }}>
+              Sem despesas em {fullMonth(selectedMonth)}.
+            </p>
+          </div>
+        ) : (
+          <>
+            <div style={{ display: "flex", justifyContent: "center", padding: "20px 18px 8px" }}>
+              <DonutChart
+                segments={donutSegments}
+                totalLabel="Total"
+                total={`R$ ${fmtShort(donutTotal)}`}
+              />
+            </div>
+
+            <div style={{ padding: "4px 18px 18px", display: "flex", flexDirection: "column", gap: "10px" }}>
+              {catRows.map(row => (
+                <div key={row.id}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "6px" }}>
+                    {row.icon
+                      ? <CategoryIcon icon={row.icon} color={row.color} size={16} />
+                      : <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: row.color }} />}
+                    <span style={{ fontSize: "13px", color: "var(--text-1)", fontWeight: 600, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {row.name}
+                    </span>
+                    <VariationBadge variation={row.variation} />
+                    <span className="mono" style={{ fontSize: "13px", fontWeight: 700, color: "var(--text-1)" }}>
+                      R$ {fmt(row.spent)}
+                    </span>
+                  </div>
+                  <div className="progress-bar-bg">
+                    <div className="progress-bar-fill" style={{ width: `${Math.min(row.pct, 100)}%`, background: row.color }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* ── SEÇÃO 5: Orçamentos (só se houver) ──────────────────────────── */}
+      {budgetsThisMonth.length > 0 && (
+        <div className="card fade-up-5" style={{ overflow: "hidden", marginBottom: "16px" }}>
+          <div style={{ padding: "14px 18px", borderBottom: "1px solid var(--border)" }}>
+            <p style={{ fontSize: "10px", fontWeight: 700, color: "var(--text-3)", letterSpacing: "0.07em", textTransform: "uppercase" }}>
+              Orçamentos do mês
+            </p>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column" }}>
+            {budgetsThisMonth.map((budget, i) => {
+              const cat       = state.categories.find(c => c.id === budget.categoryId);
+              const spent     = spentByCatSelected[budget.categoryId] ?? 0;
+              const pct       = budget.limitAmount > 0 ? Math.round((spent / budget.limitAmount) * 100) : 0;
+              const over      = spent > budget.limitAmount;
+              const barColor  = over ? "var(--red)" : pct > 80 ? "var(--amber)" : (cat?.color ?? "var(--accent)");
+              const pctColor  = over ? "var(--red)" : pct > 80 ? "var(--amber)" : "var(--text-2)";
+              return (
+                <div key={budget.id} style={{
+                  padding: "12px 18px",
+                  borderBottom: i < budgetsThisMonth.length - 1 ? "1px solid var(--border)" : "none",
+                }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px" }}>
+                    {cat?.icon
+                      ? <CategoryIcon icon={cat.icon} color={cat.color} size={16} />
+                      : <Package size={16} strokeWidth={1.5} color="var(--text-3)" />}
+                    <span style={{ fontSize: "13px", color: "var(--text-1)", fontWeight: 600, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {cat?.name ?? "—"}
+                    </span>
+                    <span className="mono" style={{ fontSize: "12.5px", fontWeight: 700, color: over ? "var(--red)" : "var(--text-1)" }}>
+                      R$ {fmt(spent)}
+                    </span>
+                    <span className="mono" style={{ fontSize: "11px", color: "var(--text-3)" }}>
+                      / R$ {fmt(budget.limitAmount)}
+                    </span>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                    <div className="progress-bar-bg" style={{ flex: 1 }}>
+                      <div className="progress-bar-fill" style={{ width: `${Math.min(pct, 100)}%`, background: barColor }} />
+                    </div>
+                    <span className="mono" style={{ fontSize: "11.5px", fontWeight: 700, color: pctColor, minWidth: "36px", textAlign: "right" }}>
+                      {pct}%
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ── SEÇÃO 6: Insights IA ────────────────────────────────────────── */}
+      <div className="card fade-up-5" style={{ padding: "16px 18px", marginBottom: "20px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "10px" }}>
+          <Sparkles size={14} strokeWidth={1.5} color="var(--accent)" />
+          <p style={{ fontSize: "10px", fontWeight: 700, color: "var(--accent)", letterSpacing: "0.07em", textTransform: "uppercase" }}>
+            Insights da IA
+          </p>
+        </div>
+
+        {!insights && !insightsLoading && !insightsError && (
+          <p style={{ fontSize: "12.5px", color: "var(--text-3)", lineHeight: 1.5, marginBottom: "12px" }}>
+            A IA analisa seus últimos 3 meses e devolve 3 observações práticas com uma ação concreta. Gera só quando você pedir.
+          </p>
+        )}
+
+        {insightsLoading && (
+          <p style={{ fontSize: "13px", color: "var(--text-2)", lineHeight: 1.5 }}>
+            Analisando seus dados...
+          </p>
+        )}
+
+        {insightsError && (
+          <div style={{
+            padding: "10px 12px", marginBottom: "12px",
+            background: "var(--red-10)", border: "1px solid var(--red-20)",
+            borderRadius: "10px",
+          }}>
+            <p style={{ fontSize: "12.5px", color: "var(--red)", lineHeight: 1.4 }}>
+              {insightsError}
+            </p>
+          </div>
+        )}
+
+        {insights && !insightsLoading && (
+          <div style={{ fontSize: "13px", color: "var(--text-2)", marginBottom: "14px" }}>
+            <Markdown text={insights} />
+          </div>
+        )}
+
+        {!insightsLoading && (
+          <button
+            onClick={fetchInsights}
+            style={{
+              padding: "10px 16px",
+              background: "var(--accent)", border: "none",
+              borderRadius: "10px",
+              color: "#06100E", fontSize: "13px", fontWeight: 700,
+              cursor: "pointer", fontFamily: "inherit", touchAction: "manipulation",
+              display: "inline-flex", alignItems: "center", gap: "6px",
+            }}
+          >
+            <Sparkles size={13} strokeWidth={1.5} />
+            {insights ? "Atualizar insights" : "Gerar insights"}
+          </button>
+        )}
+      </div>
+
+      {/* Sem dados global (3 meses todos zerados) */}
+      {monthData.every(d => d.income === 0 && d.expense === 0) && (
+        <div className="card" style={{ padding: "32px 18px", textAlign: "center" }}>
+          <div style={{ display: "flex", justifyContent: "center", marginBottom: "12px", color: "var(--text-3)" }}>
+            <BarChart2 size={36} strokeWidth={1.5} />
+          </div>
+          <p style={{ fontSize: "13px", color: "var(--text-3)" }}>
+            Sem dados em {fullMonth(selectedMonth)} e nos 2 meses anteriores.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Subcomponentes ──────────────────────────────────────────────────────────
+
+function SummaryCard({ label, value, valueColor, subtitle }: {
+  label: string; value: string; valueColor: string; subtitle?: string;
+}) {
+  return (
+    <div className="card" style={{ padding: "12px 14px", minWidth: 0 }}>
+      <p style={{ fontSize: "9px", color: "var(--text-3)", fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: "6px" }}>
+        {label}
+      </p>
+      <p className="mono" style={{
+        fontSize: "15px", fontWeight: 700, color: valueColor,
+        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+      }}>
+        {value}
+      </p>
+      {subtitle && (
+        <p style={{ fontSize: "10.5px", color: "var(--text-3)", marginTop: "3px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {subtitle}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function Legend({ color, label, shape }: { color: string; label: string; shape: "bar" | "line" }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+      {shape === "bar" ? (
+        <div style={{ width: "10px", height: "10px", borderRadius: "2px", background: color }} />
+      ) : (
+        <div style={{ width: "14px", height: "2px", background: color, borderRadius: "1px" }} />
+      )}
+      <span style={{ fontSize: "11.5px", color: "var(--text-2)" }}>{label}</span>
+    </div>
+  );
+}
+
+function VariationBadge({ variation }: { variation: number | null }) {
+  if (variation === null || !isFinite(variation)) return null;
+  const isUp = variation > 0;
+  const isFlat = Math.abs(variation) < 1;
+  if (isFlat) return null;
+  const color = isUp ? "var(--red)" : "var(--green)";
+  const bg    = isUp ? "var(--red-10)" : "var(--green-10)";
+  const Arrow = isUp ? TrendingUp : TrendingDown;
+  return (
+    <span style={{
+      display: "inline-flex", alignItems: "center", gap: "3px",
+      padding: "2px 6px", borderRadius: "6px",
+      background: bg, color,
+      fontSize: "10.5px", fontWeight: 700,
+    }}>
+      <Arrow size={10} strokeWidth={1.5} />
+      {isUp ? "+" : ""}{Math.round(variation)}%
+    </span>
+  );
+}
+
+// ─── Bar + Line chart (SVG inline) ───────────────────────────────────────────
+// Layout: HTML divs para barras (estiramento natural via height %), SVG overlay
+// pra linha (vectorEffect non-scaling-stroke evita borrar quando estica).
+
+function BarLineChart({ data, max }: { data: { month: string; income: number; expense: number }[]; max: number }) {
+  const Y_TICKS = 4; // 4 marcações (0, max/3, 2max/3, max)
+
+  return (
+    <div style={{ position: "relative", height: "180px" }}>
+      {/* Y-axis labels + grid */}
+      <div style={{ position: "absolute", inset: "0 0 25px 0", paddingLeft: "44px" }}>
+        {Array.from({ length: Y_TICKS }).map((_, i) => {
+          const value = (max * (Y_TICKS - 1 - i)) / (Y_TICKS - 1);
+          return (
+            <div key={i} style={{
+              position: "absolute", left: 0, right: 0,
+              top: `${(i / (Y_TICKS - 1)) * 100}%`,
+              borderTop: i === Y_TICKS - 1 ? "1px solid var(--text-3)" : "1px dashed rgba(255,255,255,0.06)",
+            }}>
+              <span style={{
+                position: "absolute", right: `calc(100% + 6px)`, top: "-7px",
+                fontSize: "9px", color: "var(--text-3)",
+                fontFamily: "var(--font-space-mono, monospace)",
+                whiteSpace: "nowrap",
+              }}>
+                {fmtShort(value)}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Bars + line area */}
+      <div style={{ position: "absolute", inset: "0 0 25px 44px" }}>
+        {/* Bars */}
+        <div style={{ position: "absolute", inset: 0, display: "flex" }}>
+          {data.map((d, i) => (
+            <div key={i} style={{ flex: 1, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
+              <div style={{
+                width: "44%",
+                height: `${(d.expense / max) * 100}%`,
+                background: "var(--red)",
+                borderRadius: "4px 4px 0 0",
+                minHeight: d.expense > 0 ? "3px" : "0",
+                opacity: d.expense > 0 ? 1 : 0.15,
+                transition: "height 0.4s ease",
+              }} />
+            </div>
+          ))}
+        </div>
+
+        {/* Line overlay */}
+        <svg
+          width="100%" height="100%"
+          viewBox="0 0 100 100"
+          preserveAspectRatio="none"
+          style={{ position: "absolute", inset: 0, pointerEvents: "none", overflow: "visible" }}
+        >
+          <polyline
+            fill="none"
+            stroke="var(--green)"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            vectorEffect="non-scaling-stroke"
+            points={data.map((d, i) =>
+              `${((i + 0.5) * 100) / data.length},${100 - (d.income / max) * 100}`
+            ).join(" ")}
+          />
+          {data.map((d, i) => (
+            <circle
+              key={i}
+              cx={((i + 0.5) * 100) / data.length}
+              cy={100 - (d.income / max) * 100}
+              r="3"
+              fill="var(--bg-card)"
+              stroke="var(--green)"
+              strokeWidth="2"
+              vectorEffect="non-scaling-stroke"
+            />
+          ))}
+        </svg>
+      </div>
+
+      {/* Month labels */}
+      <div style={{ position: "absolute", bottom: 0, left: "44px", right: 0, display: "flex", height: "20px" }}>
+        {data.map((d, i) => (
+          <div key={i} style={{
+            flex: 1, textAlign: "center",
+            fontSize: "10.5px", color: "var(--text-3)", fontWeight: 600,
+          }}>
+            {shortMonth(d.month)}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
