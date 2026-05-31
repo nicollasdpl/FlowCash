@@ -2,7 +2,7 @@
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useApp } from "@/context/AppContext";
-import { currentMonth, addMonths, fmt } from "@/engine/financialEngine";
+import { currentMonth, addMonths, fmt, getProjectedBalance } from "@/engine/financialEngine";
 import { Search, TrendingUp, Package, RefreshCw, Pencil, Trash2 } from "lucide-react";
 import CategoryIcon from "@/components/CategoryIcon";
 
@@ -20,6 +20,13 @@ function fmtDate(d: string) {
   if (!d) return "—";
   const [, m, day] = d.split("-");
   return `${day}/${m}`;
+}
+
+// endOfMonth não está exportado do engine — replicado inline (mesma impl do dashboard).
+function endOfMonth(yyyymm: string) {
+  const [y, m] = yyyymm.split("-").map(Number);
+  const last = new Date(y, m, 0);
+  return `${yyyymm}-${String(last.getDate()).padStart(2, "0")}`;
 }
 
 type FilterKey = "Todos" | "A pagar" | "Pago" | "Vencido" | "Receitas";
@@ -52,10 +59,21 @@ export default function Transacoes() {
   );
 
   // Resumo do mês: todas as transações de competência no mês (qualquer status).
-  // Bug anterior: card "A pagar" somava pending de income + expense juntos.
-  const income   = summaryBase.filter(t => t.type === "income").reduce((s, t) => s + t.amount, 0);
-  const expense  = summaryBase.filter(t => t.type === "expense").reduce((s, t) => s + t.amount, 0);
-  const previsto = income - expense;
+  const income  = summaryBase.filter(t => t.type === "income").reduce((s, t) => s + t.amount, 0);
+  const expense = summaryBase.filter(t => t.type === "expense").reduce((s, t) => s + t.amount, 0);
+
+  // Projetado = soma dos saldos projetados das contas ativas até o fim do mês
+  // selecionado (mesma engine do dashboard — inclui paid futuros, pendentes e
+  // faturas de cartão closed/overdue).
+  const totalProjected = useMemo(() => {
+    const eom = endOfMonth(selectedMonth);
+    return state.accounts
+      .filter(a => a.active)
+      .reduce(
+        (s, a) => s + getProjectedBalance(a, state.transactions, eom, state.cards, state.installments),
+        0,
+      );
+  }, [state.accounts, state.transactions, state.cards, state.installments, selectedMonth]);
 
   const filtered = useMemo(() => {
     let txs = [...summaryBase];
@@ -148,23 +166,23 @@ export default function Transacoes() {
           style={{
             padding: "13px 14px",
             gridColumn: "1 / -1",
-            background: previsto < 0 ? "var(--red-10)" : "var(--accent-10)",
-            borderColor:  previsto < 0 ? "var(--red-20)" : "var(--border-accent)",
+            background: totalProjected < 0 ? "var(--red-10)" : "var(--accent-10)",
+            borderColor:  totalProjected < 0 ? "var(--red-20)" : "var(--border-accent)",
           }}
         >
           <p style={{
             fontSize: "10px",
-            color: previsto < 0 ? "var(--red)" : "var(--accent)",
+            color: totalProjected < 0 ? "var(--red)" : "var(--accent)",
             fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase",
             marginBottom: "4px",
           }}>
-            Previsto
+            Projetado
           </p>
           <p className="mono" style={{
             fontSize: "17px", fontWeight: 700,
-            color: previsto < 0 ? "var(--red)" : "var(--green)",
+            color: totalProjected < 0 ? "var(--red)" : "var(--green)",
           }}>
-            {previsto < 0 ? "−" : ""}R$ {fmt(Math.abs(previsto))}
+            {totalProjected < 0 ? "−" : ""}R$ {fmt(Math.abs(totalProjected))}
           </p>
         </div>
       </div>
