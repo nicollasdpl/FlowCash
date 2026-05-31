@@ -3,6 +3,7 @@ import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useApp } from "@/context/AppContext";
 import { currentMonth, addMonths } from "@/engine/financialEngine";
+import { getSpentByCategory } from "@/engine/budgetEngine";
 import { AlertTriangle, BarChart2, Trash2, Package } from "lucide-react";
 import CategoryIcon from "@/components/CategoryIcon";
 
@@ -30,13 +31,11 @@ export default function Orcamentos() {
     [state.budgets, selectedMonth]
   );
 
-  const spentByCategory = useMemo(() => {
-    const map: Record<string, number> = {};
-    state.transactions
-      .filter(t => t.type === "expense" && t.status === "paid" && t.competenceDate.startsWith(selectedMonth))
-      .forEach(t => { map[t.categoryId] = (map[t.categoryId] ?? 0) + t.amount; });
-    return map;
-  }, [state.transactions, selectedMonth]);
+  // Inclui transactions de despesa + parcelas de cartão (via budgetEngine).
+  const spentByCategory = useMemo(
+    () => getSpentByCategory(selectedMonth, state.transactions, state.installments, state.purchases),
+    [selectedMonth, state.transactions, state.installments, state.purchases],
+  );
 
   const usedCategoryIds = new Set(budgetsThisMonth.map(b => b.categoryId));
   const availableCategories = state.categories.filter(
