@@ -51,8 +51,14 @@ export function fmtShort(v: number): string {
 // NÃO inclui pendentes, NÃO inclui cartão de crédito.
 // Pagamento de fatura é uma despesa tipo "expense" com origin="invoice".
 export function getCurrentBalance(account: Account, transactions: Transaction[]): number {
+  // Saldo atual = somente o que JÁ aconteceu (paid + paymentDate <= hoje).
+  // Lançamentos paid com paymentDate futuro (agendados pagos) impactam só
+  // a projeção, não o saldo atual.
+  const tdy  = today();
   const paid = transactions.filter(
-    t => t.accountId === account.id && t.status === "paid"
+    t => t.accountId === account.id &&
+      t.status === "paid" &&
+      t.paymentDate <= tdy,
   );
 
   let balance = account.initialBalance;
@@ -69,7 +75,8 @@ export function getCurrentBalance(account: Account, transactions: Transaction[])
   const transfersIn = transactions.filter(
     t => t.type === "transfer" &&
       t.transferToAccountId === account.id &&
-      t.status === "paid"
+      t.status === "paid" &&
+      t.paymentDate <= tdy,
   );
   for (const t of transfersIn) balance += t.amount;
 
@@ -87,6 +94,34 @@ export function getProjectedBalance(
   installments: CardInstallment[] = [],
 ): number {
   let balance = getCurrentBalance(account, transactions);
+
+  // Paid com paymentDate futuro (entre hoje+1 e upToDate) saiu de getCurrentBalance
+  // mas ainda precisa entrar no projetado — caso de agendamento já liquidado.
+  const tdy = today();
+  const futurePaid = transactions.filter(
+    t =>
+      t.accountId === account.id &&
+      t.status === "paid" &&
+      t.paymentDate > tdy &&
+      t.paymentDate <= upToDate,
+  );
+  for (const t of futurePaid) {
+    if (t.type === "income") balance += t.amount;
+    else if (t.type === "expense") balance -= t.amount;
+    else if (t.type === "transfer") {
+      if (t.transferToAccountId) balance -= t.amount;
+    }
+  }
+
+  const futurePaidTransfersIn = transactions.filter(
+    t =>
+      t.type === "transfer" &&
+      t.transferToAccountId === account.id &&
+      t.status === "paid" &&
+      t.paymentDate > tdy &&
+      t.paymentDate <= upToDate,
+  );
+  for (const t of futurePaidTransfersIn) balance += t.amount;
 
   const pending = transactions.filter(
     t =>
