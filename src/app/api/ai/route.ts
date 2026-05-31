@@ -1,70 +1,70 @@
 import { NextRequest, NextResponse } from "next/server";
+import { FieldValue } from "firebase-admin/firestore";
+import { adminAuth, adminDb } from "@/lib/firebase-admin";
+import { detectIntent, extractIntentFromAssistantContent, stripIntentPrefix } from "@/lib/intentDetection";
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
 const GEMINI_URL =
   "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent";
 
-// ─── Rate limiting (in-memory, por IP) ───────────────────────────────────────
-// Gemini free tier: 15 RPM. Limitamos a 12 para ter margem.
-
-const RL_STORE = new Map<string, number[]>();
-const RL_MAX   = 12;   // max requests per window
-const RL_WIN   = 60_000; // 60s window
-
-function getIp(req: NextRequest): string {
-  return (
-    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-    req.headers.get("x-real-ip") ??
-    "unknown"
-  );
-}
-
-function checkRateLimit(ip: string): { allowed: boolean; retryAfterMs: number } {
-  const now = Date.now();
-  const hits = (RL_STORE.get(ip) ?? []).filter(t => now - t < RL_WIN);
-
-  if (hits.length >= RL_MAX) {
-    const oldest = hits[0];
-    const retryAfterMs = RL_WIN - (now - oldest);
-    return { allowed: false, retryAfterMs };
-  }
-
-  RL_STORE.set(ip, [...hits, now]);
-  return { allowed: true, retryAfterMs: 0 };
-}
-
-// Limpeza periódica para não vazar memória
-setInterval(() => {
-  const now = Date.now();
-  for (const [ip, hits] of RL_STORE) {
-    const fresh = hits.filter(t => now - t < RL_WIN);
-    if (fresh.length === 0) RL_STORE.delete(ip);
-    else RL_STORE.set(ip, fresh);
-  }
-}, 120_000);
+const RL_MAX     = 60;       // máx. requests por janela
+const RL_WIN_MS  = 60_000;   // janela de 60s
+const MAX_TX     = 5;        // máx. transações por mensagem
+const MAX_HINTS  = 20;       // máx. hints injetados no prompt
+const MAX_HISTORY_TURNS = 2; // máx. turnos do histórico injetados (2 pares user+assistant = 4 mensagens)
 
 // ─── Schema estruturado ───────────────────────────────────────────────────────
 
-const RESPONSE_SCHEMA = {
+const TX_ITEM_SCHEMA = {
   type: "object",
   properties: {
-    intent: { type: "string", enum: ["transaction", "card_purchase", "unknown"] },
-    type: { type: "string", enum: ["income", "expense"] },
-    amount: { type: "number" },
-    description: { type: "string" },
-    categoryId: { type: "string" },
-    accountId: { type: "string" },
-    competenceDate: { type: "string" },
-    paymentDate: { type: "string" },
-    status: { type: "string", enum: ["paid", "pending", "overdue"] },
-    confidence: { type: "number" },
-    cardId: { type: "string" },
-    purchaseDate: { type: "string" },
+    intent:            { type: "string", enum: ["transaction", "card_purchase"] },
+    type:              { type: "string", enum: ["income", "expense"] },
+    amount:            { type: "number" },
+    description:       { type: "string" },
+    categoryId:        { type: "string" },
+    accountId:         { type: "string" },
+    cardId:            { type: "string" },
+    competenceDate:    { type: "string" },
+    paymentDate:       { type: "string" },
+    purchaseDate:      { type: "string" },
+    status:            { type: "string", enum: ["paid", "pending", "overdue"] },
     totalInstallments: { type: "integer" },
-    message: { type: "string" },
+    confidence:        { type: "string", enum: ["high", "low"] },
   },
   required: ["intent", "amount"],
+};
+
+// Schemas por intent — o intent final do payload é ditado pelo servidor (heurística).
+// Gemini só precisa preencher o(s) campo(s) relevante(s); o schema enforça a forma
+// e impede o modelo de "vazar" pra outro modo (ex: gerar transações quando é pergunta).
+const SCHEMA_LAUNCH = {
+  type: "object",
+  properties: {
+    transactions: { type: "array", items: TX_ITEM_SCHEMA },
+    message:      { type: "string" }, // usado só quando launch falha (Gemini não achou transações)
+  },
+  required: ["transactions"],
+};
+
+const SCHEMA_QUESTION = {
+  type: "object",
+  properties: {
+    answer:  { type: "string" },
+    message: { type: "string" },
+  },
+  required: ["answer"],
+};
+
+const SCHEMA_MIXED = {
+  type: "object",
+  properties: {
+    transactions: { type: "array", items: TX_ITEM_SCHEMA },
+    answer:       { type: "string" },
+    message:      { type: "string" },
+  },
+  required: ["transactions", "answer"],
 };
 
 // ─── Keywords por categoria (contexto semântico para o modelo) ───────────────
@@ -87,7 +87,7 @@ const CATEGORY_KEYWORDS: Record<string, string> = {
 };
 
 function normalizeKey(name: string): string {
-  return name.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").trim();
+  return name.toLowerCase().normalize("NFD").replace(/\p{M}/gu, "").trim();
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -101,13 +101,85 @@ function yesterdayStr() {
   return d.toISOString().split("T")[0];
 }
 
+function unauthorized(message: string) {
+  return NextResponse.json(
+    { intent: "error", code: "UNAUTHORIZED", message },
+    { status: 401 }
+  );
+}
+
+// ─── Autenticação ─────────────────────────────────────────────────────────────
+
+async function verifyUid(req: NextRequest): Promise<string | null> {
+  const header = req.headers.get("authorization");
+  if (!header?.startsWith("Bearer ")) return null;
+  const idToken = header.slice(7).trim();
+  if (!idToken) return null;
+  try {
+    const decoded = await adminAuth().verifyIdToken(idToken);
+    return decoded.uid;
+  } catch {
+    return null;
+  }
+}
+
+// ─── Rate limit em Firestore (atômico) ────────────────────────────────────────
+// Doc: users/{uid}/app/rateLimit { requestsThisMinute, windowStart }
+// Roda em transação para evitar race entre invocações serverless concorrentes.
+
+async function checkRateLimit(uid: string): Promise<{ allowed: boolean; retryAfterMs: number }> {
+  const ref = adminDb().doc(`users/${uid}/app/rateLimit`);
+  return adminDb().runTransaction(async tx => {
+    const snap = await tx.get(ref);
+    const now  = Date.now();
+    const data = snap.exists ? snap.data() : null;
+
+    const windowStart = typeof data?.windowStart === "number" ? data.windowStart : 0;
+    const count       = typeof data?.requestsThisMinute === "number" ? data.requestsThisMinute : 0;
+
+    // Janela expirou ou doc inexistente → reset.
+    if (!data || now - windowStart >= RL_WIN_MS) {
+      tx.set(ref, {
+        requestsThisMinute: 1,
+        windowStart: now,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      return { allowed: true, retryAfterMs: 0 };
+    }
+
+    if (count >= RL_MAX) {
+      return { allowed: false, retryAfterMs: RL_WIN_MS - (now - windowStart) };
+    }
+
+    tx.update(ref, {
+      requestsThisMinute: count + 1,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    return { allowed: true, retryAfterMs: 0 };
+  });
+}
+
 // ─── Handler ─────────────────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
 
-  // ── 1. Rate limit ────────────────────────────────────────────────────────────
-  const ip = getIp(req);
-  const rl = checkRateLimit(ip);
+  // ── 1. Autenticar ────────────────────────────────────────────────────────────
+  let uid: string | null;
+  try {
+    uid = await verifyUid(req);
+  } catch (e) {
+    console.error("[AI] Admin SDK indisponível:", e);
+    return NextResponse.json(
+      { intent: "error", code: "ADMIN_INIT", message: "Configuração de autenticação ausente no servidor." },
+      { status: 500 }
+    );
+  }
+  if (!uid) {
+    return unauthorized("Sessão expirada. Faça login novamente.");
+  }
+
+  // ── 2. Rate limit em Firestore ───────────────────────────────────────────────
+  const rl = await checkRateLimit(uid);
   if (!rl.allowed) {
     const retryAfterSec = Math.ceil(rl.retryAfterMs / 1000);
     return NextResponse.json(
@@ -121,7 +193,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // ── 2. Validar API key ───────────────────────────────────────────────────────
+  // ── 3. Validar API key ───────────────────────────────────────────────────────
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     return NextResponse.json({
@@ -131,39 +203,176 @@ export async function POST(req: NextRequest) {
     }, { status: 500 });
   }
 
-  // ── 3. Validar body ──────────────────────────────────────────────────────────
-  let body: { message?: string; categories?: unknown[]; accounts?: unknown[]; cards?: unknown[] };
+  // ── 4. Validar body ──────────────────────────────────────────────────────────
+  type HintIn = { categoryId?: unknown; accountId?: unknown; cardId?: unknown; confirmedCount?: unknown; lastUsed?: unknown };
+  type FinancialContextIn = {
+    month?: string;
+    summary?: { income?: number; expenses?: number; balance?: number };
+    byCategory?: { name?: string; spent?: number; budget?: number }[];
+    recentTransactions?: { description?: string; amount?: number; type?: string; category?: string; date?: string }[];
+  };
+  type TurnIn = { role?: unknown; content?: unknown };
+  let body: {
+    message?: string;
+    categories?: unknown[];
+    accounts?: unknown[];
+    cards?: unknown[];
+    hints?: Record<string, HintIn>;
+    financialContext?: FinancialContextIn;
+    conversationHistory?: TurnIn[];
+  };
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ intent: "error", code: "BAD_REQUEST", message: "Body inválido." }, { status: 400 });
   }
 
-  const { message, categories = [], accounts = [], cards = [] } = body;
+  const { message, categories = [], accounts = [], cards = [], hints = {}, financialContext, conversationHistory } = body;
   if (!message?.trim()) {
     return NextResponse.json({ intent: "unknown", message: "Mensagem vazia." });
   }
 
+  // ── 4b. Sanitizar histórico ──────────────────────────────────────────────────
+  // Aceita só {role, content} com strings, limita a últimos N turnos (cada turno
+  // = 1 user + 1 assistant), descarta o resto.
+  type Turn = { role: "user" | "assistant"; content: string };
+  const sanitizedHistory: Turn[] = (Array.isArray(conversationHistory) ? conversationHistory : [])
+    .map((t): Turn => ({
+      role:    t?.role === "assistant" ? "assistant" : "user",
+      content: typeof t?.content === "string" ? t.content.trim() : "",
+    }))
+    .filter(t => t.content.length > 0)
+    .slice(-MAX_HISTORY_TURNS * 2);
+
+  // Última fala do assistente (carrega o prefixo [launch]/[question]/[mixed])
+  const lastAssistantTurn = [...sanitizedHistory].reverse().find(t => t.role === "assistant");
+  const previousAssistantIntent = lastAssistantTurn
+    ? extractIntentFromAssistantContent(lastAssistantTurn.content)
+    : null;
+
+  // ── 4c. Classificar intenção (heurística + contexto do turno anterior) ──────
+  const intentHint = detectIntent(message, previousAssistantIntent);
+  const needsContext = intentHint !== "launch";
+
   const today     = todayStr();
   const yesterday = yesterdayStr();
 
-  // ── 4. Montar prompt ─────────────────────────────────────────────────────────
-  const categoriesList = (categories as { id: string; name: string; type: string }[])
+  // Conjuntos de IDs válidos do usuário (para sanitização de categoryId/accountId/cardId).
+  const categoriesTyped = categories as { id: string; name: string; type: string }[];
+  const accountsTyped   = accounts   as { id: string; name: string }[];
+  const cardsTyped      = cards      as { id: string; name: string; brand: string }[];
+
+  const categoryIds = new Set(categoriesTyped.map(c => c.id));
+  const accountIds  = new Set(accountsTyped.map(a => a.id));
+  const cardIds     = new Set(cardsTyped.map(c => c.id));
+
+  // ── 5. Montar prompt ─────────────────────────────────────────────────────────
+  const categoriesList = categoriesTyped
     .map(c => {
       const kw = CATEGORY_KEYWORDS[normalizeKey(c.name)];
       return `  id="${c.id}" | ${c.name} (${c.type})${kw ? ` → ${kw}` : ""}`;
     })
     .join("\n") || "  (nenhuma)";
 
-  const accountsList = (accounts as { id: string; name: string }[])
+  const accountsList = accountsTyped
     .map(a => `  id="${a.id}" | ${a.name}`)
     .join("\n") || "  (nenhuma)";
 
-  const cardsList = (cards as { id: string; name: string; brand: string }[])
+  const cardsList = cardsTyped
     .map(c => `  id="${c.id}" | ${c.name} (${c.brand})`)
     .join("\n") || "  (nenhum)";
 
-  const prompt = `Você é um assistente financeiro pessoal brasileiro. Extraia dados financeiros de mensagens informais.
+  // ── 5b. Hints (memória de comportamento) ─────────────────────────────────────
+  // Valida cada hint: descarta os que apontam pra IDs que o usuário não tem mais.
+  // Ordena por confirmedCount desc e corta no topo MAX_HINTS.
+  type ValidatedHint = { key: string; categoryId: string; accountId?: string; cardId?: string; confirmedCount: number };
+  const validatedHints: ValidatedHint[] = Object.entries(hints || {})
+    .map(([key, raw]) => {
+      const categoryId      = typeof raw?.categoryId      === "string" ? raw.categoryId      : "";
+      const rawAccountId    = typeof raw?.accountId       === "string" ? raw.accountId       : "";
+      const rawCardId       = typeof raw?.cardId          === "string" ? raw.cardId          : "";
+      const confirmedCount  = typeof raw?.confirmedCount  === "number" ? raw.confirmedCount  : 0;
+      const normKey = typeof key === "string" ? key.toLowerCase().trim() : "";
+      return { key: normKey, categoryId, accountId: rawAccountId, cardId: rawCardId, confirmedCount };
+    })
+    .filter(h =>
+      h.key &&
+      h.confirmedCount >= 1 &&
+      categoryIds.has(h.categoryId) &&
+      (h.accountId ? accountIds.has(h.accountId) : true) &&
+      (h.cardId    ? cardIds.has(h.cardId)       : true) &&
+      (h.accountId || h.cardId)
+    )
+    .sort((a, b) => b.confirmedCount - a.confirmedCount)
+    .slice(0, MAX_HINTS);
+
+  const hintsList = validatedHints.length === 0 ? "" :
+    "\n\nPreferências do usuário (baseadas em histórico confirmado):\n" +
+    validatedHints.map(h => {
+      const cat  = categoriesTyped.find(c => c.id === h.categoryId);
+      const acc  = h.accountId ? accountsTyped.find(a => a.id === h.accountId) : null;
+      const card = h.cardId    ? cardsTyped.find(c => c.id === h.cardId)       : null;
+      const dest = acc ? `conta: ${acc.name}` : card ? `cartão: ${card.name}` : "";
+      return `- '${h.key}' → categoria: ${cat?.name ?? "?"}${dest ? `, ${dest}` : ""} (confirmado ${h.confirmedCount}x)`;
+    }).join("\n");
+
+  // ── 5b2. Bloco de histórico recente ─────────────────────────────────────────
+  // Prefixos [launch]/[question]/[mixed] são strip antes de mostrar pro Gemini.
+  const historyBlock = sanitizedHistory.length === 0 ? "" :
+    "\n\nContexto recente da conversa:\n" + sanitizedHistory.map(turn => {
+      const label   = turn.role === "user" ? "Usuário" : "Assistente";
+      const content = turn.role === "assistant" ? stripIntentPrefix(turn.content) : turn.content;
+      return `${label}: ${content}`;
+    }).join("\n");
+
+  // ── 5c. Bloco de contexto financeiro (apenas se intent != launch) ────────────
+  function fmtBRL(n: number): string {
+    return n.toLocaleString("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
+  let financialContextBlock = "";
+  if (needsContext && financialContext) {
+    const { month, summary, byCategory, recentTransactions } = financialContext;
+    const incomeStr   = typeof summary?.income   === "number" ? fmtBRL(summary.income)   : "—";
+    const expensesStr = typeof summary?.expenses === "number" ? fmtBRL(summary.expenses) : "—";
+    const balanceStr  = typeof summary?.balance  === "number" ? fmtBRL(summary.balance)  : "—";
+
+    const byCatLines = (byCategory ?? [])
+      .filter(c => typeof c?.name === "string" && typeof c?.spent === "number")
+      .map(c => {
+        const budget = typeof c.budget === "number" ? ` / orçamento ${fmtBRL(c.budget)}` : "";
+        return `  - ${c.name}: ${fmtBRL(c.spent as number)}${budget}`;
+      })
+      .join("\n") || "  (sem gastos no mês)";
+
+    const recentLines = (recentTransactions ?? [])
+      .filter(t => typeof t?.description === "string" && typeof t?.amount === "number")
+      .map(t => `  - ${t.date ?? "—"} | ${t.type === "income" ? "+" : "−"}${fmtBRL(t.amount as number)} | ${t.description} (${t.category ?? "—"})`)
+      .join("\n") || "  (sem lançamentos recentes)";
+
+    financialContextBlock = `
+
+CONTEXTO FINANCEIRO ATUAL:
+Mês: ${month ?? "—"}
+Resumo do mês: receitas ${incomeStr} | despesas ${expensesStr} | saldo atual ${balanceStr}
+Gastos por categoria (mês):
+${byCatLines}
+Últimos lançamentos:
+${recentLines}`;
+  }
+
+  // ── 5d. Instruções específicas por intent ────────────────────────────────────
+  // O responseSchema selecionado já enforça os campos; aqui só explicamos a TAREFA.
+  const intentInstructions = intentHint === "launch"
+    ? `\nTAREFA: extrair transação(ões) financeira(s) dessa mensagem. Preencha "transactions" com 1+ itens. Se a mensagem não contiver nenhuma transação clara, retorne transactions=[] e use "message" para explicar brevemente.`
+    : intentHint === "question"
+    ? `\nTAREFA: responder a pergunta do usuário sobre as finanças dele. Preencha SOMENTE o campo "answer" (string em markdown simples, em português brasileiro). Use APENAS o CONTEXTO FINANCEIRO ATUAL acima como fonte de verdade — não invente valores. Seja conciso e direto: 1-3 parágrafos curtos, ou uma lista enxuta. Negrito com **texto**. Listas com "- ". Se a pergunta não puder ser respondida com os dados disponíveis, diga isso brevemente no próprio answer (NÃO retorne answer vazio).`
+    : `\nTAREFA: extrair transação(ões) E responder à pergunta na mesma mensagem. Preencha "transactions" com os lançamentos identificados E "answer" com a resposta em markdown simples. No "answer", considere que as transações extraídas vão ser confirmadas em seguida — use formulações como "Após esse lançamento, ...". Use APENAS o CONTEXTO FINANCEIRO ATUAL como fonte de verdade.`;
+
+  const prompt = `Você é um assistente financeiro pessoal brasileiro. Extraia dados financeiros e responda perguntas sobre as finanças do usuário.
+
+INSTRUÇÃO CRÍTICA: você DEVE responder APENAS com JSON válido seguindo o schema fornecido. NUNCA responda em texto livre. NUNCA confirme lançamentos em texto (ex: "Lançamento realizado com sucesso", "Valor: R$ X"). Toda resposta DEVE ser um objeto JSON parseável. Se não souber o que fazer, devolva o JSON com os campos vazios — mas devolva JSON.
+
 Hoje: ${today} | Ontem: ${yesterday}
 
 CATEGORIAS:
@@ -179,36 +388,79 @@ CONTAS:
 ${accountsList}
 
 CARTÕES:
-${cardsList}
+${cardsList}${historyBlock}
 
-MENSAGEM: "${message.trim()}"
+MENSAGEM ATUAL: "${message.trim()}"${financialContextBlock}
+${intentInstructions}
+
+A mensagem do usuário pode conter MÚLTIPLAS transações (ex: "gastei 50 no ifood e 30 de uber" → 2 itens).
+Cada item da array tem os campos:
+- intent: "transaction" | "card_purchase"
+- type: "income" | "expense" (transaction)
+- amount: número decimal
+- description: texto curto
+- categoryId: id da categoria mais provável (string vazia se nenhuma se encaixa)
+- accountId: id da conta (transaction)
+- cardId: id do cartão (card_purchase)
+- competenceDate, paymentDate: YYYY-MM-DD (transaction)
+- purchaseDate: YYYY-MM-DD (card_purchase)
+- status: "paid" | "pending" (transaction)
+- totalInstallments: int (card_purchase, 1 = à vista)
+- confidence: "high" | "low"
+  - "high": categoryId, accountId/cardId e amount foram identificados sem ambiguidade — usuário mencionou explicitamente OU bate com uma preferência confirmada (ver bloco "Preferências do usuário" abaixo, se houver). Parcelas (se aplicável) também foram especificadas.
+  - "low": qualquer campo foi inferido por default (primeira conta/cartão da lista quando não há menção, categoria adivinhada por keyword fraca, valor ambíguo, parcelas mencionadas mas sem número, mensagem com ruído).
 
 REGRAS:
-- Menciona bandeira (Visa/Mastercard/Elo/Amex) ou palavra "cartão" → card_purchase
+- Menciona bandeira (Visa/Mastercard/Elo/Amex) ou palavra "cartão" → intent=card_purchase
 - Parcelado/"em X vezes"/"X parcelas" → card_purchase, totalInstallments=X
 - Banco (Bradesco/Nubank/Itaú/Inter/C6) sem "cartão" → transaction com accountId
 - Gasto sem cartão → transaction, type=expense
 - Receita/salário/freela/pix recebido → transaction, type=income
-- Ambíguo → unknown
+- Mensagem sem nenhuma transação clara → intent="unknown", transactions=[]
 - "hoje" → ${today} | "ontem" → ${yesterday} | sem data → ${today}
 - Status padrão: "paid" | "vou pagar"/"pendente"/"devo" → "pending"
 - Sem conta → primeiro id da lista | Sem cartão → primeiro id da lista
 - VALOR: converta para número decimal. "49,75"→49.75 | "R$50"→50 | "1.200,00"→1200 | "mil reais"→1000 | "cinquenta"→50
+- Máximo ${MAX_TX} transações por resposta.
 
-EXEMPLOS:
-"passei 30 no mercadão" → Alimentação, expense, 30
-"paguei o ifood" → Alimentação, expense
-"uber até o trabalho" → Transporte, expense
-"comprei um beck" → Bebida, expense
-"boteco ontem, 80 conto" → Bebida, expense, 80, ontem
-"renovação do spotify" → Assinatura, expense
-"comprei um tênis pra mim" → Para Mim, expense
-"academia esse mês" → Saúde, expense
-"salário caiu" → Salário, income
-"recebi freela" → Freelance, income
-"paguei aluguel" → Moradia, expense`;
+EXEMPLOS DE LAUNCH:
+"passei 30 no mercadão" → 1 item: Alimentação, expense, 30
+"gastei 50 no ifood e 30 de uber" → 2 itens: [iFood/Alimentação 50, Uber/Transporte 30]
+"100 de gasolina e paguei netflix 39,90" → 2 itens: [Gasolina/Transporte 100, Netflix/Assinatura 39.90]
+"recebi salário 3000 e paguei aluguel 1200" → 2 itens: [Salário income 3000, Aluguel/Moradia expense 1200]
+"comprei tênis 400 em 4x no cartão" → 1 item card_purchase, 400, 4 parcelas
+"boteco ontem, 80 conto" → 1 item: Bebida, expense, 80, ontem
+"oi tudo bem" → intent=unknown, transactions=[]
 
-  // ── 5. Chamar Gemini ─────────────────────────────────────────────────────────
+EXEMPLO DE CORREÇÃO (lê o "Contexto recente da conversa" acima):
+Histórico:
+  Usuário: "8,25 em lazer cartão Bradesco"
+  Assistente: R$ 8,25 em Lazer (cartão Bradesco)
+Mensagem atual: "errado, foi 15,50"
+→ 1 item: card_purchase de Lazer no cartão Bradesco, amount=15.50, totalInstallments=1, mesmos demais campos da identificação anterior.
+
+Outra correção típica:
+Histórico:
+  Usuário: "gastei 50 no ifood"
+  Assistente: R$ 50,00 em Alimentação (conta Nubank)
+Mensagem atual: "na verdade foi no Bradesco"
+→ 1 item: transaction de Alimentação, amount=50, accountId do Bradesco.
+
+EXEMPLOS DE QUESTION (use o CONTEXTO FINANCEIRO acima — não invente valores):
+"quanto gastei esse mês?" → answer: "Você gastou **R$ 1.240** em maio. Sua maior categoria foi **Alimentação** com R$ 480."
+"falta quanto pro limite de alimentação?" → answer: "Seu orçamento de Alimentação é **R$ 600**. Você já gastou **R$ 480**, faltam **R$ 120**."
+"resumo do mês" → answer: "Em maio:\\n- Receitas: **R$ 5.000**\\n- Despesas: **R$ 2.300**\\n- Saldo das contas: **R$ 3.200**"
+
+EXEMPLOS DE MIXED:
+"gastei 50 no iFood, como tá o orçamento de alimentação?" →
+transactions: [iFood/Alimentação 50] + answer: "Após esse lançamento, você terá gasto **R$ 530** de **R$ 600** no orçamento de Alimentação."${hintsList}`;
+
+  // ── 6. Chamar Gemini ─────────────────────────────────────────────────────────
+  const responseSchema =
+    intentHint === "launch"   ? SCHEMA_LAUNCH   :
+    intentHint === "question" ? SCHEMA_QUESTION :
+                                SCHEMA_MIXED;
+
   let geminiRes: Response;
   try {
     geminiRes = await fetch(`${GEMINI_URL}?key=${apiKey}`, {
@@ -218,9 +470,9 @@ EXEMPLOS:
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: {
           responseMimeType: "application/json",
-          responseSchema: RESPONSE_SCHEMA,
+          responseSchema,
           temperature: 0.0,
-          maxOutputTokens: 512,
+          maxOutputTokens: 1024,
           thinkingConfig: { thinkingBudget: 0 },
         },
       }),
@@ -237,7 +489,7 @@ EXEMPLOS:
     });
   }
 
-  // ── 6. Tratar erros HTTP ─────────────────────────────────────────────────────
+  // ── 7. Tratar erros HTTP ─────────────────────────────────────────────────────
   if (!geminiRes.ok) {
     const errBody = await geminiRes.text().catch(() => "");
     console.error(`[AI] HTTP ${geminiRes.status}:`, errBody.slice(0, 400));
@@ -261,7 +513,7 @@ EXEMPLOS:
     });
   }
 
-  // ── 7. Parsear resposta ──────────────────────────────────────────────────────
+  // ── 8. Parsear envelope ──────────────────────────────────────────────────────
   const rawBody = await geminiRes.text();
 
   let geminiData: Record<string, unknown>;
@@ -287,44 +539,159 @@ EXEMPLOS:
     return NextResponse.json({ intent: "error", code: "TRUNCATED", message: "Resposta truncada. Tente uma mensagem mais curta." });
   }
 
-  let parsed: Record<string, unknown>;
+  let parsed: { intent?: string; transactions?: unknown[]; message?: string; answer?: string };
   try {
     parsed = JSON.parse(rawText.trim());
   } catch {
-    return NextResponse.json({ intent: "error", code: "JSON_PARSE", message: "Gemini retornou JSON inválido." });
+    // Gemini ignorou o responseSchema e devolveu texto livre — devolve 422 pra
+    // que o cliente trate como "resposta inválida" sem travar o input.
+    console.warn("[AI] Gemini retornou texto não-JSON:", rawText.slice(0, 200));
+    return NextResponse.json(
+      { intent: "error", code: "INVALID_RESPONSE", message: "Resposta inválida do modelo." },
+      { status: 422 },
+    );
   }
 
-  const validIntents = ["transaction", "card_purchase", "unknown"];
-  if (!parsed.intent || !validIntents.includes(parsed.intent as string)) {
-    return NextResponse.json({ intent: "error", code: "INVALID_INTENT", message: `Intent inválido: "${parsed.intent ?? "ausente"}".` });
-  }
+  // ── 9. Resposta-only (intent question) ───────────────────────────────────────
+  // Não precisamos validar o `parsed.intent` aqui — quem dita o intent final é a
+  // heurística do servidor (`intentHint`). O Gemini só fornece os dados.
+  const rawAnswer = typeof parsed.answer === "string" ? parsed.answer.trim() : "";
 
-  if (parsed.intent === "transaction") {
-    parsed.status         ??= "paid";
-    parsed.competenceDate ??= today;
-    parsed.paymentDate    ??= today;
-    parsed.confidence     ??= 0.8;
-  }
-  if (parsed.intent === "card_purchase") {
-    parsed.totalInstallments ??= 1;
-    parsed.purchaseDate      ??= today;
-    parsed.confidence        ??= 0.8;
-  }
-
-  // Sanitiza amount — Gemini pode retornar string com vírgula ou omitir o campo
-  if (parsed.intent === "transaction" || parsed.intent === "card_purchase") {
-    if (typeof parsed.amount === "string") {
-      const n = parseFloat((parsed.amount as string).replace(/\./g, "").replace(",", "."));
-      parsed.amount = isNaN(n) ? undefined : n;
-    }
-    if (typeof parsed.amount !== "number" || isNaN(parsed.amount as number) || (parsed.amount as number) <= 0) {
+  if (intentHint === "question") {
+    if (!rawAnswer) {
       return NextResponse.json({
-        intent: "error",
-        code: "MISSING_AMOUNT",
-        message: "Não consegui identificar o valor. Tente incluir o valor de forma mais clara, ex: 'gastei R$49,75'.",
+        intent: "unknown",
+        message: parsed.message || "Não consegui responder com os dados disponíveis. Tente reformular.",
+      });
+    }
+    return NextResponse.json({ intent: "question", answer: rawAnswer });
+  }
+
+  // ── 10. Sanitizar transações (intent launch ou mixed) ───────────────────────
+  const rawItems = Array.isArray(parsed.transactions) ? parsed.transactions : [];
+  if (rawItems.length === 0) {
+    // Sem transações: se era "mixed" mas a resposta veio, degrade para "question";
+    // se era "launch" puro, é unknown.
+    if (intentHint === "mixed" && rawAnswer) {
+      return NextResponse.json({ intent: "question", answer: rawAnswer });
+    }
+    return NextResponse.json({
+      intent: "unknown",
+      message: parsed.message || "Não consegui identificar nenhuma transação. Tente reformular.",
+    });
+  }
+
+  const truncated = rawItems.length > MAX_TX;
+  const items     = rawItems.slice(0, MAX_TX);
+
+  const firstAccountId = accountsTyped[0]?.id ?? "";
+  const firstCardId    = cardsTyped[0]?.id ?? "";
+
+  type SanitizedItem = {
+    intent: "transaction" | "card_purchase";
+    type?: "income" | "expense";
+    amount: number;
+    description: string;
+    categoryId: string | null;     // null = não reconhecida, escolher manualmente
+    accountId?: string;
+    cardId?: string;
+    competenceDate?: string;
+    paymentDate?: string;
+    purchaseDate?: string;
+    status?: "paid" | "pending";
+    totalInstallments?: number;
+    confidence: "high" | "low";
+  };
+
+  const sanitized: SanitizedItem[] = [];
+
+  for (const raw of items) {
+    if (!raw || typeof raw !== "object") continue;
+    const r = raw as Record<string, unknown>;
+
+    const intent = r.intent === "card_purchase" ? "card_purchase" : "transaction";
+
+    // amount: aceita number ou string com vírgula
+    let amount: number;
+    if (typeof r.amount === "string") {
+      const n = parseFloat(r.amount.replace(/\./g, "").replace(",", "."));
+      amount = isNaN(n) ? 0 : n;
+    } else if (typeof r.amount === "number") {
+      amount = r.amount;
+    } else {
+      amount = 0;
+    }
+    if (!amount || amount <= 0) continue; // item inválido, pula
+
+    const description = typeof r.description === "string" ? r.description : "";
+
+    // confidence: começa pelo que o Gemini disse; servidor rebaixa pra "low" se detectar fallback.
+    let confidence: "high" | "low" = r.confidence === "high" ? "high" : "low";
+
+    // categoryId: null se não bater com nenhuma categoria do usuário (força low)
+    const rawCategoryId = typeof r.categoryId === "string" ? r.categoryId : "";
+    const categoryId    = rawCategoryId && categoryIds.has(rawCategoryId) ? rawCategoryId : null;
+    if (!categoryId) confidence = "low";
+
+    if (intent === "transaction") {
+      const type = r.type === "income" ? "income" : "expense";
+
+      const rawAccountId = typeof r.accountId === "string" ? r.accountId : "";
+      const validRawAccount = Boolean(rawAccountId) && accountIds.has(rawAccountId);
+      const accountId    = validRawAccount ? rawAccountId : firstAccountId;
+      // Se Gemini não trouxe accountId válido e caímos no default, rebaixa confidence.
+      if (!validRawAccount) confidence = "low";
+
+      const paymentDate    = typeof r.paymentDate    === "string" && r.paymentDate    ? r.paymentDate    : today;
+      const competenceDate = typeof r.competenceDate === "string" && r.competenceDate ? r.competenceDate : paymentDate;
+      const status         = r.status === "pending" || r.status === "overdue" ? "pending" : "paid";
+
+      sanitized.push({
+        intent, type, amount, description, categoryId,
+        accountId, competenceDate, paymentDate, status, confidence,
+      });
+    } else {
+      const rawCardId = typeof r.cardId === "string" ? r.cardId : "";
+      const validRawCard = Boolean(rawCardId) && cardIds.has(rawCardId);
+      const cardId    = validRawCard ? rawCardId : firstCardId;
+      // Mesmo motivo do accountId: fallback derruba confidence.
+      if (!validRawCard) confidence = "low";
+
+      const purchaseDate      = typeof r.purchaseDate === "string" && r.purchaseDate ? r.purchaseDate : today;
+      const totalInstallments = typeof r.totalInstallments === "number" && r.totalInstallments > 0
+        ? Math.floor(r.totalInstallments) : 1;
+      // Parcelamento ambíguo é detectado pelo próprio Gemini via confidence "low".
+      // Aqui não rebaixamos: totalInstallments=1 ausente significa à vista, não ambiguidade.
+
+      sanitized.push({
+        intent, amount, description, categoryId,
+        cardId, purchaseDate, totalInstallments, confidence,
       });
     }
   }
 
-  return NextResponse.json(parsed);
+  if (sanitized.length === 0) {
+    if (intentHint === "mixed" && rawAnswer) {
+      return NextResponse.json({ intent: "question", answer: rawAnswer });
+    }
+    return NextResponse.json({
+      intent: "unknown",
+      message: "Não consegui extrair nenhuma transação válida. Tente incluir os valores.",
+    });
+  }
+
+  // Resposta final: "launch" puro ou "mixed" (com answer).
+  if (intentHint === "mixed") {
+    return NextResponse.json({
+      intent: "mixed",
+      transactions: sanitized,
+      truncated,
+      answer: rawAnswer || "",
+    });
+  }
+  return NextResponse.json({
+    intent: "launch",
+    transactions: sanitized,
+    truncated,
+  });
 }
