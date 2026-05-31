@@ -51,10 +51,11 @@ export default function Transacoes() {
     [state.transactions, selectedMonth]
   );
 
-  const income = summaryBase.filter(t => t.type === "income").reduce((s, t) => s + t.amount, 0);
-  const expense = summaryBase.filter(t => t.type === "expense").reduce((s, t) => s + t.amount, 0);
-  const aPagar = summaryBase.filter(t => t.status === "pending").reduce((s, t) => s + t.amount, 0);
-  const vencido = summaryBase.filter(t => t.status === "overdue").reduce((s, t) => s + t.amount, 0);
+  // Resumo do mês: todas as transações de competência no mês (qualquer status).
+  // Bug anterior: card "A pagar" somava pending de income + expense juntos.
+  const income   = summaryBase.filter(t => t.type === "income").reduce((s, t) => s + t.amount, 0);
+  const expense  = summaryBase.filter(t => t.type === "expense").reduce((s, t) => s + t.amount, 0);
+  const previsto = income - expense;
 
   const filtered = useMemo(() => {
     let txs = [...summaryBase];
@@ -142,18 +143,30 @@ export default function Transacoes() {
           <p style={{ fontSize: "10px", color: "var(--text-3)", fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: "4px" }}>↓ Despesas</p>
           <p className="mono" style={{ fontSize: "17px", fontWeight: 700, color: expense > income ? "var(--red)" : "var(--text-1)" }}>R$ {fmt(expense)}</p>
         </div>
-        {aPagar > 0 && (
-          <div className="card" style={{ padding: "13px 14px", background: "var(--amber-10)", borderColor: "var(--amber-20)" }}>
-            <p style={{ fontSize: "10px", color: "var(--amber)", fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: "4px" }}>A pagar</p>
-            <p className="mono" style={{ fontSize: "17px", fontWeight: 700, color: "var(--amber)" }}>R$ {fmt(aPagar)}</p>
-          </div>
-        )}
-        {vencido > 0 && (
-          <div className="card" style={{ padding: "13px 14px", background: "var(--red-10)", borderColor: "var(--red-20)" }}>
-            <p style={{ fontSize: "10px", color: "var(--red)", fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: "4px" }}>Vencido</p>
-            <p className="mono" style={{ fontSize: "17px", fontWeight: 700, color: "var(--red)" }}>R$ {fmt(vencido)}</p>
-          </div>
-        )}
+        <div
+          className="card"
+          style={{
+            padding: "13px 14px",
+            gridColumn: "1 / -1",
+            background: previsto < 0 ? "var(--red-10)" : "var(--accent-10)",
+            borderColor:  previsto < 0 ? "var(--red-20)" : "var(--border-accent)",
+          }}
+        >
+          <p style={{
+            fontSize: "10px",
+            color: previsto < 0 ? "var(--red)" : "var(--accent)",
+            fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase",
+            marginBottom: "4px",
+          }}>
+            Previsto
+          </p>
+          <p className="mono" style={{
+            fontSize: "17px", fontWeight: 700,
+            color: previsto < 0 ? "var(--red)" : "var(--green)",
+          }}>
+            {previsto < 0 ? "−" : ""}R$ {fmt(Math.abs(previsto))}
+          </p>
+        </div>
       </div>
 
       {/* ── Filtros ── */}
