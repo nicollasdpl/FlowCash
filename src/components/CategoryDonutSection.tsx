@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { CreditCard as CreditCardIcon, X } from "lucide-react";
 import type { Transaction, CardInstallment, CardPurchase } from "@/types/financial";
+import { SEED_INVOICE_PAYMENT_CATEGORY_ID } from "@/types/financial";
 
 // ─── Tipos exportados ─────────────────────────────────────────────────────────
 
@@ -48,12 +49,15 @@ export function buildCatSlices(
     return map[catId];
   }
 
-  // 1. Despesas pagas com competenceDate no mês
+  // 1. Despesas pagas com competenceDate no mês.
+  // Exclui a liquidação de fatura (categoria de sistema): o gasto do cartão já
+  // entra pelas parcelas no passo 2, com as categorias reais das compras.
   transactions
     .filter(t =>
       t.type === "expense" &&
       t.status === "paid" &&
-      t.competenceDate.startsWith(month)
+      t.competenceDate.startsWith(month) &&
+      t.categoryId !== SEED_INVOICE_PAYMENT_CATEGORY_ID
     )
     .forEach(t => {
       const slice = ensure(t.categoryId || "__none__");

@@ -233,7 +233,7 @@ export default function Configuracoes() {
       <div className="card fade-up-4" style={{ overflow: "hidden", marginBottom: "14px" }}>
         <div style={{ padding: "13px 16px", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <p style={{ fontSize: "11px", fontWeight: 700, color: "var(--text-3)", letterSpacing: "0.08em", textTransform: "uppercase" }}>
-            Categorias ({state.categories.length})
+            Categorias ({state.categories.filter(c => !c.isSystem).length})
           </p>
           <button
             onClick={() => router.push("/configuracoes/categorias/nova")}
@@ -246,7 +246,7 @@ export default function Configuracoes() {
           >+ Nova</button>
         </div>
         <div style={{ padding: "12px 16px", display: "flex", flexWrap: "wrap", gap: "7px" }}>
-          {state.categories.map(cat => (
+          {state.categories.filter(c => !c.isSystem).map(cat => (
             <button
               key={cat.id}
               onClick={() => router.push(`/configuracoes/categorias/${cat.id}/editar`)}

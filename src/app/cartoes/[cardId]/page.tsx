@@ -3,6 +3,7 @@ import { useState, useMemo } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { useApp, newId } from "@/context/AppContext";
 import type { CardInstallment } from "@/context/AppContext";
+import { SEED_INVOICE_PAYMENT_CATEGORY_ID } from "@/types/financial";
 import {
   getCardLimitSummary, getCurrentBalance, currentMonth, addMonths, today,
 } from "@/engine/financialEngine";
@@ -114,32 +115,36 @@ export default function CartaoDetail() {
     const { dueDate: noteDueDate } = getInvoiceDates(selectedMonth, card.closingDay, card.dueDay);
     const invoiceNote = `Fatura ${card.name} ${monthTabLabel(noteDueDate)}`;
 
+    // Marca todas as parcelas da fatura como pagas. O vínculo de cada parcela
+    // com sua compra permanece — o histórico por categoria é preservado.
     pendingInsts.forEach(inst => {
-      const purchase = state.purchases.find(p => p.id === inst.purchaseId);
-
-      dispatch({
-        type: "ADD_TX",
-        payload: {
-          id: newId(),
-          accountId: card.paymentAccountId,
-          type: "expense",
-          amount: inst.amount,
-          description: purchase?.description ?? "—",
-          categoryId: purchase?.categoryId ?? "",
-          competenceDate: `${inst.competenceMonth}-01`,
-          paymentDate: todayDate,
-          status: "paid",
-          isRecurring: false,
-          origin: "invoice",
-          notes: invoiceNote,
-          createdAt: new Date().toISOString(),
-        },
-      });
-
       dispatch({
         type: "PAY_INSTALLMENT",
         payload: { installmentId: inst.id, paidAt: todayDate },
       });
+    });
+
+    // Cria UMA única transação representando a liquidação da fatura.
+    // Usa a categoria de sistema "Pagamento de Fatura": ela NÃO conta como
+    // gasto por categoria (budgetEngine a ignora), evitando a dupla contagem
+    // com as parcelas — que já contam pelas categorias das compras.
+    dispatch({
+      type: "ADD_TX",
+      payload: {
+        id: newId(),
+        accountId: card.paymentAccountId,
+        type: "expense",
+        amount: total,
+        description: `Pagamento Fatura ${card.name} ${monthTabLabel(noteDueDate)}`,
+        categoryId: SEED_INVOICE_PAYMENT_CATEGORY_ID,
+        competenceDate: todayDate,
+        paymentDate: todayDate,
+        status: "paid",
+        isRecurring: false,
+        origin: "invoice",
+        notes: invoiceNote,
+        createdAt: new Date().toISOString(),
+      },
     });
   }
 

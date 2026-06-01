@@ -39,7 +39,7 @@ export default function Orcamentos() {
 
   const usedCategoryIds = new Set(budgetsThisMonth.map(b => b.categoryId));
   const availableCategories = state.categories.filter(
-    c => c.type === "expense" && !usedCategoryIds.has(c.id)
+    c => c.type === "expense" && !c.isSystem && !usedCategoryIds.has(c.id)
   );
 
   const totalLimit = budgetsThisMonth.reduce((s, b) => s + b.limitAmount, 0);

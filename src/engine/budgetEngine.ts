@@ -12,6 +12,7 @@
 // Não inclui pagamento de fatura (isso é liquidação, não gasto novo).
 
 import type { Transaction, CardInstallment, CardPurchase } from "@/types/financial";
+import { SEED_INVOICE_PAYMENT_CATEGORY_ID } from "@/types/financial";
 
 export function getSpentByCategory(
   month: string,
@@ -22,6 +23,9 @@ export function getSpentByCategory(
   const map: Record<string, number> = {};
 
   for (const t of transactions) {
+    // Ignora a liquidação de fatura: não é gasto novo por categoria.
+    // As parcelas do cartão já contam pelas categorias corretas no bloco (b).
+    if (t.categoryId === SEED_INVOICE_PAYMENT_CATEGORY_ID) continue;
     if (t.type === "expense" && t.competenceDate.startsWith(month)) {
       map[t.categoryId] = (map[t.categoryId] ?? 0) + t.amount;
     }

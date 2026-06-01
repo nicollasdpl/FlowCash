@@ -14,6 +14,7 @@ import type {
   Account, Transaction, CreditCard, CardPurchase, CardInstallment,
   Goal, Category, Budget,
 } from "@/types/financial";
+import { SEED_INVOICE_PAYMENT_CATEGORY_ID } from "@/types/financial";
 import { generateInstallments, generateSubscriptionInstallment, getCompetenceMonth } from "@/engine/invoiceEngine";
 import { addMonths } from "@/engine/financialEngine";
 
@@ -79,6 +80,7 @@ const SEED_CATEGORIES: Category[] = [
   { id: "cat_salario",     name: "Salário",       type: "income",  color: "#00E5A0", icon: "Wallet" },
   { id: "cat_freelance",   name: "Pets",          type: "expense", color: "#8BC34A", icon: "PawPrint" },
   { id: "cat_investimento",name: "Investimentos", type: "income",  color: "#00E5A0", icon: "TrendingUp" },
+  { id: SEED_INVOICE_PAYMENT_CATEGORY_ID, name: "Pagamento de Fatura", type: "expense", color: "#6B7280", icon: "CreditCard", isSystem: true },
 ];
 
 export const SEED_CATEGORY_IDS = new Set(SEED_CATEGORIES.map(c => c.id));
@@ -125,7 +127,7 @@ function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
     case "LOAD": {
       const payloadCats = action.payload.categories;
-      const categories = Array.isArray(payloadCats) && payloadCats.length > 0
+      const baseCategories = Array.isArray(payloadCats) && payloadCats.length > 0
         ? payloadCats.map((cat: Category) => {
             // Já é um nome Lucide válido (PascalCase) → manter sem tocar
             if (/^[A-Z][A-Za-z0-9]+$/.test(cat.icon ?? "")) return cat;
@@ -136,6 +138,12 @@ function reducer(state: AppState, action: Action): AppState {
             return { ...cat, icon: "Tag" };
           })
         : seed.categories;
+      // Garante que a categoria de sistema "Pagamento de Fatura" sempre exista,
+      // inclusive em estados já persistidos antes desta versão.
+      const systemInvoiceCat = seed.categories.find(c => c.id === SEED_INVOICE_PAYMENT_CATEGORY_ID)!;
+      const categories = baseCategories.some(c => c.id === SEED_INVOICE_PAYMENT_CATEGORY_ID)
+        ? baseCategories
+        : [...baseCategories, systemInvoiceCat];
       return { ...seed, ...action.payload, categories };
     }
     case "SET_USER_NAME":

@@ -267,7 +267,7 @@ export default function Relatorios() {
         },
         body: JSON.stringify({
           message,
-          categories: state.categories,
+          categories: state.categories.filter(c => !c.isSystem),
           accounts: state.accounts.filter(a => a.active),
           cards: state.cards,
         }),

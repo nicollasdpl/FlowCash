@@ -11,11 +11,13 @@ export default function EditarCategoriaPage() {
 
   const category = state.categories.find(c => c.id === id);
 
-  if (!category) {
+  if (!category || category.isSystem) {
     return (
       <div style={{ padding: "60px 24px", textAlign: "center" }}>
         <p style={{ color: "var(--text-3)", fontSize: "14px", marginBottom: "16px" }}>
-          Categoria não encontrada.
+          {category?.isSystem
+            ? "Esta é uma categoria do sistema e não pode ser editada."
+            : "Categoria não encontrada."}
         </p>
         <button
           onClick={() => router.push("/configuracoes")}

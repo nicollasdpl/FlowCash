@@ -39,8 +39,8 @@ export default function TransactionFormPage({ transaction }: Props) {
   const { state, dispatch } = useApp();
   const todayStr = new Date().toISOString().split("T")[0];
 
-  const expenseCategories = state.categories.filter(c => c.type === "expense");
-  const incomeCategories  = state.categories.filter(c => c.type === "income");
+  const expenseCategories = state.categories.filter(c => c.type === "expense" && !c.isSystem);
+  const incomeCategories  = state.categories.filter(c => c.type === "income" && !c.isSystem);
 
   const [txType, setTxType]   = useState<"income" | "expense">(transaction?.type === "income" ? "income" : "expense");
   const [description, setDesc]  = useState(transaction?.description ?? "");

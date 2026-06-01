@@ -49,7 +49,7 @@ export default function EditarCompra() {
     );
   }
 
-  const expenseCategories = state.categories.filter(c => c.type === "expense");
+  const expenseCategories = state.categories.filter(c => c.type === "expense" && !c.isSystem);
   const hasPaidInstallments = state.installments.some(i => i.purchaseId === purchase.id && i.paid);
 
   function handleSave() {

@@ -16,7 +16,7 @@ export default function PurchaseFormPage({ card }: Props) {
 
   const [description, setDescription] = useState("");
   const [amount, setAmount] = useState("");
-  const [categoryId, setCategoryId] = useState(state.categories.find(c => c.type === "expense")?.id ?? "");
+  const [categoryId, setCategoryId] = useState(state.categories.find(c => c.type === "expense" && !c.isSystem)?.id ?? "");
   const [purchaseDate, setPurchaseDate] = useState(todayStr);
   const [totalInstallments, setTotalInstallments] = useState("1");
   const [isSubscription, setIsSubscription] = useState(false);
@@ -57,7 +57,7 @@ export default function PurchaseFormPage({ card }: Props) {
     router.push(`/cartoes/${card.id}`);
   }
 
-  const expenseCategories = state.categories.filter(c => c.type === "expense");
+  const expenseCategories = state.categories.filter(c => c.type === "expense" && !c.isSystem);
 
   return (
     <>

@@ -24,7 +24,7 @@ export default function BudgetFormPage({ budget, month }: Props) {
   const router = useRouter();
   const { state, dispatch } = useApp();
 
-  const expenseCategories = state.categories.filter(c => c.type === "expense");
+  const expenseCategories = state.categories.filter(c => c.type === "expense" && !c.isSystem);
   const usedCategoryIds = new Set(
     state.budgets.filter(b => b.month === month && b.id !== budget?.id).map(b => b.categoryId)
   );

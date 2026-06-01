@@ -10,6 +10,11 @@ export type TransactionOrigin = "manual" | "invoice" | "recurring" | "import";
 export type RecurringFrequency = "daily" | "weekly" | "monthly" | "yearly";
 export type InvoiceStatus = "open" | "closed" | "overdue" | "paid";
 
+// ID fixo da categoria de sistema usada para liquidar a fatura do cartão.
+// NÃO conta como gasto por categoria (as parcelas já contam pelas categorias
+// das compras originais). Não editável nem deletável; oculta em formulários.
+export const SEED_INVOICE_PAYMENT_CATEGORY_ID = "system_invoice_payment";
+
 // ─── CONTA BANCÁRIA ───────────────────────────────────────────────────────────
 // Onde o dinheiro EXISTE fisicamente.
 export interface Account {
@@ -30,6 +35,7 @@ export interface Category {
   type: "income" | "expense";
   color: string;
   icon: string;
+  isSystem?: boolean;             // categoria de sistema: não editável/deletável, oculta em formulários
 }
 
 // ─── TRANSAÇÃO ────────────────────────────────────────────────────────────────

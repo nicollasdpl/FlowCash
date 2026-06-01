@@ -560,7 +560,7 @@ export default function AIPageContent() {
         },
         body: JSON.stringify({
           message: msg,
-          categories: state.categories,
+          categories: state.categories.filter(c => !c.isSystem),
           accounts: state.accounts.filter(a => a.active),
           cards: state.cards,
           hints,
@@ -1063,7 +1063,7 @@ export default function AIPageContent() {
                 <DraftCard
                   key={draft.uid}
                   draft={draft}
-                  categories={state.categories}
+                  categories={state.categories.filter(c => !c.isSystem)}
                   accounts={state.accounts.filter(a => a.active)}
                   cards={state.cards}
                   readOnly={autoConfirmIn !== null}
