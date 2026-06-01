@@ -6,7 +6,10 @@ import { detectIntent, extractIntentFromAssistantContent, stripIntentPrefix } fr
 // ─── Config ───────────────────────────────────────────────────────────────────
 
 const GEMINI_URL =
-  "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent";
+  "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
+
+// Permite até ~3 tentativas (retry/backoff) dentro do limite da function serverless.
+export const maxDuration = 60;
 
 const RL_MAX     = 60;       // máx. requests por janela
 const RL_WIN_MS  = 60_000;   // janela de 60s
@@ -461,31 +464,61 @@ transactions: [iFood/Alimentação 50] + answer: "Após esse lançamento, você 
     intentHint === "question" ? SCHEMA_QUESTION :
                                 SCHEMA_MIXED;
 
-  let geminiRes: Response;
-  try {
-    geminiRes = await fetch(`${GEMINI_URL}?key=${apiKey}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: {
-          responseMimeType: "application/json",
-          responseSchema,
-          temperature: 0.0,
-          maxOutputTokens: 1024,
-          thinkingConfig: { thinkingBudget: 0 },
-        },
-      }),
-      signal: AbortSignal.timeout(20000),
-    });
-  } catch (e) {
-    const isTimeout = e instanceof Error && e.name === "TimeoutError";
+  const geminiBody = JSON.stringify({
+    contents: [{ parts: [{ text: prompt }] }],
+    generationConfig: {
+      responseMimeType: "application/json",
+      responseSchema,
+      temperature: 0.0,
+      maxOutputTokens: 1024,
+      thinkingConfig: { thinkingBudget: 0 },
+    },
+  });
+
+  // 503/500/502/504 e timeout/rede são transitórios (modelo sobrecarregado/lento)
+  // → re-tenta com backoff antes de desistir. 429 (rate limit) NÃO entra aqui.
+  const MAX_ATTEMPTS = 3;
+  const TRANSIENT_HTTP = new Set([500, 502, 503, 504]);
+  let geminiRes: Response | null = null;
+
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      const res = await fetch(`${GEMINI_URL}?key=${apiKey}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: geminiBody,
+        signal: AbortSignal.timeout(15000),
+      });
+      // HTTP transitório: re-tenta se ainda há tentativas; senão o bloco 7 trata.
+      if (TRANSIENT_HTTP.has(res.status) && attempt < MAX_ATTEMPTS) {
+        await new Promise(r => setTimeout(r, 500 * attempt)); // 500ms, 1000ms
+        continue;
+      }
+      geminiRes = res;
+      break;
+    } catch (e) {
+      const isTimeout = e instanceof Error && e.name === "TimeoutError";
+      if (attempt < MAX_ATTEMPTS) {
+        await new Promise(r => setTimeout(r, 500 * attempt));
+        continue;
+      }
+      return NextResponse.json({
+        intent: "error",
+        code: isTimeout ? "TIMEOUT" : "NETWORK",
+        message: isTimeout
+          ? "Gemini não respondeu a tempo. Tente novamente."
+          : "Erro de rede ao conectar com o Gemini.",
+        retryAfterSec: 15,
+      });
+    }
+  }
+
+  if (!geminiRes) {
     return NextResponse.json({
       intent: "error",
-      code: isTimeout ? "TIMEOUT" : "NETWORK",
-      message: isTimeout
-        ? "Gemini não respondeu em 20s. Tente novamente."
-        : "Erro de rede ao conectar com o Gemini.",
+      code: "HTTP_503",
+      message: "O modelo está sobrecarregado no momento. Tente novamente em instantes.",
+      retryAfterSec: 15,
     });
   }
 
@@ -499,6 +532,16 @@ transactions: [iFood/Alimentação 50] + answer: "Após esse lançamento, você 
         { intent: "error", code: "HTTP_429", message: "Limite da API Gemini atingido. Aguarde alguns segundos.", retryAfterSec: 30 },
         { status: 429 }
       );
+    }
+
+    // 503/500/502/504 que sobreviveram às tentativas → erro retentável pelo cliente.
+    if (TRANSIENT_HTTP.has(geminiRes.status)) {
+      return NextResponse.json({
+        intent: "error",
+        code: "HTTP_503",
+        message: "O modelo está sobrecarregado no momento. Tente novamente em instantes.",
+        retryAfterSec: 15,
+      });
     }
 
     const msgMap: Record<number, string> = {

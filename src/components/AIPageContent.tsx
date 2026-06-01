@@ -582,9 +582,12 @@ export default function AIPageContent() {
 
       const data: AIResult = await res.json();
 
-      if (data.intent === "error" && data.code === "HTTP_429") {
+      if (
+        data.intent === "error" &&
+        (data.code === "HTTP_429" || data.code === "HTTP_503" || data.code === "TIMEOUT")
+      ) {
         setLoading(false);
-        const secs = (data as AIError).retryAfterSec ?? 30;
+        const secs = (data as AIError).retryAfterSec ?? (data.code === "HTTP_429" ? 30 : 15);
         startRetry(msg, secs);
         return;
       }
