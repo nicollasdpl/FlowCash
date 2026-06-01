@@ -7,7 +7,7 @@ import CategoryIcon from "@/components/CategoryIcon";
 import { Landmark, BarChart2, TrendingUp, ArrowUpDown, CreditCard, Target, RefreshCw } from "lucide-react";
 
 export default function Configuracoes() {
-  const { state, dispatch, user, signOut, syncNow, syncState, lastSyncedAt } = useApp();
+  const { state, dispatch, user, signOut, syncNow, syncState, lastSyncedAt, lastSyncError } = useApp();
   const router = useRouter();
   const [editingName, setEditingName] = useState(false);
   const [nameInput, setNameInput] = useState(state.userName ?? "");
@@ -56,6 +56,7 @@ export default function Configuracoes() {
   const lastSyncLabel = lastSyncedAt
     ? new Date(lastSyncedAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
     : null;
+  const stateSizeKB = Math.round(JSON.stringify(state).length / 1024);
 
   return (
     <div style={{ padding: "16px", maxWidth: "640px", margin: "0 auto" }}>
@@ -258,6 +259,14 @@ export default function Configuracoes() {
                     ? `Sincronizado às ${lastSyncLabel}`
                     : "Sincroniza sozinho ao abrir o app."}
             </p>
+            <p style={{ fontSize: "10px", color: "var(--text-3)", marginTop: "6px", textAlign: "center" }}>
+              {state.transactions.length} transações · {state.purchases.length} compras · {state.installments.length} parcelas · ~{stateSizeKB} KB
+            </p>
+            {lastSyncError && (
+              <p style={{ fontSize: "10.5px", color: "var(--red)", marginTop: "6px", textAlign: "center", wordBreak: "break-word", lineHeight: 1.4 }}>
+                Erro de sync: {lastSyncError}
+              </p>
+            )}
           </div>
         </div>
       </div>

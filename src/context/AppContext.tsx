@@ -274,6 +274,7 @@ interface CtxType {
   syncNow: () => Promise<void>;
   syncState: "idle" | "syncing" | "synced" | "error";
   lastSyncedAt: number | null;
+  lastSyncError: string | null;
 }
 
 const Ctx = createContext<CtxType | null>(null);
@@ -290,6 +291,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [isReady, setIsReady]         = useState(false);
   const [syncState, setSyncState]       = useState<"idle" | "syncing" | "synced" | "error">("idle");
   const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(null);
+  const [lastSyncError, setLastSyncError] = useState<string | null>(null);
 
   // Versão (ms do SERVIDOR) do dado que está no estado agora — base de comparação.
   const loadedAtRef  = useRef<number>(0);
@@ -385,8 +387,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       try {
         await setDoc(FIRESTORE_DOC(user.uid), { ...state, updatedAt: serverTimestamp() });
         needsFirestoreSyncRef.current = false;
+        setLastSyncError(null);
       } catch (err) {
         console.error("Firestore save error:", err);
+        setSyncState("error");
+        setLastSyncError(err instanceof Error ? err.message : String(err));
       }
     }, 1500);
     return () => clearTimeout(timer);
@@ -423,6 +428,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   async function syncNow() {
     if (!user) return;
     setSyncState("syncing");
+    setLastSyncError(null);
     try {
       if (needsFirestoreSyncRef.current) {
         await setDoc(FIRESTORE_DOC(user.uid), { ...state, updatedAt: serverTimestamp() });
@@ -447,6 +453,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } catch (err) {
       console.error("Sync error:", err);
       setSyncState("error");
+      setLastSyncError(err instanceof Error ? err.message : String(err));
     }
   }
 
@@ -477,7 +484,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <Ctx.Provider value={{ state, dispatch, user, authLoading, signIn, signOut, syncNow, syncState, lastSyncedAt }}>
+    <Ctx.Provider value={{ state, dispatch, user, authLoading, signIn, signOut, syncNow, syncState, lastSyncedAt, lastSyncError }}>
       {children}
     </Ctx.Provider>
   );
