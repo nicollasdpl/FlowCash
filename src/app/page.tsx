@@ -164,19 +164,17 @@ export default function Dashboard() {
 
   const cardInvoices = useMemo(() => {
     return state.cards.filter(c => c.active).flatMap(card => {
-      const allMonths = [...new Set(
+      const months = [...new Set(
         state.installments
           .filter(i => i.cardId === card.id)
           .map(i => i.competenceMonth),
-      )].sort();
-      const targetMonth = allMonths.find(m => {
-        const hasUnpaid = state.installments.some(i => i.cardId === card.id && i.competenceMonth === m && !i.paid);
-        if (!hasUnpaid) return false;
-        const inv = computeInvoice(card, state.installments, m);
-        if (inv.status === "closed" || inv.status === "overdue") return true;
-        if (inv.status === "open") return inv.dueDate.substring(0, 7) === selectedMonth;
-        return false;
-      });
+      )];
+      // Mostra a fatura cujo VENCIMENTO (dueDate) cai no mês selecionado — o
+      // mapeamento competência→dueDate é 1:1, então no máximo uma casa por cartão.
+      // Independe do status: exibe Paga/Em aberto/Fechada/Vencida conforme computeInvoice.
+      const targetMonth = months.find(m =>
+        computeInvoice(card, state.installments, m).dueDate.substring(0, 7) === selectedMonth
+      );
       if (!targetMonth) return [];
       const invoice = computeInvoice(card, state.installments, targetMonth);
       return [{ card, invoice }];
