@@ -162,24 +162,32 @@ export default function Dashboard() {
   const totalExpensePending = useMemo(() => expensePending.reduce((s, t) => s + t.amount, 0), [expensePending]);
   const totalIncomePending  = useMemo(() => incomePending.reduce((s, t) => s + t.amount, 0), [incomePending]);
 
+  // Ciclo de exibição por cartão — INDEPENDE do mês selecionado; baseia-se no
+  // status real HOJE (computeInvoice):
+  //   a) fatura fechada/vencida mais recente NÃO paga → "A pagar"
+  //   b) fatura aberta (ciclo corrente)              → "Em andamento"
+  // closed/overdue já implicam "não paga" (computeInvoice só devolve "paid"
+  // quando todas as parcelas do mês estão pagas); "paid" nunca entra.
   const cardInvoices = useMemo(() => {
     return state.cards.filter(c => c.active).flatMap(card => {
       const months = [...new Set(
         state.installments
           .filter(i => i.cardId === card.id)
           .map(i => i.competenceMonth),
-      )];
-      // Mostra a fatura cujo VENCIMENTO (dueDate) cai no mês selecionado — o
-      // mapeamento competência→dueDate é 1:1, então no máximo uma casa por cartão.
-      // Independe do status: exibe Paga/Em aberto/Fechada/Vencida conforme computeInvoice.
-      const targetMonth = months.find(m =>
-        computeInvoice(card, state.installments, m).dueDate.substring(0, 7) === selectedMonth
-      );
-      if (!targetMonth) return [];
-      const invoice = computeInvoice(card, state.installments, targetMonth);
-      return [{ card, invoice }];
+      )].sort(); // crescente (YYYY-MM)
+      const invoices = months.map(m => computeInvoice(card, state.installments, m));
+
+      // a pagar agora: fechada/vencida mais recente (months crescente → a última)
+      const due  = invoices.filter(inv => inv.status === "closed" || inv.status === "overdue").pop();
+      // em andamento: ciclo corrente = a aberta mais antiga (primeira ainda não fechada)
+      const open = invoices.find(inv => inv.status === "open");
+
+      return [
+        ...(due  ? [{ card, invoice: due,  kind: "due"     as const }] : []),
+        ...(open ? [{ card, invoice: open, kind: "current" as const }] : []),
+      ];
     });
-  }, [state.cards, state.installments, selectedMonth]);
+  }, [state.cards, state.installments]);
 
   // Donut: despesas pagas + parcelas do mês selecionado
   const catSlices = useMemo(() =>
@@ -699,47 +707,62 @@ export default function Dashboard() {
                 Ver →
               </Link>
             </div>
-            {cardInvoices.map(({ card, invoice }, i) => (
-              <div
-                key={card.id}
-                onClick={() => router.push(`/cartoes/${card.id}`)}
-                style={{
-                  display: "flex", alignItems: "center", gap: "12px",
-                  padding: "13px 14px",
-                  borderBottom: i < cardInvoices.length - 1 ? "1px solid var(--border)" : "none",
-                  cursor: "pointer",
-                  overflow: "hidden",
-                }}
-              >
-                <div style={{
-                  width: "36px", height: "36px", borderRadius: "10px", flexShrink: 0,
-                  background: `${card.color}20`,
-                  border: `1px solid ${card.color}35`,
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                }}>
-                  <CreditCard size={16} strokeWidth={1.5} color={card.color} />
-                </div>
-                <div style={{ flex: 1, minWidth: 0, overflow: "hidden" }}>
-                  <p style={{
-                    fontSize: "13px", fontWeight: 600, color: "var(--text-1)",
-                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+            {cardInvoices.map(({ card, invoice, kind }, i) => {
+              const isDue = kind === "due";
+              const labelText   = isDue ? "A pagar" : "Em andamento";
+              const labelColor  = isDue ? (invoice.status === "overdue" ? "var(--red)" : "var(--amber)") : "var(--text-3)";
+              const labelBg     = isDue ? (invoice.status === "overdue" ? "var(--red-10)" : "var(--amber-10)") : "rgba(255,255,255,0.04)";
+              const labelBorder = isDue ? (invoice.status === "overdue" ? "var(--red-20)" : "var(--amber-20)") : "var(--border)";
+              return (
+                <div
+                  key={`${card.id}-${invoice.competenceMonth}`}
+                  onClick={() => router.push(`/cartoes/${card.id}`)}
+                  style={{
+                    display: "flex", alignItems: "center", gap: "12px",
+                    padding: "13px 14px",
+                    borderBottom: i < cardInvoices.length - 1 ? "1px solid var(--border)" : "none",
+                    cursor: "pointer",
+                    overflow: "hidden",
+                  }}
+                >
+                  <div style={{
+                    width: "36px", height: "36px", borderRadius: "10px", flexShrink: 0,
+                    background: `${card.color}20`,
+                    border: `1px solid ${card.color}35`,
+                    display: "flex", alignItems: "center", justifyContent: "center",
                   }}>
-                    {card.name}
-                  </p>
-                  <p style={{ fontSize: "11px", color: "var(--text-3)", marginTop: "2px" }}>
-                    {`Fatura ${fullMonthLabel(invoice.dueDate.substring(0, 7))} · `}
-                    {{ paid: "Paga", closed: "Fechada", overdue: "Vencida", open: "Em aberto" }[invoice.status]}
-                    {` · Fecha ${fmtDate(invoice.closingDate)}`}
+                    <CreditCard size={16} strokeWidth={1.5} color={card.color} />
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0, overflow: "hidden" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "7px", minWidth: 0 }}>
+                      <p style={{
+                        fontSize: "13px", fontWeight: 600, color: "var(--text-1)",
+                        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                      }}>
+                        {card.name}
+                      </p>
+                      <span style={{
+                        flexShrink: 0,
+                        fontSize: "9.5px", fontWeight: 700, letterSpacing: "0.04em",
+                        textTransform: "uppercase", padding: "2px 6px", borderRadius: "5px",
+                        color: labelColor, background: labelBg, border: `1px solid ${labelBorder}`,
+                      }}>
+                        {labelText}
+                      </span>
+                    </div>
+                    <p style={{ fontSize: "11px", color: "var(--text-3)", marginTop: "2px" }}>
+                      {`Fatura ${fullMonthLabel(invoice.dueDate.substring(0, 7))} · Vence ${fmtDate(invoice.dueDate)}`}
+                    </p>
+                  </div>
+                  <p className="mono" style={{
+                    fontSize: "14px", fontWeight: 700, flexShrink: 0,
+                    color: isDue && invoice.status === "overdue" ? "var(--red)" : "var(--text-1)",
+                  }}>
+                    R$ {fmt(invoice.totalAmount)}
                   </p>
                 </div>
-                <p className="mono" style={{
-                  fontSize: "14px", fontWeight: 700, flexShrink: 0,
-                  color: invoice.status === "paid" ? "var(--green)" : invoice.status === "overdue" ? "var(--red)" : "var(--text-1)",
-                }}>
-                  R$ {fmt(invoice.totalAmount)}
-                </p>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
 
