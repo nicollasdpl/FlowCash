@@ -342,21 +342,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
       FIRESTORE_DOC(user.uid),
       (snap) => {
         if (!snap.exists()) return;
-        // Eco otimista do nosso próprio write (ainda não confirmado pelo servidor): ignora.
+        // Eco otimista do nosso próprio write (ainda não confirmado): ignora.
         if (snap.metadata.hasPendingWrites) return;
+        // Mudança local ainda não enviada: não sobrescreve — o debounce vai empurrar.
+        if (needsFirestoreSyncRef.current) return;
 
+        // 1 usuário, 1 documento → o servidor é autoritativo: aplica o estado remoto.
         const remote = snap.data() as AppState & { updatedAt?: unknown };
-        // updatedAt agora é serverTimestamp (Timestamp) → ms do SERVIDOR, imune ao
-        // relógio de cada dispositivo. Mantém compat. com docs antigos (number).
         const ts = remote.updatedAt;
         const remoteMs = ts instanceof Timestamp ? ts.toMillis()
           : typeof ts === "number" ? ts : 0;
-
-        // Aplica só se o servidor tiver algo mais novo que o estado atual.
-        if (remoteMs <= loadedAtRef.current) return;
-
         loadedAtRef.current = remoteMs;
-        needsFirestoreSyncRef.current = false; // remoto é autoritativo; não reescrever de volta
         const persisted: PersistedState = { ...(remote as AppState), updatedAt: remoteMs };
         try { localStorage.setItem("flowcash_v2", JSON.stringify(persisted)); } catch {}
         dispatch({ type: "LOAD", payload: persisted });
@@ -434,19 +430,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
         await setDoc(FIRESTORE_DOC(user.uid), { ...state, updatedAt: serverTimestamp() });
         needsFirestoreSyncRef.current = false;
       }
+      // Já empurramos a pendência acima (se havia) → o servidor agora tem a
+      // verdade. Puxa e aplica SEMPRE (sem trava de timestamp).
       const snap = await getDoc(FIRESTORE_DOC(user.uid));
       if (snap.exists()) {
         const remote = snap.data() as AppState & { updatedAt?: unknown };
         const ts = remote.updatedAt;
         const remoteMs = ts instanceof Timestamp ? ts.toMillis()
           : typeof ts === "number" ? ts : 0;
-        if (remoteMs > loadedAtRef.current) {
-          loadedAtRef.current = remoteMs;
-          needsFirestoreSyncRef.current = false;
-          const persisted: PersistedState = { ...(remote as AppState), updatedAt: remoteMs };
-          try { localStorage.setItem("flowcash_v2", JSON.stringify(persisted)); } catch {}
-          dispatch({ type: "LOAD", payload: persisted });
-        }
+        loadedAtRef.current = remoteMs;
+        const persisted: PersistedState = { ...(remote as AppState), updatedAt: remoteMs };
+        try { localStorage.setItem("flowcash_v2", JSON.stringify(persisted)); } catch {}
+        dispatch({ type: "LOAD", payload: persisted });
       }
       setLastSyncedAt(Date.now());
       setSyncState("synced");
