@@ -8,7 +8,7 @@ import {
   onAuthStateChanged, signInWithPopup,
   GoogleAuthProvider, signOut as fbSignOut,
 } from "firebase/auth";
-import { doc, onSnapshot, setDoc, serverTimestamp, Timestamp } from "firebase/firestore";
+import { doc, getDoc, onSnapshot, setDoc, serverTimestamp, Timestamp } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import type {
   Account, Transaction, CreditCard, CardPurchase, CardInstallment,
@@ -271,6 +271,9 @@ interface CtxType {
   authLoading: boolean;
   signIn: () => Promise<void>;
   signOut: () => Promise<void>;
+  syncNow: () => Promise<void>;
+  syncState: "idle" | "syncing" | "synced" | "error";
+  lastSyncedAt: number | null;
 }
 
 const Ctx = createContext<CtxType | null>(null);
@@ -285,6 +288,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [user, setUser]   = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [isReady, setIsReady]         = useState(false);
+  const [syncState, setSyncState]       = useState<"idle" | "syncing" | "synced" | "error">("idle");
+  const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(null);
 
   // Versão (ms do SERVIDOR) do dado que está no estado agora — base de comparação.
   const loadedAtRef  = useRef<number>(0);
@@ -412,6 +417,51 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.purchases, state.cards, state.installments, user, isReady]);
 
+  // ── Sincronização manual (botão) + ao voltar ao primeiro plano (PWA) ──────
+  // Empurra mudança local pendente na hora e puxa o estado do servidor (getDoc),
+  // sem depender do listener em tempo real — que o PWA suspende em segundo plano.
+  async function syncNow() {
+    if (!user) return;
+    setSyncState("syncing");
+    try {
+      if (needsFirestoreSyncRef.current) {
+        await setDoc(FIRESTORE_DOC(user.uid), { ...state, updatedAt: serverTimestamp() });
+        needsFirestoreSyncRef.current = false;
+      }
+      const snap = await getDoc(FIRESTORE_DOC(user.uid));
+      if (snap.exists()) {
+        const remote = snap.data() as AppState & { updatedAt?: unknown };
+        const ts = remote.updatedAt;
+        const remoteMs = ts instanceof Timestamp ? ts.toMillis()
+          : typeof ts === "number" ? ts : 0;
+        if (remoteMs > loadedAtRef.current) {
+          loadedAtRef.current = remoteMs;
+          needsFirestoreSyncRef.current = false;
+          const persisted: PersistedState = { ...(remote as AppState), updatedAt: remoteMs };
+          try { localStorage.setItem("flowcash_v2", JSON.stringify(persisted)); } catch {}
+          dispatch({ type: "LOAD", payload: persisted });
+        }
+      }
+      setLastSyncedAt(Date.now());
+      setSyncState("synced");
+    } catch (err) {
+      console.error("Sync error:", err);
+      setSyncState("error");
+    }
+  }
+
+  // Referência sempre atual do syncNow (evita re-subscrever o listener de foco).
+  const syncNowRef = useRef(syncNow);
+  useEffect(() => { syncNowRef.current = syncNow; });
+
+  // Auto-sincroniza quando o app volta ao primeiro plano (PWA suspende o listener).
+  useEffect(() => {
+    if (!user) return;
+    const onVis = () => { if (document.visibilityState === "visible") syncNowRef.current(); };
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
+  }, [user]);
+
   // ── Auth actions ──────────────────────────────────────────────────────────
   function signIn(): Promise<void> {
     const provider = new GoogleAuthProvider();
@@ -427,7 +477,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <Ctx.Provider value={{ state, dispatch, user, authLoading, signIn, signOut }}>
+    <Ctx.Provider value={{ state, dispatch, user, authLoading, signIn, signOut, syncNow, syncState, lastSyncedAt }}>
       {children}
     </Ctx.Provider>
   );

@@ -4,10 +4,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useApp } from "@/context/AppContext";
 import CategoryIcon from "@/components/CategoryIcon";
-import { Landmark, BarChart2, TrendingUp, ArrowUpDown, CreditCard, Target } from "lucide-react";
+import { Landmark, BarChart2, TrendingUp, ArrowUpDown, CreditCard, Target, RefreshCw } from "lucide-react";
 
 export default function Configuracoes() {
-  const { state, dispatch, user, signOut } = useApp();
+  const { state, dispatch, user, signOut, syncNow, syncState, lastSyncedAt } = useApp();
   const router = useRouter();
   const [editingName, setEditingName] = useState(false);
   const [nameInput, setNameInput] = useState(state.userName ?? "");
@@ -52,6 +52,10 @@ export default function Configuracoes() {
     { label: "Cartões", value: stats.cards, Icon: CreditCard },
     { label: "Metas", value: stats.goals, Icon: Target },
   ];
+
+  const lastSyncLabel = lastSyncedAt
+    ? new Date(lastSyncedAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
+    : null;
 
   return (
     <div style={{ padding: "16px", maxWidth: "640px", margin: "0 auto" }}>
@@ -226,6 +230,35 @@ export default function Configuracoes() {
           >
             Exportar dados (JSON)
           </button>
+
+          {/* Sincronização manual + status */}
+          <div style={{ marginTop: "12px" }}>
+            <button
+              className="btn-secondary"
+              onClick={() => { if (syncState !== "syncing") syncNow(); }}
+              disabled={syncState === "syncing"}
+              style={{ width: "100%", textAlign: "center", justifyContent: "center", display: "flex", alignItems: "center", gap: "8px" }}
+            >
+              <RefreshCw
+                size={15}
+                strokeWidth={1.5}
+                style={syncState === "syncing" ? { animation: "spin 0.8s linear infinite" } : undefined}
+              />
+              {syncState === "syncing" ? "Sincronizando..." : "Sincronizar agora"}
+            </button>
+            <p style={{
+              fontSize: "11px", marginTop: "8px", textAlign: "center",
+              color: syncState === "error" ? "var(--red)" : "var(--text-3)",
+            }}>
+              {syncState === "syncing"
+                ? "Buscando dados do servidor..."
+                : syncState === "error"
+                  ? "Falha ao sincronizar — verifique a conexão."
+                  : lastSyncLabel
+                    ? `Sincronizado às ${lastSyncLabel}`
+                    : "Sincroniza sozinho ao abrir o app."}
+            </p>
+          </div>
         </div>
       </div>
 
