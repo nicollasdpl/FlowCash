@@ -6,7 +6,7 @@ import { detectIntent, extractIntentFromAssistantContent, stripIntentPrefix } fr
 // ─── Config ───────────────────────────────────────────────────────────────────
 
 const GEMINI_URL =
-  "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-001:generateContent";
+  "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent";
 
 // Permite até ~3 tentativas (retry/backoff) dentro do limite da function serverless.
 export const maxDuration = 60;
@@ -470,9 +470,8 @@ transactions: [iFood/Alimentação 50] + answer: "Após esse lançamento, você 
       responseMimeType: "application/json",
       responseSchema,
       temperature: 0.0,
-      maxOutputTokens: 2048,
-      // gemini-2.0-flash-001 NÃO é "thinking" — sem thinkingConfig (evita 400 e o
-      // consumo de tokens de raciocínio que truncava o JSON no 2.5-flash).
+      maxOutputTokens: 2048,                  // dobro do original (1024) p/ folga
+      thinkingConfig: { thinkingBudget: 0 },  // desliga raciocínio (evita truncar o JSON)
     },
   });
 
