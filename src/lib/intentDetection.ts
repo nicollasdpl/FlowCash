@@ -79,6 +79,13 @@ export function detectIntent(
   // ── Sinais de lançamento (valor monetário ou verbo de transação) ─────────
   // "gastei" só vale como sinal de lançamento se NÃO for parte de "gastei esse mês".
   const hasGasteiVerb = /\bgastei\b/.test(m) && !hasGasteiQuestion;
+
+  // Valor monetário "solto" — cobre lançamentos sem verbo explícito:
+  // "17,97 em comida no cartão Bradesco", "50 no mercado", "12,90 Spotify".
+  const hasAmount =
+    /(?:^|\s)\d+(?:[.,]\d{1,2})?(?=\s|$)/.test(m) ||  // token numérico isolado: 50 · 17,97 · 12,90
+    /\d[.,]\d{1,2}\b/.test(m);                        // decimais mesmo grudados: "r$17,97"
+
   const hasMoney =
     m.includes("r$")           ||
     /\breais?\b/.test(m)       ||
@@ -86,7 +93,8 @@ export function detectIntent(
     /\brecebi\b/.test(m)       ||
     /\bcomprei\b/.test(m)      ||
     /\bparcelei\b/.test(m)     ||
-    hasGasteiVerb;
+    hasGasteiVerb              ||
+    hasAmount;
 
   if (hasQuestion && hasMoney) return "mixed";
   if (hasQuestion)             return "question";
