@@ -1,10 +1,10 @@
 "use client";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { useApp } from "@/context/AppContext";
+import { useApp, newId } from "@/context/AppContext";
 import { currentMonth, addMonths } from "@/engine/financialEngine";
 import { getSpentByCategory } from "@/engine/budgetEngine";
-import { AlertTriangle, BarChart2, Trash2, Package } from "lucide-react";
+import { AlertTriangle, BarChart2, Trash2, Package, Copy } from "lucide-react";
 import CategoryIcon from "@/components/CategoryIcon";
 
 const MONTH_NAMES = [
@@ -45,6 +45,37 @@ export default function Orcamentos() {
   const totalLimit = budgetsThisMonth.reduce((s, b) => s + b.limitAmount, 0);
   const totalSpent = budgetsThisMonth.reduce((s, b) => s + (spentByCategory[b.categoryId] ?? 0), 0);
   const overBudgetCount = budgetsThisMonth.filter(b => (spentByCategory[b.categoryId] ?? 0) > b.limitAmount).length;
+
+  // ── Toast simples (sem lib) ────────────────────────────────────────────────
+  const [toast, setToast] = useState("");
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (toastTimer.current) clearTimeout(toastTimer.current); }, []);
+  function showToast(msg: string) {
+    setToast(msg);
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToast(""), 3500);
+  }
+
+  // ── Copiar orçamentos do mês anterior ──────────────────────────────────────
+  function copyPreviousMonth() {
+    const prev = addMonths(selectedMonth, -1);
+    const prevLabel = fullMonthLabel(prev);
+    const prevBudgets = state.budgets.filter(b => b.month === prev);
+    if (prevBudgets.length === 0) {
+      showToast(`Nenhum orçamento encontrado em ${prevLabel}`);
+      return;
+    }
+    const toCopy = prevBudgets.filter(b => !usedCategoryIds.has(b.categoryId));
+    if (toCopy.length === 0) {
+      showToast(`Os orçamentos de ${prevLabel} já existem neste mês`);
+      return;
+    }
+    if (!confirm(`Copiar ${toCopy.length} orçamento${toCopy.length > 1 ? "s" : ""} de ${prevLabel}?`)) return;
+    toCopy.forEach(b => {
+      dispatch({ type: "ADD_BUDGET", payload: { id: newId(), categoryId: b.categoryId, limitAmount: b.limitAmount, month: selectedMonth } });
+    });
+    showToast(`${toCopy.length} orçamento${toCopy.length > 1 ? "s" : ""} copiado${toCopy.length > 1 ? "s" : ""} de ${prevLabel}`);
+  }
 
   return (
     <div style={{ padding: "20px 16px", maxWidth: "680px", margin: "0 auto" }}>
@@ -87,6 +118,18 @@ export default function Orcamentos() {
             style={{ background: "none", border: "none", color: "var(--text-2)", cursor: "pointer", fontSize: "20px", padding: "8px 16px", minHeight: "44px", minWidth: "48px", display: "flex", alignItems: "center", justifyContent: "center" }}
           >›</button>
         </div>
+      </div>
+
+      {/* Copiar mês anterior */}
+      <div className="fade-up-1" style={{ marginBottom: "16px" }}>
+        <button
+          className="btn-secondary"
+          onClick={copyPreviousMonth}
+          style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px", fontSize: "13px" }}
+        >
+          <Copy size={15} strokeWidth={1.5} />
+          Copiar mês anterior
+        </button>
       </div>
 
       {/* Resumo geral */}
@@ -138,9 +181,11 @@ export default function Orcamentos() {
           {budgetsThisMonth.map(budget => {
             const cat = state.categories.find(c => c.id === budget.categoryId);
             const spent = spentByCategory[budget.categoryId] ?? 0;
-            const pct = Math.min(Math.round((spent / budget.limitAmount) * 100), 100);
+            const rawPct = budget.limitAmount > 0 ? Math.round((spent / budget.limitAmount) * 100) : 0;
+            const barPct = Math.min(rawPct, 100);
             const over = spent > budget.limitAmount;
-            const barColor = over ? "var(--red)" : pct > 80 ? "var(--amber)" : cat?.color ?? "var(--accent)";
+            // verde < 70 · amarelo 70–90 · vermelho > 90
+            const barColor = rawPct > 90 ? "var(--red)" : rawPct >= 70 ? "var(--amber)" : "var(--green)";
 
             return (
               <div
@@ -161,69 +206,69 @@ export default function Orcamentos() {
                       : <Package size={18} strokeWidth={1.5} color="var(--text-3)" />}
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ fontSize: "14px", fontWeight: 700, color: "var(--text-1)" }}>
+                    <p style={{ fontSize: "14px", fontWeight: 700, color: "var(--text-1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                       {cat?.name ?? "—"}
                     </p>
                   </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: "8px", flexShrink: 0 }}>
-                    <div style={{ textAlign: "right" }}>
-                      <p className="mono" style={{ fontSize: "13px", fontWeight: 700, color: over ? "var(--red)" : "var(--text-1)" }}>
-                        R$ {fmt(spent)}
-                      </p>
-                      <p className="mono" style={{ fontSize: "11px", color: "var(--text-3)", marginTop: "1px" }}>
-                        / R$ {fmt(budget.limitAmount)}
-                      </p>
-                    </div>
-                    <button
-                      onClick={e => {
-                        e.stopPropagation();
-                        if (confirm(`Excluir o orçamento de ${cat?.name ?? "categoria"}?`)) {
-                          dispatch({ type: "DEL_BUDGET", payload: budget.id });
-                        }
-                      }}
-                      style={{
-                        background: "var(--red-10)", border: "1px solid var(--red-20)",
-                        borderRadius: "8px", color: "var(--red)",
-                        width: "32px", height: "32px",
-                        cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
-                        flexShrink: 0, touchAction: "manipulation",
-                      }}
-                      title="Excluir orçamento"
-                    >
-                      <Trash2 size={14} strokeWidth={1.5} />
-                    </button>
-                  </div>
+                  <button
+                    onClick={e => {
+                      e.stopPropagation();
+                      if (confirm(`Excluir o orçamento de ${cat?.name ?? "categoria"}?`)) {
+                        dispatch({ type: "DEL_BUDGET", payload: budget.id });
+                      }
+                    }}
+                    style={{
+                      background: "var(--red-10)", border: "1px solid var(--red-20)",
+                      borderRadius: "8px", color: "var(--red)",
+                      width: "32px", height: "32px",
+                      cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+                      flexShrink: 0, touchAction: "manipulation",
+                    }}
+                    title="Excluir orçamento"
+                  >
+                    <Trash2 size={14} strokeWidth={1.5} />
+                  </button>
                 </div>
 
-                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                  <div className="progress-bar-bg" style={{ flex: 1 }}>
-                    <div
-                      className="progress-bar-fill"
-                      style={{
-                        width: `${pct}%`,
-                        background: barColor,
-                        boxShadow: `0 0 6px ${barColor}55`,
-                      }}
-                    />
-                  </div>
-                  <span className="mono" style={{ fontSize: "12px", fontWeight: 700, color: barColor, flexShrink: 0 }}>
-                    {pct}%
-                  </span>
+                <div className="progress-bar-bg">
+                  <div
+                    className="progress-bar-fill"
+                    style={{ width: `${barPct}%`, background: barColor, boxShadow: `0 0 6px ${barColor}55` }}
+                  />
                 </div>
+                <p className="mono" style={{ fontSize: "11.5px", marginTop: "8px", fontWeight: 600, color: barColor }}>
+                  R$ {fmt(spent)} de R$ {fmt(budget.limitAmount)} ({rawPct}%)
+                </p>
 
                 {over && (
-                  <p style={{ fontSize: "11px", color: "var(--red)", marginTop: "8px", fontWeight: 600 }}>
+                  <p style={{ fontSize: "11px", color: "var(--red)", marginTop: "4px", fontWeight: 600 }}>
                     Excedido em R$ {fmt(spent - budget.limitAmount)}
                   </p>
                 )}
-                {!over && pct > 80 && (
-                  <p style={{ fontSize: "11px", color: "var(--amber)", marginTop: "8px", fontWeight: 600 }}>
-                    Atenção: {100 - pct}% do limite restante
+                {!over && rawPct >= 70 && (
+                  <p style={{ fontSize: "11px", color: "var(--amber)", marginTop: "4px", fontWeight: 600 }}>
+                    Atenção: {Math.max(100 - rawPct, 0)}% do limite restante
                   </p>
                 )}
               </div>
             );
           })}
+        </div>
+      )}
+
+      {toast && (
+        <div style={{
+          position: "fixed", left: "16px", right: "16px", bottom: "84px",
+          zIndex: 60, display: "flex", justifyContent: "center", pointerEvents: "none",
+        }}>
+          <div style={{
+            background: "var(--bg-card)", border: "1px solid var(--border)",
+            borderRadius: "10px", padding: "10px 16px",
+            fontSize: "12.5px", color: "var(--text-1)", fontWeight: 600,
+            boxShadow: "0 6px 20px rgba(0,0,0,0.45)", textAlign: "center", maxWidth: "100%",
+          }}>
+            {toast}
+          </div>
         </div>
       )}
     </div>
