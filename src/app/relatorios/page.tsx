@@ -1,7 +1,7 @@
 "use client";
 import { useState, useMemo, type ReactNode } from "react";
 import { useApp } from "@/context/AppContext";
-import { addMonths, currentMonth, fmt, today } from "@/engine/financialEngine";
+import { addMonths, currentMonth, fmt } from "@/engine/financialEngine";
 import { getSpentByCategory } from "@/engine/budgetEngine";
 import { auth } from "@/lib/firebase";
 import DonutChart, { type Segment } from "@/components/DonutChart";
@@ -30,10 +30,6 @@ function shortMonth(yyyymm: string): string {
 function fullMonth(yyyymm: string): string {
   const [y, m] = yyyymm.split("-").map(Number);
   return `${MONTH_NAMES[m - 1]} ${y}`;
-}
-function daysInMonth(yyyymm: string): number {
-  const [y, m] = yyyymm.split("-").map(Number);
-  return new Date(y, m, 0).getDate();
 }
 function fmtShort(v: number): string {
   if (v >= 1000) return `${(v / 1000).toFixed(v >= 10000 ? 0 : 1)}k`;
@@ -102,7 +98,6 @@ export default function Relatorios() {
   const [insightsError, setInsightsError]     = useState<string>("");
 
   const atCurrentMonth = selectedMonth === currentMonth();
-  const todayStr       = today();
 
   function changeMonth(delta: number) {
     const next = addMonths(selectedMonth, delta);
@@ -154,23 +149,26 @@ export default function Relatorios() {
   // ── Projeção (só mês corrente) ───────────────────────────────────────────
   const projection = useMemo(() => {
     if (!atCurrentMonth) return null;
-    const dim = daysInMonth(selectedMonth);
-    const todayDay = parseInt(todayStr.slice(8, 10), 10);
-    const elapsed = Math.max(1, Math.min(todayDay, dim));
 
-    const expensesSoFar = state.transactions
-      .filter(t =>
-        t.type === "expense" &&
-        t.status === "paid" &&
-        t.paymentDate.startsWith(selectedMonth) &&
-        t.paymentDate <= todayStr,
-      )
+    // Realizado: despesas já pagas com pagamento no mês.
+    const realized = state.transactions
+      .filter(t => t.type === "expense" && t.status === "paid" && t.paymentDate.startsWith(selectedMonth))
       .reduce((s, t) => s + t.amount, 0);
 
-    const projected = (expensesSoFar / elapsed) * dim;
+    // Futuro conhecido: despesas a pagar (pending/overdue) no mês
+    // + parcelas de cartão não pagas com competência no mês.
+    const pendingTx = state.transactions
+      .filter(t => t.type === "expense" && t.status !== "paid" && t.paymentDate.startsWith(selectedMonth))
+      .reduce((s, t) => s + t.amount, 0);
+    const unpaidInstallments = state.installments
+      .filter(i => i.competenceMonth === selectedMonth && !i.paid)
+      .reduce((s, i) => s + i.amount, 0);
+    const futureKnown = pendingTx + unpaidInstallments;
+
+    const projected = realized + futureKnown;
     const income    = selectedData.income;
-    return { projected, income, expensesSoFar, elapsed, dim, danger: projected > income && income > 0 };
-  }, [atCurrentMonth, selectedMonth, state.transactions, todayStr, selectedData.income]);
+    return { projected, realized, futureKnown, income, danger: projected > income && income > 0 };
+  }, [atCurrentMonth, selectedMonth, state.transactions, state.installments, selectedData.income]);
 
   // ── Donut + lista de categorias (mês selecionado vs anterior) ────────────
   type CatRow = { id: string; name: string; color: string; icon: string; spent: number; prevSpent: number; pct: number; variation: number | null };
@@ -383,7 +381,7 @@ export default function Relatorios() {
             </p>
           </div>
           <p style={{ fontSize: "12px", color: "var(--text-3)", lineHeight: 1.5 }}>
-            Baseado em <span style={{ color: "var(--text-2)", fontWeight: 600 }}>R$ {fmt(projection.expensesSoFar)}</span> gastos em <span style={{ color: "var(--text-2)", fontWeight: 600 }}>{projection.elapsed}</span> dia{projection.elapsed > 1 ? "s" : ""}.
+            Baseado em gastos realizados + compromissos futuros do mês.
             Receita do mês: <span style={{ color: "var(--green)", fontWeight: 600 }}>R$ {fmt(projection.income)}</span>.
           </p>
           {projection.danger && (
