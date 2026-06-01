@@ -49,13 +49,13 @@ export function buildCatSlices(
     return map[catId];
   }
 
-  // 1. Despesas pagas com competenceDate no mês.
+  // 1. Despesas (qualquer status) com competenceDate no mês — alinhado ao
+  // getSpentByCategory (Relatórios/Orçamentos): visão por competência.
   // Exclui a liquidação de fatura (categoria de sistema): o gasto do cartão já
   // entra pelas parcelas no passo 2, com as categorias reais das compras.
   transactions
     .filter(t =>
       t.type === "expense" &&
-      t.status === "paid" &&
       t.competenceDate.startsWith(month) &&
       t.categoryId !== SEED_INVOICE_PAYMENT_CATEGORY_ID
     )
