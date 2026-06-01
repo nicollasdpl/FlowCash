@@ -8,7 +8,7 @@ import {
   onAuthStateChanged, signInWithPopup,
   GoogleAuthProvider, signOut as fbSignOut,
 } from "firebase/auth";
-import { doc, onSnapshot, setDoc } from "firebase/firestore";
+import { doc, onSnapshot, setDoc, serverTimestamp, Timestamp } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import type {
   Account, Transaction, CreditCard, CardPurchase, CardInstallment,
@@ -286,10 +286,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [authLoading, setAuthLoading] = useState(true);
   const [isReady, setIsReady]         = useState(false);
 
-  // Timestamp do dado que está no estado agora (para comparar com Firestore)
+  // Versão (ms do SERVIDOR) do dado que está no estado agora — base de comparação.
   const loadedAtRef  = useRef<number>(0);
-  // Timestamp do nosso último write no Firestore (para ignorar o echo do onSnapshot)
-  const ownSaveTsRef = useRef<number>(0);
   // True somente quando o usuário fez uma mudança real — evita salvar dados de localStorage no Firestore
   const needsFirestoreSyncRef = useRef<boolean>(false);
 
@@ -306,7 +304,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (!firebaseUser) {
         dispatch({ type: "LOAD", payload: seed });
         loadedAtRef.current         = 0;
-        ownSaveTsRef.current        = 0;
         needsFirestoreSyncRef.current = false;
         setAuthLoading(false);
         setIsReady(false);
@@ -338,17 +335,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
       FIRESTORE_DOC(user.uid),
       (snap) => {
         if (!snap.exists()) return;
-        const remote = snap.data() as PersistedState;
-        const remoteTs = remote.updatedAt ?? 0;
-        // Ignora o echo do nosso próprio write recente
-        if (remoteTs <= ownSaveTsRef.current) return;
-        // Ignora se já temos dado igual ou mais novo
-        if (remoteTs <= loadedAtRef.current) return;
-        // Dado mais recente vindo de outro dispositivo — aplicar
-        loadedAtRef.current = remoteTs;
+        // Eco otimista do nosso próprio write (ainda não confirmado pelo servidor): ignora.
+        if (snap.metadata.hasPendingWrites) return;
+
+        const remote = snap.data() as AppState & { updatedAt?: unknown };
+        // updatedAt agora é serverTimestamp (Timestamp) → ms do SERVIDOR, imune ao
+        // relógio de cada dispositivo. Mantém compat. com docs antigos (number).
+        const ts = remote.updatedAt;
+        const remoteMs = ts instanceof Timestamp ? ts.toMillis()
+          : typeof ts === "number" ? ts : 0;
+
+        // Aplica só se o servidor tiver algo mais novo que o estado atual.
+        if (remoteMs <= loadedAtRef.current) return;
+
+        loadedAtRef.current = remoteMs;
         needsFirestoreSyncRef.current = false; // remoto é autoritativo; não reescrever de volta
-        try { localStorage.setItem("flowcash_v2", JSON.stringify(remote)); } catch {}
-        dispatch({ type: "LOAD", payload: remote });
+        const persisted: PersistedState = { ...(remote as AppState), updatedAt: remoteMs };
+        try { localStorage.setItem("flowcash_v2", JSON.stringify(persisted)); } catch {}
+        dispatch({ type: "LOAD", payload: persisted });
       },
       (err) => console.error("Firestore snapshot error:", err),
     );
@@ -357,9 +361,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [user]);
 
   // ── Salva localStorage imediatamente a cada dispatch ──────────────────────
+  // updatedAt = última versão conhecida do servidor (loadedAtRef), pra manter a
+  // comparação de versão sempre no MESMO domínio de tempo (servidor).
   useEffect(() => {
     if (!user) return;
-    const toSave: PersistedState = { ...state, updatedAt: Date.now() };
+    const toSave: PersistedState = { ...state, updatedAt: loadedAtRef.current };
     try { localStorage.setItem("flowcash_v2", JSON.stringify(toSave)); } catch {}
   }, [state, user]);
 
@@ -368,14 +374,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!isReady || !user) return;
     if (!needsFirestoreSyncRef.current) return; // não salvar carregamentos de storage
     const timer = setTimeout(async () => {
-      const ts = Date.now();
-      const toSave: PersistedState = { ...state, updatedAt: ts };
-      ownSaveTsRef.current = ts; // marca antes do await para ganhar corrida com onSnapshot
+      // updatedAt = serverTimestamp(): ordenação por relógio do SERVIDOR, imune à
+      // diferença de horário entre dispositivos. O eco local é ignorado no
+      // onSnapshot via metadata.hasPendingWrites.
       try {
-        await setDoc(FIRESTORE_DOC(user.uid), toSave);
+        await setDoc(FIRESTORE_DOC(user.uid), { ...state, updatedAt: serverTimestamp() });
+        needsFirestoreSyncRef.current = false;
       } catch (err) {
         console.error("Firestore save error:", err);
-        ownSaveTsRef.current = 0; // reset para que o próximo snapshot possa recuperar
       }
     }, 1500);
     return () => clearTimeout(timer);
