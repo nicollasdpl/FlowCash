@@ -124,10 +124,11 @@ export default function Dashboard() {
     [state.transactions, selectedMonth]
   );
 
-  // Receita por COMPETÊNCIA (qualquer status).
+  // Receita por CAIXA (estilo Mobills): só conta quando entrou de fato
+  // (status "paid" + paymentDate no mês).
   const monthIncome = useMemo(() =>
     state.transactions
-      .filter(t => t.type === "income" && t.competenceDate.startsWith(selectedMonth))
+      .filter(t => t.type === "income" && t.status === "paid" && t.paymentDate.startsWith(selectedMonth))
       .reduce((s, t) => s + t.amount, 0),
     [state.transactions, selectedMonth]
   );
