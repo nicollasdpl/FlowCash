@@ -1,6 +1,6 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+import { getFirestore, initializeFirestore, type Firestore } from "firebase/firestore";
 
 const firebaseConfig = {
   apiKey:            process.env.NEXT_PUBLIC_FIREBASE_API_KEY!,
@@ -14,4 +14,12 @@ const firebaseConfig = {
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 
 export const auth = getAuth(app);
-export const db   = getFirestore(app);
+// ignoreUndefinedProperties: omite campos `undefined` (ex.: isSubscription, notes,
+// recurringRuleId) em vez de quebrar o setDoc — era o que travava o sync.
+export const db: Firestore = (() => {
+  try {
+    return initializeFirestore(app, { ignoreUndefinedProperties: true });
+  } catch {
+    return getFirestore(app);
+  }
+})();
