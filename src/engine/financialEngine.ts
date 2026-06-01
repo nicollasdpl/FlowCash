@@ -147,7 +147,6 @@ export function getProjectedBalance(
 
   // Subtract unpaid invoices (closed or overdue) whose dueDate falls within the period.
   // Mirrors getInvoiceDates: both closingDate and dueDate are in the competenceMonth itself.
-  const tdStr = today();
   for (const card of cards) {
     if (card.paymentAccountId !== account.id) continue;
     const cardInst = installments.filter(i => i.cardId === card.id);
@@ -160,7 +159,6 @@ export function getProjectedBalance(
       // Inline mirror of getInvoiceDates (no import — circular dep with invoiceEngine)
       const [y, m] = month.split("-").map(Number);
       const lastDay = new Date(y, m, 0).getDate();
-      const closingDate = `${month}-${String(Math.min(card.closingDay, lastDay)).padStart(2, "0")}`;
       let dueDate: string;
       if (card.dueDay > card.closingDay) {
         dueDate = `${month}-${String(Math.min(card.dueDay, lastDay)).padStart(2, "0")}`;
@@ -170,7 +168,6 @@ export function getProjectedBalance(
         dueDate = `${nextMonth}-${String(Math.min(card.dueDay, new Date(ny, nm, 0).getDate())).padStart(2, "0")}`;
       }
       if (dueDate > upToDate) continue;
-      if (tdStr < closingDate) continue; // still open — not yet a firm liability
       balance -= unpaidTotal;
     }
   }
