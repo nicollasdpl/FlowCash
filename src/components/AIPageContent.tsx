@@ -303,6 +303,7 @@ export default function AIPageContent() {
   const [flash, setFlash]             = useState(false);
   const [flashCount, setFlashCount]   = useState(0);
   const [retryIn, setRetryIn]         = useState<number | null>(null);
+  const [retryReason, setRetryReason] = useState<string>("");
   const [hints, setHints]             = useState<Hints>({});
   const [autoConfirmIn, setAutoConfirmIn] = useState<number | null>(null);
   const [chatHistory, setChatHistory] = useState<ChatTurn[]>([]);
@@ -587,6 +588,7 @@ export default function AIPageContent() {
         (data.code === "HTTP_429" || data.code === "HTTP_503" || data.code === "TIMEOUT")
       ) {
         setLoading(false);
+        setRetryReason(typeof data.message === "string" ? data.message : "");
         const secs = (data as AIError).retryAfterSec ?? (data.code === "HTTP_429" ? 30 : 15);
         startRetry(msg, secs);
         return;
@@ -941,6 +943,11 @@ export default function AIPageContent() {
               <p style={{ fontSize: "12px", color: "var(--text-3)", marginTop: "2px", lineHeight: 1.4 }}>
                 Reenviando automaticamente em {retryIn}s
               </p>
+              {retryReason && (
+                <p style={{ fontSize: "10.5px", color: "var(--text-3)", marginTop: "4px", lineHeight: 1.35, wordBreak: "break-word", opacity: 0.85 }}>
+                  {retryReason}
+                </p>
+              )}
             </div>
           </div>
         )}

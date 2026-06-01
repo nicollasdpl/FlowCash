@@ -477,7 +477,7 @@ transactions: [iFood/Alimentação 50] + answer: "Após esse lançamento, você 
 
   // 503/500/502/504 e timeout/rede são transitórios (modelo sobrecarregado/lento)
   // → re-tenta com backoff antes de desistir. 429 (rate limit) NÃO entra aqui.
-  const MAX_ATTEMPTS = 3;
+  const MAX_ATTEMPTS = 2;
   const TRANSIENT_HTTP = new Set([500, 502, 503, 504]);
   let geminiRes: Response | null = null;
 
@@ -528,8 +528,10 @@ transactions: [iFood/Alimentação 50] + answer: "Após esse lançamento, você 
     console.error(`[AI] HTTP ${geminiRes.status}:`, errBody.slice(0, 400));
 
     if (geminiRes.status === 429) {
+      // Inclui o motivo do Gemini (qual quota estourou) p/ diagnóstico na UI.
+      const reason = errBody.replace(/\s+/g, " ").trim().slice(0, 200);
       return NextResponse.json(
-        { intent: "error", code: "HTTP_429", message: "Limite da API Gemini atingido. Aguarde alguns segundos.", retryAfterSec: 30 },
+        { intent: "error", code: "HTTP_429", message: `Limite da API Gemini atingido. ${reason}`, retryAfterSec: 30 },
         { status: 429 }
       );
     }
