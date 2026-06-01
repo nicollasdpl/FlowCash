@@ -10,6 +10,7 @@ import {
   currentMonth, addMonths, fmt, today,
 } from "@/engine/financialEngine";
 import { computeInvoice } from "@/engine/invoiceEngine";
+import { getSpentByCategory } from "@/engine/budgetEngine";
 import {
   AlertTriangle, CreditCard, Wallet, TrendingUp, Package, RefreshCw,
   ArrowDown, ArrowUp, ChevronDown, ChevronUp,
@@ -123,13 +124,20 @@ export default function Dashboard() {
     [state.transactions, selectedMonth]
   );
 
+  // Receita por COMPETÊNCIA (qualquer status).
   const monthIncome = useMemo(() =>
-    monthTxs.filter(t => t.type === "income").reduce((s, t) => s + t.amount, 0),
-    [monthTxs]
+    state.transactions
+      .filter(t => t.type === "income" && t.competenceDate.startsWith(selectedMonth))
+      .reduce((s, t) => s + t.amount, 0),
+    [state.transactions, selectedMonth]
   );
+  // Despesa = MESMA base do donut: getSpentByCategory (competência + parcelas de
+  // cartão, exclui "Pagamento de Fatura"). Assim "Despesas" bate com o Total do relatório.
   const monthExpense = useMemo(() =>
-    monthTxs.filter(t => t.type === "expense").reduce((s, t) => s + t.amount, 0),
-    [monthTxs]
+    Object.values(
+      getSpentByCategory(selectedMonth, state.transactions, state.installments, state.purchases)
+    ).reduce((s, v) => s + v, 0),
+    [selectedMonth, state.transactions, state.installments, state.purchases]
   );
   const monthBalance = monthIncome - monthExpense;
 
