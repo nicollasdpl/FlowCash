@@ -2,6 +2,7 @@
 import { useRouter } from "next/navigation";
 import { useApp } from "@/context/AppContext";
 import { Target, Pencil, Trash2, CheckCircle } from "lucide-react";
+import CategoryIcon, { isLucideIcon } from "@/components/CategoryIcon";
 
 function fmt(v: number) {
   return v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -82,8 +83,12 @@ export default function Metas() {
                 <div style={{
                   width: "42px", height: "42px", borderRadius: "12px", flexShrink: 0,
                   background: `${goal.color}18`, border: `1px solid ${goal.color}30`,
-                  display: "flex", alignItems: "center", justifyContent: "center", fontSize: "20px",
-                }}>{goal.emoji}</div>
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                }}>
+                  {isLucideIcon(goal.emoji)
+                    ? <CategoryIcon icon={goal.emoji} color={goal.color} size={20} />
+                    : <Target size={20} strokeWidth={1.5} color={goal.color} />}
+                </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: "14px", fontWeight: 700, color: "var(--text-1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {goal.name}

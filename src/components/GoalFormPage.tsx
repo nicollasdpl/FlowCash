@@ -3,9 +3,10 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useApp, newId } from "@/context/AppContext";
 import type { Goal } from "@/context/AppContext";
+import CategoryIcon, { isLucideIcon } from "@/components/CategoryIcon";
 
 const GOAL_COLORS = ["#00E5C3", "#9B6DFF", "#4B8BF5", "#22D47A", "#F5A623", "#FF4D6A"];
-const GOAL_EMOJIS = ["🏦", "✈️", "💻", "🚗", "🏠", "📚", "💍", "🎯", "⚽", "🏋️"];
+const GOAL_ICONS = ["Target", "Star", "Car", "Home", "Plane", "ShoppingBag", "PiggyBank", "GraduationCap", "Heart", "Gift", "Smartphone", "Dumbbell"];
 
 interface Props {
   goal?: Goal;
@@ -16,7 +17,9 @@ export default function GoalFormPage({ goal }: Props) {
   const { state, dispatch } = useApp();
 
   const [name, setName] = useState(goal?.name ?? "");
-  const [emoji, setEmoji] = useState(goal?.emoji ?? "🎯");
+  // Reusa o campo `emoji` do Goal, mas agora guarda um NOME de ícone Lucide.
+  // Meta antiga (emoji literal) cai pro default Lucide ao editar.
+  const [emoji, setEmoji] = useState(goal?.emoji && isLucideIcon(goal.emoji) ? goal.emoji : "Target");
   const [targetAmount, setTargetAmount] = useState(goal ? String(goal.targetAmount) : "");
   const [currentAmount, setCurrentAmount] = useState(goal ? String(goal.currentAmount) : "0");
   const [deadline, setDeadline] = useState(goal?.deadline && goal.deadline !== "2099-12-31" ? goal.deadline : "");
@@ -101,22 +104,28 @@ export default function GoalFormPage({ goal }: Props) {
       {/* ── Form ── */}
       <div style={{ padding: "20px 16px 140px" }}>
 
-        {/* Emoji */}
+        {/* Ícone */}
         <div className="form-group">
-          <label className="form-label">Emoji</label>
+          <label className="form-label">Ícone</label>
           <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-            {GOAL_EMOJIS.map(e => (
-              <button
-                key={e}
-                onClick={() => setEmoji(e)}
-                style={{
-                  width: "44px", height: "44px", borderRadius: "12px", fontSize: "20px",
-                  background: emoji === e ? "var(--accent-10)" : "rgba(255,255,255,0.04)",
-                  border: emoji === e ? "1px solid var(--border-accent)" : "1px solid var(--border)",
-                  cursor: "pointer", touchAction: "manipulation",
-                }}
-              >{e}</button>
-            ))}
+            {GOAL_ICONS.map(name => {
+              const selected = emoji === name;
+              return (
+                <button
+                  key={name}
+                  onClick={() => setEmoji(name)}
+                  style={{
+                    width: "44px", height: "44px", borderRadius: "12px",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    background: selected ? "var(--accent-10)" : "rgba(255,255,255,0.04)",
+                    border: selected ? "1px solid var(--border-accent)" : "1px solid var(--border)",
+                    cursor: "pointer", touchAction: "manipulation",
+                  }}
+                >
+                  <CategoryIcon icon={name} color={selected ? "var(--accent)" : "var(--text-3)"} size={20} />
+                </button>
+              );
+            })}
           </div>
         </div>
 

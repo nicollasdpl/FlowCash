@@ -61,7 +61,7 @@ export default function GoalDepositFormPage({ goalId }: Props) {
           }}
         >‹</button>
         <span style={{ fontSize: "17px", fontWeight: 700, color: "var(--text-1)", flex: 1 }}>
-          {goal.emoji} Adicionar valor
+          Adicionar valor
         </span>
       </div>
 

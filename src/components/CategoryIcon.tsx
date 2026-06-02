@@ -24,3 +24,7 @@ export function iconLabel(icon: string, name: string): string {
   const comp = LucideIcons[icon as keyof typeof LucideIcons];
   return comp !== undefined ? name : `${icon} ${name}`;
 }
+
+export function isLucideIcon(name: string): boolean {
+  return LucideIcons[name as keyof typeof LucideIcons] !== undefined;
+}
