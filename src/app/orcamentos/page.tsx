@@ -2,9 +2,10 @@
 import { useState, useMemo, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useApp, newId } from "@/context/AppContext";
+import { auth } from "@/lib/firebase";
 import { currentMonth, addMonths } from "@/engine/financialEngine";
 import { getSpentByCategory } from "@/engine/budgetEngine";
-import { AlertTriangle, BarChart2, Trash2, Package, Copy } from "lucide-react";
+import { AlertTriangle, BarChart2, Trash2, Package, Copy, Sparkles } from "lucide-react";
 import CategoryIcon from "@/components/CategoryIcon";
 
 const MONTH_NAMES = [
@@ -77,6 +78,70 @@ export default function Orcamentos() {
     showToast(`${toCopy.length} orçamento${toCopy.length > 1 ? "s" : ""} copiado${toCopy.length > 1 ? "s" : ""} de ${prevLabel}`);
   }
 
+  // ── Sugestão de orçamentos por IA ──────────────────────────────────────────
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiSuggestions, setAiSuggestions] = useState<{ categoryId: string; amount: number }[] | null>(null);
+
+  async function suggestBudgets() {
+    const user = auth.currentUser;
+    if (!user) { showToast("Faça login para usar a sugestão por IA."); return; }
+    setAiLoading(true);
+    try {
+      const idToken = await user.getIdToken();
+      // gastos reais dos 3 meses anteriores ao selecionado
+      const months = [addMonths(selectedMonth, -1), addMonths(selectedMonth, -2), addMonths(selectedMonth, -3)];
+      const spentLast3Months: { categoryId: string; month: string; spent: number }[] = [];
+      for (const month of months) {
+        const map = getSpentByCategory(month, state.transactions, state.installments, state.purchases);
+        for (const [categoryId, spent] of Object.entries(map)) {
+          if (spent > 0) spentLast3Months.push({ categoryId, month, spent });
+        }
+      }
+      const categories = state.categories
+        .filter(c => c.type === "expense" && !c.isSystem)
+        .map(c => ({ id: c.id, name: c.name }));
+
+      const res = await fetch("/api/ai-budget", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${idToken}` },
+        body: JSON.stringify({ categories, spentLast3Months }),
+      });
+      const data = await res.json();
+      if (!res.ok || !Array.isArray(data.suggestions)) {
+        showToast(res.status === 429 ? "Limite da IA atingido. Tente em instantes." : "Não consegui sugerir agora. Tente novamente.");
+        return;
+      }
+      // só categorias que ainda não têm orçamento no mês
+      const filtered = (data.suggestions as { categoryId: string; amount: number }[])
+        .filter(s => !usedCategoryIds.has(s.categoryId) && s.amount > 0);
+      if (filtered.length === 0) {
+        showToast("Sem sugestões novas (categorias já orçadas ou sem histórico).");
+        return;
+      }
+      setAiSuggestions(filtered);
+    } catch {
+      showToast("Erro ao chamar a sugestão por IA.");
+    } finally {
+      setAiLoading(false);
+    }
+  }
+
+  function updateSuggestion(categoryId: string, amount: number) {
+    setAiSuggestions(prev => prev ? prev.map(s => s.categoryId === categoryId ? { ...s, amount } : s) : prev);
+  }
+
+  function applySuggestions() {
+    if (!aiSuggestions) return;
+    let created = 0;
+    aiSuggestions.forEach(s => {
+      if (usedCategoryIds.has(s.categoryId) || !s.amount || s.amount <= 0) return;
+      dispatch({ type: "ADD_BUDGET", payload: { id: newId(), categoryId: s.categoryId, limitAmount: s.amount, month: selectedMonth } });
+      created++;
+    });
+    setAiSuggestions(null);
+    showToast(`${created} orçamento${created !== 1 ? "s" : ""} criado${created !== 1 ? "s" : ""} pela IA`);
+  }
+
   return (
     <div style={{ padding: "20px 16px", maxWidth: "680px", margin: "0 auto" }}>
 
@@ -120,17 +185,83 @@ export default function Orcamentos() {
         </div>
       </div>
 
-      {/* Copiar mês anterior */}
-      <div className="fade-up-1" style={{ marginBottom: "16px" }}>
+      {/* Ações: copiar mês anterior + sugerir por IA */}
+      <div className="fade-up-1" style={{ marginBottom: "16px", display: "flex", gap: "8px" }}>
         <button
           className="btn-secondary"
           onClick={copyPreviousMonth}
-          style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px", fontSize: "13px" }}
+          style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: "8px", fontSize: "13px" }}
         >
           <Copy size={15} strokeWidth={1.5} />
           Copiar mês anterior
         </button>
+        <button
+          className="btn-secondary"
+          onClick={suggestBudgets}
+          disabled={aiLoading}
+          aria-label="Sugerir orçamentos por IA"
+          title="Sugerir orçamentos por IA"
+          style={{ width: "48px", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, opacity: aiLoading ? 0.6 : 1 }}
+        >
+          {aiLoading ? (
+            <div style={{ width: "15px", height: "15px", border: "2px solid var(--accent)", borderTopColor: "transparent", borderRadius: "50%", animation: "spin 0.7s linear infinite" }} />
+          ) : (
+            <Sparkles size={16} strokeWidth={1.5} />
+          )}
+        </button>
       </div>
+
+      {/* Card de revisão das sugestões da IA */}
+      {aiSuggestions && (
+        <div className="card fade-up-2" style={{ padding: "14px 16px", marginBottom: "16px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
+            <Sparkles size={15} strokeWidth={1.5} color="var(--accent)" />
+            <p style={{ fontSize: "11px", fontWeight: 700, color: "var(--accent)", letterSpacing: "0.06em", textTransform: "uppercase" }}>
+              Sugestão de orçamentos
+            </p>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+            {aiSuggestions.map(s => {
+              const cat = state.categories.find(c => c.id === s.categoryId);
+              return (
+                <div key={s.categoryId} style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                  <div style={{
+                    width: "32px", height: "32px", borderRadius: "9px", flexShrink: 0,
+                    background: cat ? `${cat.color}18` : "rgba(255,255,255,0.06)",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                  }}>
+                    {cat?.icon
+                      ? <CategoryIcon icon={cat.icon} color={cat.color} size={15} />
+                      : <Package size={15} strokeWidth={1.5} color="var(--text-3)" />}
+                  </div>
+                  <span style={{ flex: 1, minWidth: 0, fontSize: "13px", color: "var(--text-1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {cat?.name ?? "—"}
+                  </span>
+                  <div style={{ display: "flex", alignItems: "center", gap: "5px", flexShrink: 0 }}>
+                    <span style={{ fontSize: "12px", color: "var(--text-3)" }}>R$</span>
+                    <input
+                      className="mono"
+                      type="text"
+                      inputMode="numeric"
+                      value={s.amount ? String(s.amount) : ""}
+                      onChange={e => updateSuggestion(s.categoryId, parseInt(e.target.value.replace(/\D/g, "")) || 0)}
+                      style={{ width: "78px", textAlign: "right", background: "var(--bg-input)", border: "1px solid var(--border)", borderRadius: "8px", padding: "6px 8px", color: "var(--text-1)", fontSize: "13px", fontFamily: "inherit" }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <div style={{ display: "flex", gap: "8px", marginTop: "14px" }}>
+            <button className="btn-primary" onClick={applySuggestions} style={{ flex: 1, textAlign: "center", justifyContent: "center" }}>
+              Aplicar sugestões
+            </button>
+            <button className="btn-secondary" onClick={() => setAiSuggestions(null)} style={{ padding: "0 16px" }}>
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Resumo geral */}
       {budgetsThisMonth.length > 0 && (
