@@ -171,13 +171,13 @@ export default function Dashboard() {
   const totalExpensePending = useMemo(() => expensePending.reduce((s, t) => s + t.amount, 0), [expensePending]);
   const totalIncomePending  = useMemo(() => incomePending.reduce((s, t) => s + t.amount, 0), [incomePending]);
 
-  // Ciclo de exibição por cartão — INDEPENDE do mês selecionado; baseia-se no
-  // status real HOJE (computeInvoice):
-  //   a) fatura fechada/vencida mais recente NÃO paga → "A pagar"
-  //   b) fatura aberta (ciclo corrente)              → "Em andamento"
-  // closed/overdue já implicam "não paga" (computeInvoice só devolve "paid"
-  // quando todas as parcelas do mês estão pagas); "paid" nunca entra.
+  // Exibição por cartão, em função do mês selecionado:
+  //   1) Sempre a fatura cujo VENCIMENTO cai no selectedMonth (open→"open"; closed/overdue→"due").
+  //   2) Só no mês atual: TAMBÉM faturas closed/overdue de meses anteriores (alerta de atraso) → "due".
+  //   3) Em outros meses: apenas a do item 1.
+  // "paid" nunca entra (computeInvoice só devolve "paid" com tudo pago).
   const cardInvoices = useMemo(() => {
+    const cm = currentMonth();
     return state.cards.filter(c => c.active).flatMap(card => {
       const months = [...new Set(
         state.installments
@@ -186,17 +186,27 @@ export default function Dashboard() {
       )].sort(); // crescente (YYYY-MM)
       const invoices = months.map(m => computeInvoice(card, state.installments, m));
 
-      // a pagar agora: fechada/vencida mais recente (months crescente → a última)
-      const due  = invoices.filter(inv => inv.status === "closed" || inv.status === "overdue").pop();
-      // em andamento: ciclo corrente = a aberta mais antiga (primeira ainda não fechada)
-      const open = invoices.find(inv => inv.status === "open");
+      // 1. Fatura que vence no mês selecionado (ignora paga).
+      const ofMonth = invoices.find(
+        inv => inv.dueDate.substring(0, 7) === selectedMonth && inv.status !== "paid",
+      );
+
+      // 2. No mês atual: atrasos (closed/overdue) de meses anteriores, fora a do item 1.
+      const overdueAlerts = selectedMonth === cm
+        ? invoices.filter(inv =>
+            (inv.status === "closed" || inv.status === "overdue") &&
+            inv.dueDate.substring(0, 7) < cm &&
+            inv.competenceMonth !== ofMonth?.competenceMonth)
+        : [];
 
       return [
-        ...(due  ? [{ card, invoice: due,  kind: "due"     as const }] : []),
-        ...(open ? [{ card, invoice: open, kind: "current" as const }] : []),
+        ...(ofMonth
+          ? [{ card, invoice: ofMonth, kind: (ofMonth.status === "open" ? "open" : "due") as "due" | "open" }]
+          : []),
+        ...overdueAlerts.map(inv => ({ card, invoice: inv, kind: "due" as const })),
       ];
     });
-  }, [state.cards, state.installments]);
+  }, [state.cards, state.installments, selectedMonth]);
 
   // Donut: despesas pagas + parcelas do mês selecionado
   const catSlices = useMemo(() =>
