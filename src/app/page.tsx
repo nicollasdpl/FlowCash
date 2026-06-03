@@ -171,13 +171,10 @@ export default function Dashboard() {
   const totalExpensePending = useMemo(() => expensePending.reduce((s, t) => s + t.amount, 0), [expensePending]);
   const totalIncomePending  = useMemo(() => incomePending.reduce((s, t) => s + t.amount, 0), [incomePending]);
 
-  // Exibição por cartão, em função do mês selecionado:
-  //   1) Sempre a fatura cujo VENCIMENTO cai no selectedMonth (open→"open"; closed/overdue→"due").
-  //   2) Só no mês atual: TAMBÉM faturas closed/overdue de meses anteriores (alerta de atraso) → "due".
-  //   3) Em outros meses: apenas a do item 1.
-  // "paid" nunca entra (computeInvoice só devolve "paid" com tudo pago).
+  // Exibição por cartão:
+  //   1) Fatura cujo VENCIMENTO cai no selectedMonth (se houver) — open→"open", closed/overdue→"due"; paga não entra.
+  //   2) Fatura "open" (em andamento) — SEMPRE, independente do mês — exceto se já entrou no item 1.
   const cardInvoices = useMemo(() => {
-    const cm = currentMonth();
     return state.cards.filter(c => c.active).flatMap(card => {
       const months = [...new Set(
         state.installments
@@ -190,20 +187,16 @@ export default function Dashboard() {
       const ofMonth = invoices.find(
         inv => inv.dueDate.substring(0, 7) === selectedMonth && inv.status !== "paid",
       );
-
-      // 2. No mês atual: atrasos (closed/overdue) de meses anteriores, fora a do item 1.
-      const overdueAlerts = selectedMonth === cm
-        ? invoices.filter(inv =>
-            (inv.status === "closed" || inv.status === "overdue") &&
-            inv.dueDate.substring(0, 7) < cm &&
-            inv.competenceMonth !== ofMonth?.competenceMonth)
-        : [];
+      // 2. Fatura em andamento (open) — sempre; deduplica se for a mesma do item 1.
+      const open = invoices.find(inv => inv.status === "open");
 
       return [
         ...(ofMonth
           ? [{ card, invoice: ofMonth, kind: (ofMonth.status === "open" ? "open" : "due") as "due" | "open" }]
           : []),
-        ...overdueAlerts.map(inv => ({ card, invoice: inv, kind: "due" as const })),
+        ...(open && open.competenceMonth !== ofMonth?.competenceMonth
+          ? [{ card, invoice: open, kind: "open" as const }]
+          : []),
       ];
     });
   }, [state.cards, state.installments, selectedMonth]);
