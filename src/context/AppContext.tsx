@@ -280,6 +280,9 @@ interface CtxType {
 const Ctx = createContext<CtxType | null>(null);
 
 const FIRESTORE_DOC = (uid: string) => doc(db, "users", uid, "app", "state");
+// Cache local por CONTA (uid). Evita que outra conta no mesmo navegador veja/
+// herde os dados via localStorage. (A chave antiga compartilhada era "flowcash_v2".)
+const LS_KEY = (uid: string) => `flowcash_v2_${uid}`;
 
 // Formato persistido — AppState + campo de versionamento (nunca entra no reducer)
 type PersistedState = AppState & { updatedAt?: number };
@@ -325,15 +328,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!user) return;
 
-    // 1. Exibe localStorage imediatamente — sem esperar o Firestore
+    // Segurança/migração: remove o cache legado COMPARTILHADO entre contas
+    // (vazava os dados de uma conta para outra no mesmo navegador).
+    try { localStorage.removeItem("flowcash_v2"); } catch {}
+
+    // 1. Exibe o cache DESTA conta imediatamente; sem cache, começa limpo (seed).
+    //    O Firestore (por uid) restaura os dados na sequência.
     try {
-      const raw = localStorage.getItem("flowcash_v2");
+      const raw = localStorage.getItem(LS_KEY(user.uid));
       if (raw) {
         const local = JSON.parse(raw) as PersistedState;
         loadedAtRef.current = local.updatedAt ?? 0;
         dispatch({ type: "LOAD", payload: local });
+      } else {
+        loadedAtRef.current = 0;
+        dispatch({ type: "LOAD", payload: seed });
       }
-    } catch {}
+    } catch {
+      loadedAtRef.current = 0;
+      dispatch({ type: "LOAD", payload: seed });
+    }
 
     setIsReady(true);
 
@@ -356,7 +370,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (remoteMs <= loadedAtRef.current) return;
         loadedAtRef.current = remoteMs;
         const persisted: PersistedState = { ...(remote as AppState), updatedAt: remoteMs };
-        try { localStorage.setItem("flowcash_v2", JSON.stringify(persisted)); } catch {}
+        try { localStorage.setItem(LS_KEY(user.uid), JSON.stringify(persisted)); } catch {}
         dispatch({ type: "LOAD", payload: persisted });
       },
       (err) => console.error("Firestore snapshot error:", err),
@@ -371,7 +385,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!user) return;
     const toSave: PersistedState = { ...state, updatedAt: loadedAtRef.current };
-    try { localStorage.setItem("flowcash_v2", JSON.stringify(toSave)); } catch {}
+    try { localStorage.setItem(LS_KEY(user.uid), JSON.stringify(toSave)); } catch {}
   }, [state, user]);
 
   // ── Salva no Firestore com debounce de 1.5s (apenas mudanças do usuário) ──
@@ -443,7 +457,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (remoteMs > loadedAtRef.current) {
           loadedAtRef.current = remoteMs;
           const persisted: PersistedState = { ...(remote as AppState), updatedAt: remoteMs };
-          try { localStorage.setItem("flowcash_v2", JSON.stringify(persisted)); } catch {}
+          try { localStorage.setItem(LS_KEY(user.uid), JSON.stringify(persisted)); } catch {}
           dispatch({ type: "LOAD", payload: persisted });
         }
       }

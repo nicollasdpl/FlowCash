@@ -29,7 +29,7 @@ export default function Configuracoes() {
   }
 
   function clearAllData() {
-    localStorage.removeItem("flowcash_v2");
+    localStorage.removeItem(`flowcash_v2_${user?.uid}`);
     window.location.reload();
   }
 
@@ -218,7 +218,7 @@ export default function Configuracoes() {
           <button
             className="btn-secondary"
             onClick={() => {
-              const data = JSON.stringify(JSON.parse(localStorage.getItem("flowcash_v2") ?? "{}"), null, 2);
+              const data = JSON.stringify(JSON.parse(localStorage.getItem(`flowcash_v2_${user?.uid}`) ?? "{}"), null, 2);
               const blob = new Blob([data], { type: "application/json" });
               const url = URL.createObjectURL(blob);
               const a = document.createElement("a");
