@@ -173,7 +173,8 @@ export default function Dashboard() {
 
   // Exibição por cartão:
   //   1) Fatura cujo VENCIMENTO cai no selectedMonth (se houver) — open→"open", closed/overdue→"due"; paga não entra.
-  //   2) Fatura "open" (em andamento) — SEMPRE, independente do mês — exceto se já entrou no item 1.
+  //   2) Fatura "overdue" de mês anterior ao selecionado — APENAS se não houve item 1
+  //      (compromisso vencido afetando a projeção).
   const cardInvoices = useMemo(() => {
     return state.cards.filter(c => c.active).flatMap(card => {
       const months = [...new Set(
@@ -187,15 +188,18 @@ export default function Dashboard() {
       const ofMonth = invoices.find(
         inv => inv.dueDate.substring(0, 7) === selectedMonth && inv.status !== "paid",
       );
-      // 2. Fatura em andamento (open) — sempre; deduplica se for a mesma do item 1.
-      const open = invoices.find(inv => inv.status === "open");
+      // 2. Só se o cartão não teve item 1: fatura vencida (overdue) de mês anterior
+      //    ao selecionado — compromisso atrasado (mais recente).
+      const overduePast = ofMonth
+        ? undefined
+        : invoices.filter(inv => inv.status === "overdue" && inv.dueDate.substring(0, 7) < selectedMonth).pop();
 
       return [
         ...(ofMonth
           ? [{ card, invoice: ofMonth, kind: (ofMonth.status === "open" ? "open" : "due") as "due" | "open" }]
           : []),
-        ...(open && open.competenceMonth !== ofMonth?.competenceMonth
-          ? [{ card, invoice: open, kind: "open" as const }]
+        ...(overduePast
+          ? [{ card, invoice: overduePast, kind: "due" as const }]
           : []),
       ];
     });
