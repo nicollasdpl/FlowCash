@@ -171,10 +171,9 @@ export default function Dashboard() {
   const totalExpensePending = useMemo(() => expensePending.reduce((s, t) => s + t.amount, 0), [expensePending]);
   const totalIncomePending  = useMemo(() => incomePending.reduce((s, t) => s + t.amount, 0), [incomePending]);
 
-  // Exibição por cartão:
+  // Exibição por cartão — EXATAMENTE UMA fatura por cartão (sem duplicata, sem sumir):
   //   1) Fatura cujo VENCIMENTO cai no selectedMonth (se houver) — open→"open", closed/overdue→"due"; paga não entra.
-  //   2) Fatura "overdue" de mês anterior ao selecionado — APENAS se não houve item 1
-  //      (compromisso vencido afetando a projeção).
+  //   2) Senão: fatura "open" (ciclo corrente) — PRIORIDADE — OU "overdue" de mês anterior.
   const cardInvoices = useMemo(() => {
     return state.cards.filter(c => c.active).flatMap(card => {
       const months = [...new Set(
@@ -188,20 +187,18 @@ export default function Dashboard() {
       const ofMonth = invoices.find(
         inv => inv.dueDate.substring(0, 7) === selectedMonth && inv.status !== "paid",
       );
-      // 2. Só se o cartão não teve item 1: fatura vencida (overdue) de mês anterior
-      //    ao selecionado — compromisso atrasado (mais recente).
-      const overduePast = ofMonth
-        ? undefined
-        : invoices.filter(inv => inv.status === "overdue" && inv.dueDate.substring(0, 7) < selectedMonth).pop();
+      // 2. Fallback (só se não houve item 1): "open" (ciclo corrente) tem prioridade;
+      //    senão a "overdue" de mês anterior mais recente.
+      const open = invoices.find(inv => inv.status === "open");
+      const overduePast = invoices.filter(
+        inv => inv.status === "overdue" && inv.dueDate.substring(0, 7) < selectedMonth,
+      ).pop();
 
-      return [
-        ...(ofMonth
-          ? [{ card, invoice: ofMonth, kind: (ofMonth.status === "open" ? "open" : "due") as "due" | "open" }]
-          : []),
-        ...(overduePast
-          ? [{ card, invoice: overduePast, kind: "due" as const }]
-          : []),
-      ];
+      // Exatamente uma por cartão: item 1 > open > overdue.
+      const chosen = ofMonth ?? open ?? overduePast;
+      return chosen
+        ? [{ card, invoice: chosen, kind: (chosen.status === "open" ? "open" : "due") as "due" | "open" }]
+        : [];
     });
   }, [state.cards, state.installments, selectedMonth]);
 
