@@ -6,21 +6,24 @@ function SparkleIcon() {
     <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
       <path d="M12 2L13.9 9.1L21 11L13.9 12.9L12 20L10.1 12.9L3 11L10.1 9.1L12 2Z" />
       <circle cx="19" cy="4" r="1.5" opacity="0.5" />
-      <circle cx="5"  cy="18" r="1"   opacity="0.4" />
+      <circle cx="5" cy="18" r="1" opacity="0.4" />
     </svg>
   );
 }
 
 export default function AIAssistant() {
   const pathname = usePathname();
-  const router   = useRouter();
+  const router = useRouter();
 
-  if (pathname !== "/") return null;
+  if (pathname === "/assistente") return null;
 
   return (
     <button
-      onClick={() => router.push("/assistente")}
-      aria-label="Abrir assistente IA"
+      onClick={() => {
+        const from = pathname === "/assistente" ? "/" : pathname;
+        router.push(`/assistente?from=${encodeURIComponent(from)}`);
+      }}
+      aria-label="Abrir Copiloto Financeiro"
       style={{
         position: "fixed",
         bottom: "calc(var(--bottom-nav-total, 48px) + 14px)",
