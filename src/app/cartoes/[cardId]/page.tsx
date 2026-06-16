@@ -219,7 +219,9 @@ export default function CartaoDetail() {
       </div>
 
       {/* ── Content ── */}
-      <div style={{ padding: "16px 16px 80px" }}>
+      <div style={{
+        padding: "16px 16px calc(var(--fab-bottom) + var(--page-fab-h) + var(--fab-stack-gap) + var(--copilot-fab-size) + 16px)",
+      }}>
 
         {/* ── Resumo do limite ── */}
         {limitSummary && (

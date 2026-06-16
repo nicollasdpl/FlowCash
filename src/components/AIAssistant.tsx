@@ -11,11 +11,18 @@ function SparkleIcon() {
   );
 }
 
+/** Páginas com FAB de ação próprio no canto inferior direito */
+function hasStackedPageFab(pathname: string) {
+  return /^\/cartoes\/(?!nova$)[^/]+$/.test(pathname);
+}
+
 export default function AIAssistant() {
   const pathname = usePathname();
   const router = useRouter();
 
   if (pathname === "/assistente") return null;
+
+  const stacked = hasStackedPageFab(pathname);
 
   return (
     <button
@@ -26,7 +33,9 @@ export default function AIAssistant() {
       aria-label="Abrir Copiloto Financeiro"
       style={{
         position: "fixed",
-        bottom: "calc(var(--bottom-nav-total, 48px) + 14px)",
+        bottom: stacked
+          ? "calc(var(--fab-bottom) + var(--page-fab-h) + var(--fab-stack-gap))"
+          : "var(--fab-bottom)",
         right: "16px",
         zIndex: 300,
         width: "52px",
