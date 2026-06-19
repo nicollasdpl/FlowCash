@@ -12,6 +12,7 @@ export interface CatItem {
   date: string;           // YYYY-MM-DD
   amount: number;
   isCard: boolean;
+  cardName?: string;
   installmentLabel?: string; // "2/12" para parceladas
 }
 
@@ -31,6 +32,7 @@ export function buildCatSlices(
   installments: CardInstallment[],
   purchases: CardPurchase[],
   categories: { id: string; name: string; color: string }[],
+  cards: { id: string; name: string }[],
   month: string,
 ): CatSlice[] {
   const map: Record<string, CatSlice> = {};
@@ -77,6 +79,7 @@ export function buildCatSlices(
     .forEach(i => {
       const purchase = purchases.find(p => p.id === i.purchaseId);
       if (!purchase) return;
+      const card = cards.find(c => c.id === i.cardId);
       const slice = ensure(purchase.categoryId || "__none__");
       slice.totalAmount += i.amount;
       slice.items.push({
@@ -85,6 +88,7 @@ export function buildCatSlices(
         date: purchase.purchaseDate,
         amount: i.amount,
         isCard: true,
+        cardName: card?.name,
         installmentLabel: i.totalInstallments > 1
           ? `${i.installmentNumber}/${i.totalInstallments}`
           : undefined,
@@ -319,8 +323,16 @@ export function CategoryDonutSection({
                       background: "rgba(255,184,48,0.1)",
                       color: "var(--amber)", border: "1px solid var(--amber-20)",
                       letterSpacing: "0.04em",
+                      maxWidth: "120px",
+                      overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                     }}>
-                      {item.installmentLabel ? `PARCELA ${item.installmentLabel}` : "CARTÃO"}
+                      {item.cardName
+                        ? item.installmentLabel
+                          ? `${item.cardName.toUpperCase()} · ${item.installmentLabel}`
+                          : item.cardName.toUpperCase()
+                        : item.installmentLabel
+                          ? `PARCELA ${item.installmentLabel}`
+                          : "CARTÃO"}
                     </span>
                   )}
                 </div>

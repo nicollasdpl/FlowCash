@@ -209,9 +209,10 @@ export default function Dashboard() {
       state.installments,
       state.purchases,
       state.categories,
+      state.cards,
       selectedMonth,
     ),
-    [state.transactions, state.installments, state.purchases, state.categories, selectedMonth]
+    [state.transactions, state.installments, state.purchases, state.categories, state.cards, selectedMonth]
   );
 
   // Máximo 3 lançamentos recentes
