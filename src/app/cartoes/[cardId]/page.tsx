@@ -1,5 +1,5 @@
 "use client";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { useApp, newId } from "@/context/AppContext";
 import type { CardInstallment } from "@/context/AppContext";
@@ -8,7 +8,7 @@ import {
   getCardLimitSummary, getCurrentBalance, currentMonth, addMonths, today,
 } from "@/engine/financialEngine";
 import {
-  getCardInvoices, getInstallmentsByMonth, getInvoiceDates,
+  getCardInvoices, getInstallmentsByMonth, getInvoiceDates, getDefaultInvoiceMonth,
 } from "@/engine/invoiceEngine";
 import { Pencil, Package, Plus, Trash2 } from "lucide-react";
 import CategoryIcon from "@/components/CategoryIcon";
@@ -48,10 +48,15 @@ export default function CartaoDetail() {
   const [payError, setPayError] = useState("");
   const [payWarning, setPayWarning] = useState("");
 
+  // Ao abrir o cartão, foca na fatura em aberto (não no mês do calendário).
+  useEffect(() => {
+    if (!card) return;
+    setSelectedMonth(getDefaultInvoiceMonth(card, state.installments));
+  }, [cardId]); // eslint-disable-line react-hooks/exhaustive-deps -- só ao trocar de cartão
+
   const months = useMemo(() => {
-    const cm = currentMonth();
-    return Array.from({ length: 5 }, (_, i) => addMonths(cm, i - 1));
-  }, []);
+    return Array.from({ length: 5 }, (_, i) => addMonths(selectedMonth, i - 2));
+  }, [selectedMonth]);
 
   const invoices = useMemo(() => {
     if (!card) return [];
@@ -146,6 +151,12 @@ export default function CartaoDetail() {
         createdAt: new Date().toISOString(),
       },
     });
+
+    const paidIds = new Set(pendingInsts.map(i => i.id));
+    const nextInstallments = state.installments.map(i =>
+      paidIds.has(i.id) ? { ...i, paid: true, paidAt: todayDate } : i,
+    );
+    setSelectedMonth(getDefaultInvoiceMonth(card, nextInstallments));
   }
 
   if (!card) {

@@ -170,6 +170,25 @@ export function getCurrentInvoice(
   return computeInvoice(card, installments, currentMonth());
 }
 
+// ─── MÊS PADRÃO AO ABRIR O CARTÃO ────────────────────────────────────────────
+// Prioridade: fatura em aberto (ciclo corrente) → fechada/vencida pendente → mês atual.
+export function getDefaultInvoiceMonth(
+  card: CreditCard,
+  installments: CardInstallment[],
+): string {
+  const invoices = getCardInvoices(card, installments, 3);
+
+  const open = invoices.find(inv => inv.status === "open");
+  if (open) return open.competenceMonth;
+
+  const pending = invoices
+    .filter(inv => inv.status !== "paid" && inv.totalAmount > 0)
+    .sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+  if (pending.length > 0) return pending[0].competenceMonth;
+
+  return currentMonth();
+}
+
 // ─── PARCELAS DA FATURA ATUAL ────────────────────────────────────────────────
 export function getCurrentInvoiceInstallments(
   card: CreditCard,
