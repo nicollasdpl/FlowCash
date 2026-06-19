@@ -2,7 +2,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useApp } from "@/context/AppContext";
-import { currentMonth, addMonths, fmt, getProjectedBalance, today } from "@/engine/financialEngine";
+import { currentMonth, addMonths, fmt, getProjectedBalance, today, isBalanceNegative, isBalancePositive } from "@/engine/financialEngine";
 import { Search, TrendingUp, Package, RefreshCw, Pencil, Trash2, SlidersHorizontal, X, ArrowLeftRight } from "lucide-react";
 import CategoryIcon from "@/components/CategoryIcon";
 import type { Transaction, TransactionType } from "@/types/financial";
@@ -334,13 +334,13 @@ export default function Transacoes() {
           style={{
             padding: "13px 14px",
             gridColumn: "1 / -1",
-            background: totalProjected < 0 ? "var(--red-10)" : "var(--accent-10)",
-            borderColor: totalProjected < 0 ? "var(--red-20)" : "var(--border-accent)",
+            background: isBalanceNegative(totalProjected) ? "var(--red-10)" : "var(--accent-10)",
+            borderColor: isBalanceNegative(totalProjected) ? "var(--red-20)" : "var(--border-accent)",
           }}
         >
           <p style={{
             fontSize: "10px",
-            color: totalProjected < 0 ? "var(--red)" : "var(--accent)",
+            color: isBalanceNegative(totalProjected) ? "var(--red)" : isBalancePositive(totalProjected) ? "var(--accent)" : "var(--text-2)",
             fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase",
             marginBottom: "4px",
           }}>
@@ -348,9 +348,9 @@ export default function Transacoes() {
           </p>
           <p className="mono" style={{
             fontSize: "17px", fontWeight: 700,
-            color: totalProjected < 0 ? "var(--red)" : "var(--green)",
+            color: isBalanceNegative(totalProjected) ? "var(--red)" : isBalancePositive(totalProjected) ? "var(--green)" : "var(--text-2)",
           }}>
-            {totalProjected < 0 ? "−" : ""}R$ {fmt(Math.abs(totalProjected))}
+            {isBalanceNegative(totalProjected) ? "−" : ""}R$ {fmt(Math.abs(totalProjected))}
           </p>
         </div>
       </div>
@@ -507,9 +507,9 @@ export default function Transacoes() {
                     </p>
                     <p className="mono" style={{
                       fontSize: "11px", fontWeight: 600,
-                      color: net >= 0 ? "var(--green)" : "var(--red)",
+                      color: isBalanceNegative(net) ? "var(--red)" : isBalancePositive(net) ? "var(--green)" : "var(--text-2)",
                     }}>
-                      {net >= 0 ? "+" : "−"}R$ {fmt(Math.abs(net))}
+                      {isBalancePositive(net) ? "+" : isBalanceNegative(net) ? "−" : ""}R$ {fmt(Math.abs(net))}
                     </p>
                   </div>
 

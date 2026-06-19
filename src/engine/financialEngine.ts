@@ -37,8 +37,24 @@ export function currentMonth(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
+/** Half-cent tolerance — values within this range display as zero (R$ 0,00). */
+export const BALANCE_EPSILON = 0.005;
+
+export function normalizeBalance(v: number): number {
+  return Math.abs(v) < BALANCE_EPSILON ? 0 : v;
+}
+
+export function isBalanceNegative(v: number): boolean {
+  return v < -BALANCE_EPSILON;
+}
+
+export function isBalancePositive(v: number): boolean {
+  return v > BALANCE_EPSILON;
+}
+
 export function fmt(v: number): string {
-  return v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const n = normalizeBalance(v);
+  return n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 export function fmtShort(v: number): string {
@@ -80,7 +96,7 @@ export function getCurrentBalance(account: Account, transactions: Transaction[])
   );
   for (const t of transfersIn) balance += t.amount;
 
-  return balance;
+  return normalizeBalance(balance);
 }
 
 // ─── SALDO PROJETADO ─────────────────────────────────────────────────────────
@@ -172,7 +188,7 @@ export function getProjectedBalance(
     }
   }
 
-  return balance;
+  return normalizeBalance(balance);
 }
 
 // ─── SALDO DISPONÍVEL ────────────────────────────────────────────────────────
@@ -189,7 +205,7 @@ export function getAvailableBalance(
   const reserved = goals
     .filter(g => g.accountId === account.id && !g.completed)
     .reduce((s, g) => s + g.currentAmount, 0);
-  return projected - reserved;
+  return normalizeBalance(projected - reserved);
 }
 
 // ─── SALDO COMPLETO DE UMA CONTA ─────────────────────────────────────────────
@@ -371,7 +387,7 @@ export function getMonthlyProjections(
       projectedExpense: expense,
       projectedBalance: runningBalance,
       riskLevel:
-        runningBalance < 0 ? "danger"
+        isBalanceNegative(runningBalance) ? "danger"
         : runningBalance < expense * 0.3 ? "warning"
         : "safe",
     });

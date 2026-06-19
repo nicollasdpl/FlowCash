@@ -1,7 +1,7 @@
 "use client";
 import { useState, useMemo, type ReactNode } from "react";
 import { useApp } from "@/context/AppContext";
-import { addMonths, currentMonth, fmt } from "@/engine/financialEngine";
+import { addMonths, currentMonth, fmt, isBalanceNegative, isBalancePositive } from "@/engine/financialEngine";
 import { getSpentByCategory } from "@/engine/budgetEngine";
 import { auth } from "@/lib/firebase";
 import DonutChart, { type Segment } from "@/components/DonutChart";
@@ -352,8 +352,8 @@ export default function Relatorios() {
         />
         <SummaryCard
           label="Saldo líquido"
-          value={`${balance < 0 ? "−" : ""}R$ ${fmt(Math.abs(balance))}`}
-          valueColor={balance < 0 ? "var(--red)" : "var(--accent)"}
+          value={`${isBalanceNegative(balance) ? "−" : ""}R$ ${fmt(Math.abs(balance))}`}
+          valueColor={isBalanceNegative(balance) ? "var(--red)" : isBalancePositive(balance) ? "var(--accent)" : "var(--text-2)"}
         />
         <SummaryCard
           label="Maior gasto"

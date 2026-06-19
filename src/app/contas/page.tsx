@@ -5,11 +5,18 @@ import { useApp } from "@/context/AppContext";
 import type { Account } from "@/context/AppContext";
 import {
   getCurrentBalance, getProjectedBalance, getAvailableBalance,
+  fmt, isBalanceNegative, isBalancePositive,
 } from "@/engine/financialEngine";
 import { Landmark, Pencil } from "lucide-react";
 
-function fmt(v: number) {
-  return v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+function balanceColor(
+  v: number,
+  positive: string,
+  zero: string = "var(--text-1)",
+): string {
+  if (isBalanceNegative(v)) return "var(--red)";
+  if (isBalancePositive(v)) return positive;
+  return zero;
 }
 
 const typeLabels: Record<Account["type"], string> = {
@@ -62,7 +69,7 @@ export default function Contas() {
           <p style={{ fontSize: "11px", color: "var(--text-3)", fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", marginBottom: "8px" }}>
             Saldo total atual
           </p>
-          <p className="mono" style={{ fontSize: "28px", fontWeight: 700, color: totalCurrent >= 0 ? "var(--green)" : "var(--red)", letterSpacing: "-0.03em" }}>
+          <p className="mono" style={{ fontSize: "28px", fontWeight: 700, color: balanceColor(totalCurrent, "var(--green)"), letterSpacing: "-0.03em" }}>
             R$ {fmt(totalCurrent)}
           </p>
           <p style={{ fontSize: "11.5px", color: "var(--text-3)", marginTop: "6px" }}>Apenas transações pagas</p>
@@ -71,7 +78,7 @@ export default function Contas() {
           <p style={{ fontSize: "11px", color: "var(--text-3)", fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", marginBottom: "8px" }}>
             Projetado (fim do mês)
           </p>
-          <p className="mono" style={{ fontSize: "28px", fontWeight: 700, color: totalProjected >= 0 ? "var(--text-1)" : "var(--red)", letterSpacing: "-0.03em" }}>
+          <p className="mono" style={{ fontSize: "28px", fontWeight: 700, color: balanceColor(totalProjected, "var(--text-1)"), letterSpacing: "-0.03em" }}>
             R$ {fmt(totalProjected)}
           </p>
           <p style={{ fontSize: "11.5px", color: "var(--text-3)", marginTop: "6px" }}>Incluindo pendentes do mês</p>
@@ -131,9 +138,9 @@ export default function Contas() {
 
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "10px" }}>
                 {[
-                  { label: "Saldo atual",  value: current,   color: current >= 0   ? "var(--green)"  : "var(--red)", help: "Transações pagas" },
-                  { label: "Projetado",    value: projected, color: projected >= 0  ? "var(--text-1)" : "var(--red)", help: "Com pendentes do mês" },
-                  { label: "Disponível",   value: available, color: available >= 0  ? "var(--accent)" : "var(--red)", help: `Reservado para metas: R$ ${fmt(reserved)}` },
+                  { label: "Saldo atual",  value: current,   color: balanceColor(current, "var(--green)"), help: "Transações pagas" },
+                  { label: "Projetado",    value: projected, color: balanceColor(projected, "var(--text-1)"), help: "Com pendentes do mês" },
+                  { label: "Disponível",   value: available, color: balanceColor(available, "var(--accent)"), help: `Reservado para metas: R$ ${fmt(reserved)}` },
                 ].map((metric, j) => (
                   <div key={j} style={{
                     background: "rgba(255,255,255,0.03)", border: "1px solid var(--border)",

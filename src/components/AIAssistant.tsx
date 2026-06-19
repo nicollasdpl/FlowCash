@@ -34,7 +34,9 @@ export default function AIAssistant() {
       style={{
         position: "fixed",
         bottom: stacked
-          ? "calc(var(--fab-bottom) + var(--page-fab-h) + var(--fab-stack-gap))"
+          ? pathname === "/"
+            ? "calc(var(--fab-bottom) + var(--copilot-fab-size) + var(--fab-stack-gap))"
+            : "calc(var(--fab-bottom) + var(--page-fab-h) + var(--fab-stack-gap))"
           : "var(--fab-bottom)",
         right: "16px",
         zIndex: 300,

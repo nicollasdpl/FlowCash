@@ -8,6 +8,7 @@ import type { Transaction } from "@/context/AppContext";
 import {
   getCurrentBalance, getProjectedBalance,
   currentMonth, addMonths, fmt, today,
+  isBalanceNegative, isBalancePositive,
 } from "@/engine/financialEngine";
 import { computeInvoice } from "@/engine/invoiceEngine";
 import { getSpentByCategory } from "@/engine/budgetEngine";
@@ -90,13 +91,22 @@ export default function Dashboard() {
 
   const touchStartX = useRef<number>(0);
   const touchStartY = useRef<number>(0);
+  const touchScrolled = useRef(false);
 
   function handleTouchStart(e: React.TouchEvent) {
     touchStartX.current = e.touches[0].clientX;
     touchStartY.current = e.touches[0].clientY;
+    touchScrolled.current = false;
+  }
+
+  function handleTouchMove(e: React.TouchEvent) {
+    if (Math.abs(e.touches[0].clientY - touchStartY.current) > 8) {
+      touchScrolled.current = true;
+    }
   }
 
   function handleTouchEnd(e: React.TouchEvent) {
+    if (touchScrolled.current) return;
     const dx = touchStartX.current - e.changedTouches[0].clientX;
     const dy = Math.abs(touchStartY.current - e.changedTouches[0].clientY);
     if (Math.abs(dx) > 60 && Math.abs(dx) > dy * 1.5) {
@@ -322,11 +332,12 @@ export default function Dashboard() {
       <div
         style={{
           padding: "16px",
-          paddingBottom: "calc(var(--fab-bottom) + var(--page-fab-h) + var(--fab-stack-gap) + var(--copilot-fab-size) + 16px)",
+          paddingBottom: "calc(var(--fab-bottom) + var(--copilot-fab-size) + var(--fab-stack-gap) + var(--copilot-fab-size) + 16px)",
           maxWidth: "680px",
           margin: "0 auto",
         }}
         onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
       >
 
@@ -420,7 +431,8 @@ export default function Dashboard() {
           </p>
           <p className="mono" style={{
             fontSize: "34px", fontWeight: 700, letterSpacing: "-0.03em",
-            color: totalBalance >= 0 ? "var(--text-1)" : "var(--red)",
+            color: isBalanceNegative(totalBalance) ? "var(--red)"
+              : isBalancePositive(totalBalance) ? "var(--green)" : "var(--text-1)",
             lineHeight: 1,
           }}>
             R$ {fmt(totalBalance)}
@@ -435,7 +447,8 @@ export default function Dashboard() {
               <p style={{ fontSize: "11px", color: "var(--text-3)" }}>Projetado:</p>
               <p className="mono" style={{
                 fontSize: "15px", fontWeight: 700,
-                color: totalProjected >= 0 ? "var(--accent)" : "var(--red)",
+                color: isBalanceNegative(totalProjected) ? "var(--red)"
+                  : isBalancePositive(totalProjected) ? "var(--accent)" : "var(--text-2)",
               }}>
                 R$ {fmt(totalProjected)}
               </p>
@@ -451,7 +464,7 @@ export default function Dashboard() {
           {[
             { label: "Receitas", value: monthIncome, color: "var(--green)", icon: "↑", href: "/transacoes?tipo=income" },
             { label: "Despesas", value: monthExpense, color: monthExpense > monthIncome ? "var(--red)" : "var(--text-1)", icon: "↓", href: "/transacoes?tipo=expense" },
-            { label: "Balanço", value: monthBalance, color: monthBalance >= 0 ? "var(--accent)" : "var(--red)", icon: monthBalance >= 0 ? "+" : "", prefix: true, href: null },
+            { label: "Balanço", value: monthBalance, color: isBalanceNegative(monthBalance) ? "var(--red)" : isBalancePositive(monthBalance) ? "var(--accent)" : "var(--text-2)", icon: isBalancePositive(monthBalance) ? "+" : "", prefix: true, href: null },
           ].map((m, i) => (
             <div
               key={i}
@@ -471,7 +484,7 @@ export default function Dashboard() {
                 fontSize: "13px", fontWeight: 700, color: m.color,
                 overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
               }}>
-                {m.prefix && m.value > 0 ? "+" : ""}
+                {m.prefix && isBalancePositive(m.value) ? "+" : ""}
                 {Math.abs(m.value) >= 1000
                   ? `${(m.value / 1000).toFixed(1)}k`
                   : fmt(m.value)}
@@ -907,7 +920,7 @@ export default function Dashboard() {
 
       </div>
 
-      {/* ── FAB Nova transação ── */}
+      {/* ── FAB Nova transação (ícone) ── */}
       <button
         onClick={() => router.push("/transacoes/nova")}
         aria-label="Nova transação"
@@ -916,26 +929,22 @@ export default function Dashboard() {
           bottom: "var(--fab-bottom)",
           right: "20px",
           zIndex: 50,
-          height: "var(--page-fab-h)",
-          padding: "0 20px",
-          borderRadius: "24px",
+          width: "var(--copilot-fab-size)",
+          height: "var(--copilot-fab-size)",
+          borderRadius: "50%",
           background: "var(--accent)",
           color: "#06100E",
           border: "none",
           cursor: "pointer",
-          fontFamily: "inherit",
-          fontSize: "14px",
-          fontWeight: 700,
           display: "flex",
           alignItems: "center",
-          gap: "7px",
+          justifyContent: "center",
           boxShadow: "0 4px 16px rgba(0,229,160,0.45), 0 0 0 1px rgba(0,229,160,0.15)",
           touchAction: "manipulation",
           WebkitTapHighlightColor: "transparent",
         }}
       >
-        <Plus size={17} strokeWidth={2.5} />
-        Nova transação
+        <Plus size={22} strokeWidth={2.5} />
       </button>
     </>
   );
