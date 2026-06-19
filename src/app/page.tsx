@@ -13,7 +13,7 @@ import { computeInvoice } from "@/engine/invoiceEngine";
 import { getSpentByCategory } from "@/engine/budgetEngine";
 import {
   AlertTriangle, CreditCard, Wallet, TrendingUp, Package, RefreshCw,
-  ArrowDown, ArrowUp, ChevronDown, ChevronUp,
+  ArrowDown, ArrowUp, ChevronDown, ChevronUp, Plus,
 } from "lucide-react";
 import CategoryIcon from "@/components/CategoryIcon";
 import { CategoryDonutSection, buildCatSlices } from "@/components/CategoryDonutSection";
@@ -320,38 +320,28 @@ export default function Dashboard() {
       />
 
       <div
-        style={{ padding: "16px", maxWidth: "680px", margin: "0 auto" }}
+        style={{
+          padding: "16px",
+          paddingBottom: "calc(var(--fab-bottom) + var(--page-fab-h) + var(--fab-stack-gap) + var(--copilot-fab-size) + 16px)",
+          maxWidth: "680px",
+          margin: "0 auto",
+        }}
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
       >
 
         {/* ── 1. Saudação + data ── */}
-        <div className="fade-up-1" style={{
-          display: "flex", justifyContent: "space-between",
-          alignItems: "center", marginBottom: "16px",
-        }}>
-          <div style={{ minWidth: 0, flex: 1, paddingRight: "12px" }}>
-            <p style={{
-              fontSize: "18px", fontWeight: 700, color: "var(--text-1)",
-              letterSpacing: "-0.02em", lineHeight: 1.2,
-              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-            }}>
-              {name ? `${greeting()}, ${name}` : greeting()}
-            </p>
-            <p style={{ fontSize: "11.5px", color: "var(--text-3)", marginTop: "3px" }}>
-              {new Date().toLocaleDateString("pt-BR", { weekday: "short", day: "numeric", month: "short" })}
-            </p>
-          </div>
-          <button
-            className="btn-primary"
-            onClick={() => router.push("/transacoes/nova")}
-            style={{
-              fontSize: "24px", padding: "0",
-              width: "44px", height: "44px",
-              borderRadius: "13px", flexShrink: 0,
-              display: "flex", alignItems: "center", justifyContent: "center",
-            }}
-          >+</button>
+        <div className="fade-up-1" style={{ marginBottom: "16px" }}>
+          <p style={{
+            fontSize: "18px", fontWeight: 700, color: "var(--text-1)",
+            letterSpacing: "-0.02em", lineHeight: 1.2,
+            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+          }}>
+            {name ? `${greeting()}, ${name}` : greeting()}
+          </p>
+          <p style={{ fontSize: "11.5px", color: "var(--text-3)", marginTop: "3px" }}>
+            {new Date().toLocaleDateString("pt-BR", { weekday: "short", day: "numeric", month: "short" })}
+          </p>
         </div>
 
         {/* ── 2. Navegação de mês ── */}
@@ -916,6 +906,37 @@ export default function Dashboard() {
         </div>
 
       </div>
+
+      {/* ── FAB Nova transação ── */}
+      <button
+        onClick={() => router.push("/transacoes/nova")}
+        aria-label="Nova transação"
+        style={{
+          position: "fixed",
+          bottom: "var(--fab-bottom)",
+          right: "20px",
+          zIndex: 50,
+          height: "var(--page-fab-h)",
+          padding: "0 20px",
+          borderRadius: "24px",
+          background: "var(--accent)",
+          color: "#06100E",
+          border: "none",
+          cursor: "pointer",
+          fontFamily: "inherit",
+          fontSize: "14px",
+          fontWeight: 700,
+          display: "flex",
+          alignItems: "center",
+          gap: "7px",
+          boxShadow: "0 4px 16px rgba(0,229,160,0.45), 0 0 0 1px rgba(0,229,160,0.15)",
+          touchAction: "manipulation",
+          WebkitTapHighlightColor: "transparent",
+        }}
+      >
+        <Plus size={17} strokeWidth={2.5} />
+        Nova transação
+      </button>
     </>
   );
 }

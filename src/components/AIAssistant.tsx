@@ -13,7 +13,7 @@ function SparkleIcon() {
 
 /** Páginas com FAB de ação próprio no canto inferior direito */
 function hasStackedPageFab(pathname: string) {
-  return /^\/cartoes\/(?!nova$)[^/]+$/.test(pathname);
+  return pathname === "/" || /^\/cartoes\/(?!nova$)[^/]+$/.test(pathname);
 }
 
 export default function AIAssistant() {
