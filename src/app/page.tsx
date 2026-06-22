@@ -726,16 +726,17 @@ export default function Dashboard() {
             </div>
             {cardInvoices.map(({ card, invoice, kind }, i) => {
               const isDue = kind === "due";
-              const labelText   = isDue ? "A pagar" : "Em andamento";
-              const labelColor  = isDue ? (invoice.status === "overdue" ? "var(--red)" : "var(--amber)") : "var(--text-3)";
-              const labelBg     = isDue ? (invoice.status === "overdue" ? "var(--red-10)" : "var(--amber-10)") : "rgba(255,255,255,0.04)";
-              const labelBorder = isDue ? (invoice.status === "overdue" ? "var(--red-20)" : "var(--amber-20)") : "var(--border)";
+              const isOverdue = isDue && invoice.status === "overdue";
+              const labelText = isOverdue ? "Vencida" : isDue ? "A pagar" : "Aberta";
+              const labelColor  = isOverdue ? "var(--red)" : isDue ? "var(--amber)" : "var(--text-3)";
+              const labelBg     = isOverdue ? "var(--red-10)" : isDue ? "var(--amber-10)" : "rgba(255,255,255,0.04)";
+              const labelBorder = isOverdue ? "var(--red-20)" : isDue ? "var(--amber-20)" : "var(--border)";
               return (
                 <div
                   key={`${card.id}-${invoice.competenceMonth}`}
                   onClick={() => router.push(`/cartoes/${card.id}`)}
                   style={{
-                    display: "flex", alignItems: "center", gap: "12px",
+                    display: "flex", alignItems: "flex-start", gap: "12px",
                     padding: "13px 14px",
                     borderBottom: i < cardInvoices.length - 1 ? "1px solid var(--border)" : "none",
                     cursor: "pointer",
@@ -751,7 +752,7 @@ export default function Dashboard() {
                   }}>
                     <CreditCard size={16} strokeWidth={1.5} />
                   </div>
-                  <div style={{ flex: 1, minWidth: 0, overflow: "hidden" }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
                     <p style={{
                       fontSize: "13px", fontWeight: 600, color: "var(--text-1)",
                       lineHeight: 1.3,
@@ -762,33 +763,32 @@ export default function Dashboard() {
                     }}>
                       {card.name}
                     </p>
-                    <div style={{
-                      display: "flex", alignItems: "center", gap: "6px",
-                      marginTop: "3px", minWidth: 0,
+                    <p style={{
+                      fontSize: "10.5px", color: "var(--text-3)",
+                      marginTop: "3px", lineHeight: 1.35,
                     }}>
-                      <span style={{
-                        flexShrink: 0,
-                        fontSize: "9px", fontWeight: 700, letterSpacing: "0.04em",
-                        textTransform: "uppercase", padding: "2px 5px", borderRadius: "5px",
-                        color: labelColor, background: labelBg, border: `1px solid ${labelBorder}`,
-                      }}>
-                        {labelText}
-                      </span>
-                      <p style={{
-                        fontSize: "11px", color: "var(--text-3)",
-                        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                        minWidth: 0,
-                      }}>
-                        {`Fatura ${fullMonthLabel(invoice.dueDate.substring(0, 7))} · Vence ${fmtDate(invoice.dueDate)}`}
-                      </p>
-                    </div>
+                      Fecha {fmtDate(invoice.closingDate)} · Vence {fmtDate(invoice.dueDate)}
+                    </p>
                   </div>
-                  <p className="mono" style={{
-                    fontSize: "14px", fontWeight: 700, flexShrink: 0,
-                    color: isDue && invoice.status === "overdue" ? "var(--red)" : "var(--text-1)",
+                  <div style={{
+                    display: "flex", flexDirection: "column",
+                    alignItems: "flex-end", gap: "4px", flexShrink: 0,
                   }}>
-                    R$ {fmt(invoice.totalAmount)}
-                  </p>
+                    <p className="mono" style={{
+                      fontSize: "14px", fontWeight: 700,
+                      color: isOverdue ? "var(--red)" : "var(--text-1)",
+                    }}>
+                      R$ {fmt(invoice.totalAmount)}
+                    </p>
+                    <span style={{
+                      fontSize: "8px", fontWeight: 700, letterSpacing: "0.03em",
+                      textTransform: "uppercase", padding: "1px 4px", borderRadius: "4px",
+                      color: labelColor, background: labelBg, border: `1px solid ${labelBorder}`,
+                      whiteSpace: "nowrap",
+                    }}>
+                      {labelText}
+                    </span>
+                  </div>
                 </div>
               );
             })}
