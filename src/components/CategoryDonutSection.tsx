@@ -13,6 +13,7 @@ export interface CatItem {
   amount: number;
   isCard: boolean;
   cardName?: string;
+  cardColor?: string;
   installmentLabel?: string; // "2/12" para parceladas
 }
 
@@ -32,7 +33,7 @@ export function buildCatSlices(
   installments: CardInstallment[],
   purchases: CardPurchase[],
   categories: { id: string; name: string; color: string }[],
-  cards: { id: string; name: string }[],
+  cards: { id: string; name: string; color: string }[],
   month: string,
 ): CatSlice[] {
   const map: Record<string, CatSlice> = {};
@@ -89,6 +90,7 @@ export function buildCatSlices(
         amount: i.amount,
         isCard: true,
         cardName: card?.name,
+        cardColor: card?.color,
         installmentLabel: i.totalInstallments > 1
           ? `${i.installmentNumber}/${i.totalInstallments}`
           : undefined,
@@ -288,7 +290,9 @@ export function CategoryDonutSection({
             </div>
           ) : [...sel.items]
               .sort((a, b) => b.date.localeCompare(a.date))
-              .map((item, j) => (
+              .map((item, j) => {
+            const accent = item.cardColor ?? "#FFB830";
+            return (
             <div
               key={item.id}
               style={{
@@ -300,10 +304,12 @@ export function CategoryDonutSection({
               {item.isCard && (
                 <div style={{
                   width: "30px", height: "30px", borderRadius: "8px", flexShrink: 0,
-                  background: "rgba(255,184,48,0.1)", border: "1px solid var(--amber-20)",
+                  background: `${accent}22`,
+                  border: `1px solid ${accent}44`,
                   display: "flex", alignItems: "center", justifyContent: "center",
+                  color: accent,
                 }}>
-                  <CreditCardIcon size={13} strokeWidth={1.5} color="var(--amber)" />
+                  <CreditCardIcon size={13} strokeWidth={1.5} />
                 </div>
               )}
 
@@ -315,21 +321,23 @@ export function CategoryDonutSection({
                   {item.description}
                 </p>
                 <div style={{ display: "flex", alignItems: "center", gap: "6px", marginTop: "2px" }}>
-                  <span style={{ fontSize: "11px", color: "var(--text-3)" }}>{fmtDate(item.date)}</span>
+                  <span style={{ fontSize: "11px", color: "var(--text-3)", flexShrink: 0 }}>
+                    {fmtDate(item.date)}
+                  </span>
                   {item.isCard && (
                     <span style={{
                       fontSize: "9px", fontWeight: 700,
                       padding: "1px 5px", borderRadius: "4px",
-                      background: "rgba(255,184,48,0.1)",
-                      color: "var(--amber)", border: "1px solid var(--amber-20)",
+                      background: `${accent}18`,
+                      color: accent, border: `1px solid ${accent}40`,
                       letterSpacing: "0.04em",
-                      maxWidth: "120px",
+                      maxWidth: "140px",
                       overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                     }}>
                       {item.cardName
                         ? item.installmentLabel
-                          ? `${item.cardName.toUpperCase()} · ${item.installmentLabel}`
-                          : item.cardName.toUpperCase()
+                          ? `${item.cardName} · ${item.installmentLabel}`
+                          : item.cardName
                         : item.installmentLabel
                           ? `PARCELA ${item.installmentLabel}`
                           : "CARTÃO"}
@@ -342,7 +350,8 @@ export function CategoryDonutSection({
                 R$ {fmt(item.amount)}
               </p>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </>
