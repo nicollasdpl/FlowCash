@@ -76,6 +76,7 @@
 
   /* ── FAB sobre o BottomNav (desktop: sem nav, apenas safe-area) ── */
   --fab-bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+  --fab-right: 20px;
   --copilot-fab-size: 52px;
   --page-fab-h: 48px;
   --fab-stack-gap: 14px;

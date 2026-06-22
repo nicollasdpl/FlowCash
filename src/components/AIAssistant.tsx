@@ -38,10 +38,10 @@ export default function AIAssistant() {
             ? "calc(var(--fab-bottom) + var(--copilot-fab-size) + var(--fab-stack-gap))"
             : "calc(var(--fab-bottom) + var(--page-fab-h) + var(--fab-stack-gap))"
           : "var(--fab-bottom)",
-        right: "16px",
+        right: "var(--fab-right)",
         zIndex: 300,
-        width: "52px",
-        height: "52px",
+        width: "var(--copilot-fab-size)",
+        height: "var(--copilot-fab-size)",
         borderRadius: "50%",
         background: "var(--accent)",
         border: "none",

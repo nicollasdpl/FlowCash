@@ -483,7 +483,7 @@ export default function CartaoDetail() {
         style={{
           position: "fixed",
           bottom: "var(--fab-bottom)",
-          right: "20px",
+          right: "var(--fab-right)",
           zIndex: 50,
           height: "48px",
           padding: "0 20px",

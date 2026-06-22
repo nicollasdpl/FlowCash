@@ -927,7 +927,7 @@ export default function Dashboard() {
         style={{
           position: "fixed",
           bottom: "var(--fab-bottom)",
-          right: "20px",
+          right: "var(--fab-right)",
           zIndex: 50,
           width: "var(--copilot-fab-size)",
           height: "var(--copilot-fab-size)",
