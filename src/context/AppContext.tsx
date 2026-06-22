@@ -515,6 +515,11 @@ export function newId(): string {
     : Math.random().toString(36).slice(2) + Date.now().toString(36);
 }
 
-export const CARD_COLORS    = ["#9B6DFF", "#4B8BF5", "#00E5C3", "#22D47A", "#F5A623", "#FF4D6A", "#FF8C42"];
+export const CARD_COLORS = [
+  "#9B6DFF", "#8A05BE", "#6366F1", "#4B8BF5", "#0EA5E9", "#06B6D4",
+  "#00E5C3", "#14B8A6", "#22D47A", "#84CC16", "#EAB308", "#F5A623",
+  "#FF8C42", "#F97316", "#FF4D6A", "#EF4444", "#EC4899", "#A855F7",
+  "#64748B", "#334155",
+];
 export const ACCOUNT_COLORS = ["#22D47A", "#4B8BF5", "#00E5C3", "#9B6DFF", "#F5A623", "#FF8C42"];
 export const ACCOUNT_ICONS  = ["🏦", "💰", "👛", "📈", "💳", "🏧"];

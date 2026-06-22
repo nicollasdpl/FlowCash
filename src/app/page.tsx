@@ -726,10 +726,23 @@ export default function Dashboard() {
             </div>
             {cardInvoices.map(({ card, invoice, kind }, i) => {
               const isDue = kind === "due";
+              const isOverdue = isDue && invoice.status === "overdue";
               const labelText   = isDue ? "A pagar" : "Em andamento";
-              const labelColor  = isDue ? (invoice.status === "overdue" ? "var(--red)" : "var(--amber)") : "var(--text-3)";
-              const labelBg     = isDue ? (invoice.status === "overdue" ? "var(--red-10)" : "var(--amber-10)") : "rgba(255,255,255,0.04)";
-              const labelBorder = isDue ? (invoice.status === "overdue" ? "var(--red-20)" : "var(--amber-20)") : "var(--border)";
+              const labelColor  = isOverdue
+                ? "var(--red)"
+                : isDue
+                  ? "var(--amber)"
+                  : card.color;
+              const labelBg     = isOverdue
+                ? "var(--red-10)"
+                : isDue
+                  ? "var(--amber-10)"
+                  : `${card.color}18`;
+              const labelBorder = isOverdue
+                ? "var(--red-20)"
+                : isDue
+                  ? "var(--amber-20)"
+                  : `${card.color}40`;
               return (
                 <div
                   key={`${card.id}-${invoice.competenceMonth}`}
@@ -738,17 +751,20 @@ export default function Dashboard() {
                     display: "flex", alignItems: "center", gap: "12px",
                     padding: "13px 14px",
                     borderBottom: i < cardInvoices.length - 1 ? "1px solid var(--border)" : "none",
+                    borderLeft: `3px solid ${card.color}`,
+                    background: `${card.color}10`,
                     cursor: "pointer",
                     overflow: "hidden",
                   }}
                 >
                   <div style={{
                     width: "36px", height: "36px", borderRadius: "10px", flexShrink: 0,
-                    background: `${card.color}20`,
-                    border: `1px solid ${card.color}35`,
+                    background: `${card.color}22`,
+                    border: `1px solid ${card.color}44`,
                     display: "flex", alignItems: "center", justifyContent: "center",
+                    color: card.color,
                   }}>
-                    <CreditCard size={16} strokeWidth={1.5} color={card.color} />
+                    <CreditCard size={16} strokeWidth={1.5} />
                   </div>
                   <div style={{ flex: 1, minWidth: 0, overflow: "hidden" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: "7px", minWidth: 0 }}>
@@ -773,7 +789,7 @@ export default function Dashboard() {
                   </div>
                   <p className="mono" style={{
                     fontSize: "14px", fontWeight: 700, flexShrink: 0,
-                    color: isDue && invoice.status === "overdue" ? "var(--red)" : "var(--text-1)",
+                    color: isOverdue ? "var(--red)" : card.color,
                   }}>
                     R$ {fmt(invoice.totalAmount)}
                   </p>
