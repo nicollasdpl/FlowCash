@@ -744,32 +744,44 @@ export default function Dashboard() {
                 >
                   <div style={{
                     width: "36px", height: "36px", borderRadius: "10px", flexShrink: 0,
-                    background: "rgba(255,184,48,0.1)",
-                    border: "1px solid var(--amber-20)",
+                    background: `${card.color}22`,
+                    border: `1px solid ${card.color}44`,
                     display: "flex", alignItems: "center", justifyContent: "center",
+                    color: card.color,
                   }}>
-                    <CreditCard size={16} strokeWidth={1.5} color="var(--amber)" />
+                    <CreditCard size={16} strokeWidth={1.5} />
                   </div>
                   <div style={{ flex: 1, minWidth: 0, overflow: "hidden" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: "7px", minWidth: 0 }}>
-                      <p style={{
-                        fontSize: "13px", fontWeight: 600, color: "var(--text-1)",
-                        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                      }}>
-                        {card.name}
-                      </p>
+                    <p style={{
+                      fontSize: "13px", fontWeight: 600, color: "var(--text-1)",
+                      lineHeight: 1.3,
+                      overflow: "hidden",
+                      display: "-webkit-box",
+                      WebkitLineClamp: 2,
+                      WebkitBoxOrient: "vertical",
+                    }}>
+                      {card.name}
+                    </p>
+                    <div style={{
+                      display: "flex", alignItems: "center", gap: "6px",
+                      marginTop: "3px", minWidth: 0,
+                    }}>
                       <span style={{
                         flexShrink: 0,
-                        fontSize: "9.5px", fontWeight: 700, letterSpacing: "0.04em",
-                        textTransform: "uppercase", padding: "2px 6px", borderRadius: "5px",
+                        fontSize: "9px", fontWeight: 700, letterSpacing: "0.04em",
+                        textTransform: "uppercase", padding: "2px 5px", borderRadius: "5px",
                         color: labelColor, background: labelBg, border: `1px solid ${labelBorder}`,
                       }}>
                         {labelText}
                       </span>
+                      <p style={{
+                        fontSize: "11px", color: "var(--text-3)",
+                        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                        minWidth: 0,
+                      }}>
+                        {`Fatura ${fullMonthLabel(invoice.dueDate.substring(0, 7))} · Vence ${fmtDate(invoice.dueDate)}`}
+                      </p>
                     </div>
-                    <p style={{ fontSize: "11px", color: "var(--text-3)", marginTop: "2px" }}>
-                      {`Fatura ${fullMonthLabel(invoice.dueDate.substring(0, 7))} · Vence ${fmtDate(invoice.dueDate)}`}
-                    </p>
                   </div>
                   <p className="mono" style={{
                     fontSize: "14px", fontWeight: 700, flexShrink: 0,
