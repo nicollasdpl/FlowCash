@@ -2,7 +2,6 @@
 import { useState, useMemo, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import TransactionDrawer from "@/components/TransactionDrawer";
 import { useApp } from "@/context/AppContext";
 import type { Transaction } from "@/context/AppContext";
 import {
@@ -85,9 +84,12 @@ function StatusBadge({ status, type }: { status: Transaction["status"]; type: Tr
 export default function Dashboard() {
   const router = useRouter();
   const { state, dispatch } = useApp();
-  const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
   const [selectedMonth, setSelectedMonth] = useState(currentMonth());
   const [pendingExpanded, setPendingExpanded] = useState(false);
+
+  function openTransaction(tx: Transaction) {
+    router.push(`/transacoes/${tx.id}/editar`);
+  }
 
   const touchStartX = useRef<number>(0);
   const touchStartY = useRef<number>(0);
@@ -237,18 +239,6 @@ export default function Dashboard() {
     dispatch({ type: "UPD_TX", payload: { ...tx, status: "paid", paymentDate: todayStr } });
   }
 
-  function handleStatusChange(id: string, status: Transaction["status"]) {
-    const tx = state.transactions.find(t => t.id === id);
-    if (!tx) return;
-    dispatch({ type: "UPD_TX", payload: { ...tx, status } });
-    setSelectedTx(prev => prev?.id === id ? { ...prev, status } : prev);
-  }
-
-  function handleDelete(id: string) {
-    dispatch({ type: "DEL_TX", payload: id });
-    setSelectedTx(null);
-  }
-
   const name = (state.userName?.trim() || "").split(" ")[0];
 
   // Linha de item pendente (usado no card expandido e nos vencidos)
@@ -264,7 +254,7 @@ export default function Dashboard() {
         }}
       >
         <div
-          onClick={() => setSelectedTx(tx)}
+          onClick={() => openTransaction(tx)}
           style={{
             width: "36px", height: "36px", borderRadius: "10px", flexShrink: 0,
             background: cat ? `${cat.color}18` : "rgba(255,255,255,0.06)",
@@ -278,7 +268,7 @@ export default function Dashboard() {
         </div>
 
         <div
-          onClick={() => setSelectedTx(tx)}
+          onClick={() => openTransaction(tx)}
           style={{ flex: 1, minWidth: 0, overflow: "hidden", cursor: "pointer" }}
         >
           <p style={{
@@ -320,15 +310,6 @@ export default function Dashboard() {
 
   return (
     <>
-      <TransactionDrawer
-        tx={selectedTx}
-        categories={state.categories}
-        onClose={() => setSelectedTx(null)}
-        onStatusChange={handleStatusChange}
-        onDelete={handleDelete}
-        onEdit={tx => { setSelectedTx(null); router.push(`/transacoes/${tx.id}/editar`); }}
-      />
-
       <div
         style={{
           padding: "16px",
@@ -530,7 +511,7 @@ export default function Dashboard() {
                   }}
                 >
                   <div
-                    onClick={() => setSelectedTx(tx)}
+                    onClick={() => openTransaction(tx)}
                     style={{
                       width: "36px", height: "36px", borderRadius: "10px", flexShrink: 0,
                       background: cat ? `${cat.color}18` : "rgba(255,77,106,0.1)",
@@ -544,7 +525,7 @@ export default function Dashboard() {
                   </div>
 
                   <div
-                    onClick={() => setSelectedTx(tx)}
+                    onClick={() => openTransaction(tx)}
                     style={{ flex: 1, minWidth: 0, overflow: "hidden", cursor: "pointer" }}
                   >
                     <p style={{
@@ -854,7 +835,7 @@ export default function Dashboard() {
                 return (
                   <div
                     key={tx.id}
-                    onClick={() => setSelectedTx(tx)}
+                    onClick={() => openTransaction(tx)}
                     style={{
                       display: "flex", alignItems: "center", gap: "12px",
                       padding: "13px 14px",
