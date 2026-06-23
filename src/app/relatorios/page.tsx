@@ -5,6 +5,7 @@ import { addMonths, currentMonth, fmt, isBalanceNegative, isBalancePositive } fr
 import { getSpentByCategory } from "@/engine/budgetEngine";
 import { auth } from "@/lib/firebase";
 import DonutChart, { type Segment } from "@/components/DonutChart";
+import SpendingHeatmapCalendar from "@/components/SpendingHeatmapCalendar";
 import CategoryIcon from "@/components/CategoryIcon";
 import {
   ChevronLeft, ChevronRight, BarChart2, AlertTriangle, TrendingUp,
@@ -418,7 +419,20 @@ export default function Relatorios() {
         </div>
       </div>
 
-      {/* ── SEÇÃO 4: Categorias (donut + lista com variação) ────────────── */}
+      {/* ── SEÇÃO 4: Mapa de calor — gastos por dia ─────────────────────── */}
+      <div className="card fade-up-5" style={{ padding: "16px 18px", marginBottom: "16px" }}>
+        <p style={{ fontSize: "10px", fontWeight: 700, color: "var(--text-3)", letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: "14px" }}>
+          Gastos por dia
+        </p>
+        <SpendingHeatmapCalendar
+          month={selectedMonth}
+          transactions={state.transactions}
+          installments={state.installments}
+          purchases={state.purchases}
+        />
+      </div>
+
+      {/* ── SEÇÃO 5: Categorias (donut + lista com variação) ────────────── */}
       <div className="card fade-up-5" style={{ overflow: "hidden", marginBottom: "16px" }}>
         <div style={{ padding: "14px 18px", borderBottom: "1px solid var(--border)" }}>
           <p style={{ fontSize: "10px", fontWeight: 700, color: "var(--text-3)", letterSpacing: "0.07em", textTransform: "uppercase" }}>
@@ -467,7 +481,7 @@ export default function Relatorios() {
         )}
       </div>
 
-      {/* ── SEÇÃO 5: Orçamentos (só se houver) ──────────────────────────── */}
+      {/* ── SEÇÃO 6: Orçamentos (só se houver) ──────────────────────────── */}
       {budgetsThisMonth.length > 0 && (
         <div className="card fade-up-5" style={{ overflow: "hidden", marginBottom: "16px" }}>
           <div style={{ padding: "14px 18px", borderBottom: "1px solid var(--border)" }}>
@@ -517,7 +531,7 @@ export default function Relatorios() {
         </div>
       )}
 
-      {/* ── SEÇÃO 6: Insights IA ────────────────────────────────────────── */}
+      {/* ── SEÇÃO 7: Insights IA ────────────────────────────────────────── */}
       <div className="card fade-up-5" style={{ padding: "16px 18px", marginBottom: "20px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "10px" }}>
           <Sparkles size={14} strokeWidth={1.5} color="var(--accent)" />
