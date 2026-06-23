@@ -3,6 +3,7 @@ import { useState, useMemo, type ReactNode } from "react";
 import { useApp } from "@/context/AppContext";
 import { addMonths, currentMonth, fmt, isBalanceNegative, isBalancePositive } from "@/engine/financialEngine";
 import { getSpentByCategory } from "@/engine/budgetEngine";
+import { getConsumptionByCategory } from "@/app/relatorios/consumptionByCategory";
 import { auth } from "@/lib/firebase";
 import DonutChart, { type Segment } from "@/components/DonutChart";
 import SpendingHeatmapCalendar from "@/components/SpendingHeatmapCalendar";
@@ -90,9 +91,12 @@ function Markdown({ text }: { text: string }) {
 
 // ─── Página ──────────────────────────────────────────────────────────────────
 
+type CategoryViewMode = "invoice" | "consumption";
+
 export default function Relatorios() {
   const { state } = useApp();
   const [selectedMonth, setSelectedMonth] = useState(() => currentMonth());
+  const [categoryView, setCategoryView] = useState<CategoryViewMode>("invoice");
 
   const [insights, setInsights]               = useState<string>("");
   const [insightsLoading, setInsightsLoading] = useState(false);
@@ -138,6 +142,18 @@ export default function Relatorios() {
     [months, state.transactions, state.installments, state.purchases],
   );
 
+  const consumptionByCatSelected = useMemo(
+    () => getConsumptionByCategory(selectedMonth, state.transactions, state.purchases),
+    [selectedMonth, state.transactions, state.purchases],
+  );
+  const consumptionByCatPrev = useMemo(
+    () => getConsumptionByCategory(months[1], state.transactions, state.purchases),
+    [months, state.transactions, state.purchases],
+  );
+
+  const activeSpentByCat = categoryView === "invoice" ? spentByCatSelected : consumptionByCatSelected;
+  const activeSpentByCatPrev = categoryView === "invoice" ? spentByCatPrev : consumptionByCatPrev;
+
   const biggestCategory = useMemo(() => {
     let topId = ""; let topVal = 0;
     for (const [catId, amount] of Object.entries(spentByCatSelected)) {
@@ -174,11 +190,11 @@ export default function Relatorios() {
   // ── Donut + lista de categorias (mês selecionado vs anterior) ────────────
   type CatRow = { id: string; name: string; color: string; icon: string; spent: number; prevSpent: number; pct: number; variation: number | null };
   const catRows: CatRow[] = useMemo(() => {
-    const totalSpent = Object.values(spentByCatSelected).reduce((s, v) => s + v, 0);
-    return Object.entries(spentByCatSelected)
+    const totalSpent = Object.values(activeSpentByCat).reduce((s, v) => s + v, 0);
+    return Object.entries(activeSpentByCat)
       .map(([catId, spent]) => {
         const cat       = state.categories.find(c => c.id === catId);
-        const prevSpent = spentByCatPrev[catId] ?? 0;
+        const prevSpent = activeSpentByCatPrev[catId] ?? 0;
         const variation = prevSpent > 0 ? ((spent - prevSpent) / prevSpent) * 100 : null;
         const pct       = totalSpent > 0 ? (spent / totalSpent) * 100 : 0;
         return {
@@ -190,7 +206,7 @@ export default function Relatorios() {
         };
       })
       .sort((a, b) => b.spent - a.spent);
-  }, [spentByCatSelected, spentByCatPrev, state.categories]);
+  }, [activeSpentByCat, activeSpentByCatPrev, state.categories]);
 
   const donutTotal = catRows.reduce((s, r) => s + r.spent, 0);
 
@@ -435,9 +451,39 @@ export default function Relatorios() {
       {/* ── SEÇÃO 5: Categorias (donut + lista com variação) ────────────── */}
       <div className="card fade-up-5" style={{ overflow: "hidden", marginBottom: "16px" }}>
         <div style={{ padding: "14px 18px", borderBottom: "1px solid var(--border)" }}>
-          <p style={{ fontSize: "10px", fontWeight: 700, color: "var(--text-3)", letterSpacing: "0.07em", textTransform: "uppercase" }}>
+          <p style={{ fontSize: "10px", fontWeight: 700, color: "var(--text-3)", letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: "12px" }}>
             Gastos por categoria
           </p>
+          <div style={{
+            display: "flex", gap: "6px",
+            padding: "3px", background: "rgba(255,255,255,0.04)",
+            borderRadius: "10px", border: "1px solid var(--border)",
+          }}>
+            {([
+              { id: "invoice" as const, label: "Por fatura" },
+              { id: "consumption" as const, label: "Consumo real" },
+            ]).map(opt => (
+              <button
+                key={opt.id}
+                onClick={() => setCategoryView(opt.id)}
+                style={{
+                  flex: 1, padding: "8px 6px", borderRadius: "8px",
+                  border: categoryView === opt.id ? "1px solid var(--border-accent)" : "1px solid transparent",
+                  fontSize: "11.5px", fontWeight: 700, fontFamily: "inherit",
+                  cursor: "pointer", touchAction: "manipulation",
+                  background: categoryView === opt.id ? "var(--accent-10)" : "transparent",
+                  color: categoryView === opt.id ? "var(--accent)" : "var(--text-3)",
+                }}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+          {categoryView === "consumption" && (
+            <p style={{ fontSize: "11px", color: "var(--text-3)", marginTop: "10px", lineHeight: 1.4 }}>
+              Gastos pela data em que você consumiu ou comprou. Pode diferir do total da fatura do mesmo mês.
+            </p>
+          )}
         </div>
 
         {donutSegments.length === 0 ? (
