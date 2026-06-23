@@ -143,25 +143,26 @@ export default function Relatorios() {
   );
 
   const consumptionByCatSelected = useMemo(
-    () => getConsumptionByCategory(selectedMonth, state.transactions, state.purchases),
-    [selectedMonth, state.transactions, state.purchases],
+    () => getConsumptionByCategory(selectedMonth, state.transactions, state.installments, state.purchases),
+    [selectedMonth, state.transactions, state.installments, state.purchases],
   );
   const consumptionByCatPrev = useMemo(
-    () => getConsumptionByCategory(months[1], state.transactions, state.purchases),
-    [months, state.transactions, state.purchases],
+    () => getConsumptionByCategory(months[1], state.transactions, state.installments, state.purchases),
+    [months, state.transactions, state.installments, state.purchases],
   );
 
   const activeSpentByCat = categoryView === "invoice" ? spentByCatSelected : consumptionByCatSelected;
   const activeSpentByCatPrev = categoryView === "invoice" ? spentByCatPrev : consumptionByCatPrev;
 
   const biggestCategory = useMemo(() => {
+    const source = categoryView === "invoice" ? spentByCatSelected : consumptionByCatSelected;
     let topId = ""; let topVal = 0;
-    for (const [catId, amount] of Object.entries(spentByCatSelected)) {
+    for (const [catId, amount] of Object.entries(source)) {
       if (amount > topVal) { topId = catId; topVal = amount; }
     }
     const cat = state.categories.find(c => c.id === topId);
     return cat ? { name: cat.name, amount: topVal, color: cat.color } : null;
-  }, [spentByCatSelected, state.categories]);
+  }, [categoryView, spentByCatSelected, consumptionByCatSelected, state.categories]);
 
   // ── Projeção (só mês corrente) ───────────────────────────────────────────
   const projection = useMemo(() => {
