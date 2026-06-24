@@ -1,20 +1,56 @@
 // Gastos por categoria — visão "Consumo real" em Relatórios.
 //
-// Diferente de "Por fatura": conta QUANDO você gastou (purchaseDate), não quando
-// a fatura fecha. Usa o valor da PARCELA (installment.amount), nunca o total.
-//
-// À vista: purchaseDate no mês → parcela da compra.
-// Parcelado: parcela N no mês civil purchaseMonth + (N-1).
-// Assinatura: valor mensal a partir do mês de início.
-// Manual: competenceDate no mês (sem duplicar cartão).
+// À vista: fatura do mês (competenceMonth) + compras com purchaseDate no mês que
+// caem na fatura seguinte — sem repetir essas na fatura de julho.
+// Parcelado: valor da parcela no mês civil a partir da purchaseDate.
+// Manual: competenceDate no mês, sem duplicar compra do cartão na mesma data/valor.
 
-import type { Transaction, CardInstallment, CardPurchase } from "@/types/financial";
+import type { Transaction, CardInstallment, CardPurchase, CreditCard } from "@/types/financial";
 import { SEED_INVOICE_PAYMENT_CATEGORY_ID } from "@/types/financial";
 import { addMonths } from "@/engine/financialEngine";
+import { getCompetenceMonth } from "@/engine/invoiceEngine";
 
 function addToMap(map: Record<string, number>, categoryId: string, amount: number) {
   if (amount <= 0 || !categoryId) return;
   map[categoryId] = (map[categoryId] ?? 0) + amount;
+}
+
+function oneTimeConsumptionAmount(
+  month: string,
+  purchase: CardPurchase,
+  inst: CardInstallment,
+  closingDay: number,
+): number {
+  const purchaseMonth = purchase.purchaseDate.substring(0, 7);
+  const competenceMonth = inst.competenceMonth;
+  const spillToNext =
+    competenceMonth > purchaseMonth &&
+    addMonths(purchaseMonth, 1) === competenceMonth;
+  const expectedInvoice = getCompetenceMonth(purchase.purchaseDate, closingDay);
+
+  // Mesmo mês civil, fatura do mês seguinte (ex.: 19/jun → fatura jul, conta em jun)
+  if (
+    purchaseMonth === month &&
+    competenceMonth > month &&
+    addMonths(purchaseMonth, 1) === competenceMonth
+  ) {
+    return inst.amount;
+  }
+
+  if (competenceMonth === month) {
+    // Virada do mês anterior já contada no mês da compra (ex.: 19/jun não repete em jul)
+    if (
+      spillToNext &&
+      purchaseMonth === addMonths(month, -1) &&
+      expectedInvoice === month &&
+      purchaseMonth === addMonths(competenceMonth, -1)
+    ) {
+      return 0;
+    }
+    return inst.amount;
+  }
+
+  return 0;
 }
 
 function amountsMatch(a: number, b: number): boolean {
@@ -39,45 +75,69 @@ export function getConsumptionByCategory(
   transactions: Transaction[],
   installments: CardInstallment[],
   purchases: CardPurchase[],
+  cards: CreditCard[] = [],
 ): Record<string, number> {
   const map: Record<string, number> = {};
-  const purchaseById = new Map(purchases.map(p => [p.id, p]));
-  const unmatchedCardAmounts = new Map<string, number[]>();
-
-  for (const purchase of purchases) {
-    if (!purchase.isSubscription) continue;
-    const purchaseMonth = purchase.purchaseDate.substring(0, 7);
-    if (month >= purchaseMonth) {
-      addToMap(map, purchase.categoryId, purchase.amount);
-      const list = unmatchedCardAmounts.get(purchase.categoryId) ?? [];
-      list.push(purchase.amount);
-      unmatchedCardAmounts.set(purchase.categoryId, list);
-    }
+  const closingByCard = new Map(cards.map(c => [c.id, c.closingDay]));
+  const installmentsByPurchase = new Map<string, CardInstallment[]>();
+  for (const inst of installments) {
+    const list = installmentsByPurchase.get(inst.purchaseId) ?? [];
+    list.push(inst);
+    installmentsByPurchase.set(inst.purchaseId, list);
   }
 
-  for (const inst of installments) {
-    const purchase = purchaseById.get(inst.purchaseId);
-    if (!purchase || purchase.isSubscription) continue;
-    const consumptionMonth = getConsumptionMonth(purchase, inst);
-    if (consumptionMonth !== month) continue;
-    addToMap(map, purchase.categoryId, inst.amount);
-    const list = unmatchedCardAmounts.get(purchase.categoryId) ?? [];
-    list.push(inst.amount);
-    unmatchedCardAmounts.set(purchase.categoryId, list);
+  const cardPurchaseKeys = new Set<string>();
+
+  for (const purchase of purchases) {
+    if (purchase.isSubscription) {
+      const purchaseMonth = purchase.purchaseDate.substring(0, 7);
+      if (month >= purchaseMonth) {
+        addToMap(map, purchase.categoryId, purchase.amount);
+        cardPurchaseKeys.add(`${purchase.categoryId}|${purchase.purchaseDate}|${purchase.amount.toFixed(2)}`);
+      }
+      continue;
+    }
+
+    const purchaseInsts = installmentsByPurchase.get(purchase.id) ?? [];
+    const total = purchase.totalInstallments ?? 1;
+
+    if (purchaseInsts.length === 0) {
+      if (purchase.purchaseDate.startsWith(month)) {
+        addToMap(map, purchase.categoryId, purchase.amount);
+        cardPurchaseKeys.add(`${purchase.categoryId}|${purchase.purchaseDate}|${purchase.amount.toFixed(2)}`);
+      }
+      continue;
+    }
+
+    for (const inst of purchaseInsts) {
+      const closingDay = closingByCard.get(purchase.cardId) ?? 10;
+      const amount =
+        total <= 1
+          ? oneTimeConsumptionAmount(month, purchase, inst, closingDay)
+          : getConsumptionMonth(purchase, inst) === month
+            ? inst.amount
+            : 0;
+      if (amount <= 0) continue;
+
+      addToMap(map, purchase.categoryId, amount);
+      cardPurchaseKeys.add(`${purchase.categoryId}|${purchase.purchaseDate}|${amount.toFixed(2)}`);
+    }
   }
 
   for (const t of transactions) {
     if (t.categoryId === SEED_INVOICE_PAYMENT_CATEGORY_ID) continue;
     if (t.type !== "expense" || !t.competenceDate.startsWith(month)) continue;
 
-    const cardAmounts = unmatchedCardAmounts.get(t.categoryId);
-    if (cardAmounts) {
-      const idx = cardAmounts.findIndex(a => amountsMatch(a, t.amount));
-      if (idx >= 0) {
-        cardAmounts.splice(idx, 1);
-        continue;
-      }
-    }
+    const txKey = `${t.categoryId}|${t.competenceDate}|${t.amount.toFixed(2)}`;
+    if (cardPurchaseKeys.has(txKey)) continue;
+
+    const dupPurchase = purchases.some(
+      p =>
+        p.categoryId === t.categoryId &&
+        p.purchaseDate === t.competenceDate &&
+        amountsMatch(p.amount, t.amount),
+    );
+    if (dupPurchase) continue;
 
     addToMap(map, t.categoryId, t.amount);
   }

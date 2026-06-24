@@ -143,12 +143,12 @@ export default function Relatorios() {
   );
 
   const consumptionByCatSelected = useMemo(
-    () => getConsumptionByCategory(selectedMonth, state.transactions, state.installments, state.purchases),
-    [selectedMonth, state.transactions, state.installments, state.purchases],
+    () => getConsumptionByCategory(selectedMonth, state.transactions, state.installments, state.purchases, state.cards),
+    [selectedMonth, state.transactions, state.installments, state.purchases, state.cards],
   );
   const consumptionByCatPrev = useMemo(
-    () => getConsumptionByCategory(months[1], state.transactions, state.installments, state.purchases),
-    [months, state.transactions, state.installments, state.purchases],
+    () => getConsumptionByCategory(months[1], state.transactions, state.installments, state.purchases, state.cards),
+    [months, state.transactions, state.installments, state.purchases, state.cards],
   );
 
   const activeSpentByCat = categoryView === "invoice" ? spentByCatSelected : consumptionByCatSelected;

@@ -287,6 +287,20 @@ const LS_KEY = (uid: string) => `flowcash_v2_${uid}`;
 // Formato persistido — AppState + campo de versionamento (nunca entra no reducer)
 type PersistedState = AppState & { updatedAt?: number };
 
+function isEmptyAppState(s: AppState): boolean {
+  return (
+    s.accounts.length === 0 &&
+    s.transactions.length === 0 &&
+    s.purchases.length === 0 &&
+    s.cards.length === 0
+  );
+}
+
+function remoteUpdatedAt(remote: AppState & { updatedAt?: unknown }): number {
+  const ts = remote.updatedAt;
+  return ts instanceof Timestamp ? ts.toMillis() : typeof ts === "number" ? ts : 0;
+}
+
 export function AppProvider({ children }: { children: ReactNode }) {
   const [state, rawDispatch] = useReducer(reducer, seed);
   const [user, setUser]   = useState<User | null>(null);
@@ -334,22 +348,50 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     // 1. Exibe o cache DESTA conta imediatamente; sem cache, começa limpo (seed).
     //    O Firestore (por uid) restaura os dados na sequência.
+    let shouldPullRemote = false;
     try {
       const raw = localStorage.getItem(LS_KEY(user.uid));
       if (raw) {
         const local = JSON.parse(raw) as PersistedState;
-        loadedAtRef.current = local.updatedAt ?? 0;
+        if (isEmptyAppState(local)) {
+          loadedAtRef.current = 0;
+          shouldPullRemote = true;
+        } else {
+          loadedAtRef.current = local.updatedAt ?? 0;
+        }
         dispatch({ type: "LOAD", payload: local });
       } else {
         loadedAtRef.current = 0;
+        shouldPullRemote = true;
         dispatch({ type: "LOAD", payload: seed });
       }
     } catch {
       loadedAtRef.current = 0;
+      shouldPullRemote = true;
       dispatch({ type: "LOAD", payload: seed });
     }
 
     setIsReady(true);
+
+    // Cache vazio no localhost (ou só seed): puxa Firestore na hora — produção e dev
+    // usam origens diferentes, então o cache local não vem da Vercel automaticamente.
+    if (shouldPullRemote) {
+      void (async () => {
+        try {
+          const snap = await getDoc(FIRESTORE_DOC(user.uid));
+          if (!snap.exists()) return;
+          const remote = snap.data() as AppState & { updatedAt?: unknown };
+          const remoteMs = remoteUpdatedAt(remote);
+          if (remoteMs <= loadedAtRef.current) return;
+          loadedAtRef.current = remoteMs;
+          const persisted: PersistedState = { ...(remote as AppState), updatedAt: remoteMs };
+          try { localStorage.setItem(LS_KEY(user.uid), JSON.stringify(persisted)); } catch {}
+          dispatch({ type: "LOAD", payload: persisted });
+        } catch (err) {
+          console.error("Firestore initial pull error:", err);
+        }
+      })();
+    }
 
     // 2. Listener em tempo real — sincroniza outros dispositivos
     const unsubSnapshot = onSnapshot(
@@ -362,9 +404,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (needsFirestoreSyncRef.current) return;
 
         const remote = snap.data() as AppState & { updatedAt?: unknown };
-        const ts = remote.updatedAt;
-        const remoteMs = ts instanceof Timestamp ? ts.toMillis()
-          : typeof ts === "number" ? ts : 0;
+        const remoteMs = remoteUpdatedAt(remote);
         // Aplica só se o servidor for mais novo — não sobrescreve dados locais
         // ainda não enviados com um doc do servidor mais antigo.
         if (remoteMs <= loadedAtRef.current) return;
@@ -451,9 +491,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const snap = await getDoc(FIRESTORE_DOC(user.uid));
       if (snap.exists()) {
         const remote = snap.data() as AppState & { updatedAt?: unknown };
-        const ts = remote.updatedAt;
-        const remoteMs = ts instanceof Timestamp ? ts.toMillis()
-          : typeof ts === "number" ? ts : 0;
+        const remoteMs = remoteUpdatedAt(remote);
         if (remoteMs > loadedAtRef.current) {
           loadedAtRef.current = remoteMs;
           const persisted: PersistedState = { ...(remote as AppState), updatedAt: remoteMs };

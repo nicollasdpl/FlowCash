@@ -62,7 +62,12 @@ describe("getConsumptionByCategory", () => {
     expect(getSpentByCategory("2026-07", [], installments, purchases)).toEqual({ "cat-corre": 19 });
   });
 
-  it("parcelado: valor da parcela, mes civil a partir da compra (nao fatura)", () => {
+  it("compra sem parcela gerada usa purchase.amount no mes da purchaseDate", () => {
+    const purchases = [purchase({ id: "p1", amount: 48.76, purchaseDate: "2026-06-22" })];
+    expect(getConsumptionByCategory("2026-06", [], [], purchases)).toEqual({ "cat-corre": 48.76 });
+  });
+
+  it("parcelado: valor da parcela, mes civil a partir da compra", () => {
     const purchases = [purchase({
       id: "p1",
       amount: 200,
@@ -75,12 +80,16 @@ describe("getConsumptionByCategory", () => {
     ];
     expect(getConsumptionByCategory("2026-06", [], installments, purchases)).toEqual({ "cat-corre": 10 });
     expect(getConsumptionByCategory("2026-07", [], installments, purchases)).toEqual({ "cat-corre": 10 });
-    // Por fatura: ambas no ciclo da fatura (jul e ago), nao jun
-    expect(getSpentByCategory("2026-06", [], installments, purchases)).toEqual({});
-    expect(getSpentByCategory("2026-07", [], installments, purchases)).toEqual({ "cat-corre": 10 });
   });
 
-  it("nubank + bradesco no mesmo mes civil: tudo em junho no consumo real", () => {
+  it("compra anterior na fatura de junho entra em junho no consumo real (à vista)", () => {
+    const purchases = [purchase({ id: "p1", amount: 50, purchaseDate: "2026-04-28" })];
+    const installments = [inst({ id: "i1", purchaseId: "p1", amount: 50, competenceMonth: "2026-06" })];
+    expect(getConsumptionByCategory("2026-06", [], installments, purchases)).toEqual({ "cat-corre": 50 });
+    expect(getConsumptionByCategory("2026-04", [], installments, purchases)).toEqual({});
+  });
+
+  it("fatura junho + nubank junho na fatura julho somam no consumo real de junho", () => {
     const purchases = [
       purchase({ id: "p1", amount: 60.14, purchaseDate: "2026-06-15", cardId: "bradesco" }),
       purchase({ id: "p2", amount: 48.76, purchaseDate: "2026-06-22", cardId: "nubank" }),
@@ -94,7 +103,7 @@ describe("getConsumptionByCategory", () => {
     expect(getConsumptionByCategory("2026-07", [], installments, purchases)).toEqual({});
   });
 
-  it("ignora lancamento manual duplicado do cartao", () => {
+  it("nao duplica lancamento manual igual a compra do cartao na mesma data", () => {
     const purchases = [purchase({ id: "p1", amount: 30, purchaseDate: "2026-06-03" })];
     const installments = [inst({ id: "i1", purchaseId: "p1", amount: 30, competenceMonth: "2026-07" })];
     const transactions = [
