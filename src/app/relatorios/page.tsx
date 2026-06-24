@@ -482,7 +482,8 @@ export default function Relatorios() {
           </div>
           {categoryView === "consumption" && (
             <p style={{ fontSize: "11px", color: "var(--text-3)", marginTop: "10px", lineHeight: 1.4 }}>
-              Gastos pela data em que você consumiu ou comprou. Pode diferir do total da fatura do mesmo mês.
+              Compras no cartão pela data em que você passou o cartão (valor integral da compra).
+              Lançamentos manuais usam a data de competência. Pode diferir da fatura do mesmo mês.
             </p>
           )}
         </div>
