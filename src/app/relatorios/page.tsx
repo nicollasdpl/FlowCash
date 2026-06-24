@@ -1,11 +1,12 @@
 "use client";
-import { useState, useMemo, type ReactNode } from "react";
+import { useState, useMemo, useEffect, type ReactNode } from "react";
 import { useApp } from "@/context/AppContext";
 import { addMonths, currentMonth, fmt, isBalanceNegative, isBalancePositive } from "@/engine/financialEngine";
 import { getSpentByCategory } from "@/engine/budgetEngine";
-import { getConsumptionByCategory } from "@/app/relatorios/consumptionByCategory";
+import { getConsumptionByCategory, buildConsumptionCatSlices } from "@/app/relatorios/consumptionByCategory";
 import { auth } from "@/lib/firebase";
 import DonutChart, { type Segment } from "@/components/DonutChart";
+import { buildCatSlices, CategoryExpenseDetailPanel } from "@/components/CategoryDonutSection";
 import SpendingHeatmapCalendar from "@/components/SpendingHeatmapCalendar";
 import CategoryIcon from "@/components/CategoryIcon";
 import {
@@ -97,6 +98,11 @@ export default function Relatorios() {
   const { state } = useApp();
   const [selectedMonth, setSelectedMonth] = useState(() => currentMonth());
   const [categoryView, setCategoryView] = useState<CategoryViewMode>("invoice");
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
+
+  useEffect(() => {
+    setSelectedCategoryId(null);
+  }, [selectedMonth, categoryView]);
 
   const [insights, setInsights]               = useState<string>("");
   const [insightsLoading, setInsightsLoading] = useState(false);
@@ -226,6 +232,41 @@ export default function Relatorios() {
     if (drift !== 0 && rounded.length > 0) rounded[0].percentage += drift;
     return rounded;
   }, [catRows, donutTotal]);
+
+  const catSlices = useMemo(() => {
+    if (categoryView === "invoice") {
+      return buildCatSlices(
+        state.transactions,
+        state.installments,
+        state.purchases,
+        state.categories,
+        state.cards,
+        selectedMonth,
+      );
+    }
+    return buildConsumptionCatSlices(
+      selectedMonth,
+      state.transactions,
+      state.installments,
+      state.purchases,
+      state.categories,
+      state.cards,
+    );
+  }, [
+    categoryView,
+    selectedMonth,
+    state.transactions,
+    state.installments,
+    state.purchases,
+    state.categories,
+    state.cards,
+  ]);
+
+  const selectedSlice = catSlices.find(s => s.catId === selectedCategoryId) ?? null;
+
+  function toggleCategory(catId: string) {
+    setSelectedCategoryId(prev => (prev === catId ? null : catId));
+  }
 
   // ── Orçamentos do mês ────────────────────────────────────────────────────
   const budgetsThisMonth = useMemo(
@@ -501,17 +542,49 @@ export default function Relatorios() {
                 segments={donutSegments}
                 totalLabel="Total"
                 total={`R$ ${fmtShort(donutTotal)}`}
+                activeSegment={selectedSlice?.name ?? null}
+                onSegmentClick={seg => {
+                  if (!seg) {
+                    setSelectedCategoryId(null);
+                    return;
+                  }
+                  const slice = catSlices.find(s => s.name === seg.name);
+                  if (slice) toggleCategory(slice.catId);
+                }}
               />
             </div>
 
             <div style={{ padding: "4px 18px 18px", display: "flex", flexDirection: "column", gap: "10px" }}>
-              {catRows.map(row => (
-                <div key={row.id}>
+              {catRows.map(row => {
+                const active = selectedCategoryId === row.id;
+                return (
+                <div
+                  key={row.id}
+                  onClick={() => toggleCategory(row.id)}
+                  style={{
+                    cursor: "pointer",
+                    padding: "6px 8px",
+                    margin: "0 -8px",
+                    borderRadius: "10px",
+                    background: active ? `${row.color}14` : "transparent",
+                    border: `1px solid ${active ? `${row.color}35` : "transparent"}`,
+                    transition: "all 0.15s",
+                  }}
+                >
                   <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "6px" }}>
                     {row.icon
                       ? <CategoryIcon icon={row.icon} color={row.color} size={16} />
                       : <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: row.color }} />}
-                    <span style={{ fontSize: "13px", color: "var(--text-1)", fontWeight: 600, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    <span style={{
+                      fontSize: "13px",
+                      color: active ? "var(--text-1)" : "var(--text-1)",
+                      fontWeight: active ? 700 : 600,
+                      flex: 1,
+                      minWidth: 0,
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}>
                       {row.name}
                     </span>
                     <VariationBadge variation={row.variation} />
@@ -523,8 +596,16 @@ export default function Relatorios() {
                     <div className="progress-bar-fill" style={{ width: `${Math.min(row.pct, 100)}%`, background: row.color }} />
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
+
+            {selectedSlice && (
+              <CategoryExpenseDetailPanel
+                slice={selectedSlice}
+                onClose={() => setSelectedCategoryId(null)}
+              />
+            )}
           </>
         )}
       </div>
