@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import CategoryIcon from "@/components/CategoryIcon";
 import { CategoryDonutSection, buildCatSlices } from "@/components/CategoryDonutSection";
+import { buildConsumptionCatSlices } from "@/app/relatorios/consumptionByCategory";
 
 const MONTH_NAMES = [
   "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
@@ -86,6 +87,7 @@ export default function Dashboard() {
   const { state, dispatch } = useApp();
   const [selectedMonth, setSelectedMonth] = useState(currentMonth());
   const [pendingExpanded, setPendingExpanded] = useState(false);
+  const [categoryView, setCategoryView] = useState<"invoice" | "consumption">("invoice");
 
   function openTransaction(tx: Transaction) {
     router.push(`/transacoes/${tx.id}/editar`);
@@ -216,15 +218,24 @@ export default function Dashboard() {
 
   // Donut: despesas pagas + parcelas do mês selecionado
   const catSlices = useMemo(() =>
-    buildCatSlices(
-      state.transactions,
-      state.installments,
-      state.purchases,
-      state.categories,
-      state.cards,
-      selectedMonth,
-    ),
-    [state.transactions, state.installments, state.purchases, state.categories, state.cards, selectedMonth]
+    categoryView === "invoice"
+      ? buildCatSlices(
+          state.transactions,
+          state.installments,
+          state.purchases,
+          state.categories,
+          state.cards,
+          selectedMonth,
+        )
+      : buildConsumptionCatSlices(
+          selectedMonth,
+          state.transactions,
+          state.installments,
+          state.purchases,
+          state.categories,
+          state.cards,
+        ),
+    [categoryView, state.transactions, state.installments, state.purchases, state.categories, state.cards, selectedMonth]
   );
 
   // Máximo 3 lançamentos recentes
@@ -782,19 +793,45 @@ export default function Dashboard() {
             <div style={{
               padding: "12px 14px 10px",
               borderBottom: "1px solid var(--border)",
-              display: "flex", justifyContent: "space-between", alignItems: "center",
             }}>
-              <p style={{
-                fontSize: "11px", fontWeight: 700, color: "var(--text-3)",
-                letterSpacing: "0.07em", textTransform: "uppercase",
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
+                <p style={{
+                  fontSize: "11px", fontWeight: 700, color: "var(--text-3)",
+                  letterSpacing: "0.07em", textTransform: "uppercase",
+                }}>
+                  Gastos por Categoria
+                </p>
+                <Link href="/relatorios" style={{ fontSize: "11.5px", color: "var(--accent)", textDecoration: "none", fontWeight: 600 }}>
+                  Relatórios →
+                </Link>
+              </div>
+              <div style={{
+                display: "flex", gap: "4px",
+                padding: "3px", background: "rgba(255,255,255,0.04)",
+                borderRadius: "10px", border: "1px solid var(--border)",
               }}>
-                Gastos por Categoria
-              </p>
-              <Link href="/relatorios" style={{ fontSize: "11.5px", color: "var(--accent)", textDecoration: "none", fontWeight: 600 }}>
-                Relatórios →
-              </Link>
+                {([
+                  { id: "invoice" as const, label: "Por fatura" },
+                  { id: "consumption" as const, label: "Gasto real" },
+                ] as const).map(opt => (
+                  <button
+                    key={opt.id}
+                    onClick={() => setCategoryView(opt.id)}
+                    style={{
+                      flex: 1, padding: "6px 6px", borderRadius: "8px",
+                      border: categoryView === opt.id ? "1px solid var(--border-accent)" : "1px solid transparent",
+                      fontSize: "11px", fontWeight: 700, fontFamily: "inherit",
+                      cursor: "pointer", touchAction: "manipulation",
+                      background: categoryView === opt.id ? "var(--accent-10)" : "transparent",
+                      color: categoryView === opt.id ? "var(--accent)" : "var(--text-3)",
+                    }}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
             </div>
-            <CategoryDonutSection key={selectedMonth} slices={catSlices} />
+            <CategoryDonutSection key={`${selectedMonth}-${categoryView}`} slices={catSlices} />
           </div>
         )}
 
