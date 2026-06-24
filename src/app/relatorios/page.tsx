@@ -482,8 +482,8 @@ export default function Relatorios() {
           </div>
           {categoryView === "consumption" && (
             <p style={{ fontSize: "11px", color: "var(--text-3)", marginTop: "10px", lineHeight: 1.4 }}>
-              Compras no cartão pela data em que você passou o cartão (valor integral da compra).
-              Lançamentos manuais usam a data de competência. Pode diferir da fatura do mesmo mês.
+              Cartão: valor de cada parcela no mês da fatura (parcelado conta só a parcela do mês).
+              Lançamentos em dinheiro/PIX usam a data de competência.
             </p>
           )}
         </div>
