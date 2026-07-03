@@ -302,7 +302,6 @@ export default function AIPageContent() {
             drafts={copilot.drafts}
             mixedAnswer={copilot.result?.intent === "mixed" ? copilot.result.answer : undefined}
             truncated={copilot.truncated}
-            autoConfirmIn={copilot.autoConfirmIn}
             categories={categories}
             accounts={accounts}
             cards={state.cards}
@@ -315,7 +314,6 @@ export default function AIPageContent() {
               copilot.applyResult(null);
               copilot.setMessage("");
             }}
-            onStopAutoConfirm={copilot.stopAutoConfirm}
           />
         )}
       </div>

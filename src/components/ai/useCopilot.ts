@@ -19,8 +19,6 @@ import type {
 } from "@/lib/ai/types";
 import { itemToDraft, type DraftItem, type PurchaseDraft, type TxDraft } from "./AIDraftPreview";
 
-const AUTO_CONFIRM_MAX_AMOUNT = 500;
-const AUTO_CONFIRM_SECONDS = 5;
 const CHAT_HISTORY_MAX = 5;
 const CONVERSATION_HISTORY_MAX = 4;
 
@@ -43,14 +41,12 @@ export function useCopilot(initialMessage = "") {
   const [retryIn, setRetryIn] = useState<number | null>(null);
   const [retryReason, setRetryReason] = useState("");
   const [hints, setHints] = useState<Hints>({});
-  const [autoConfirmIn, setAutoConfirmIn] = useState<number | null>(null);
   const [chatHistory, setChatHistory] = useState<ChatTurn[]>([]);
   const [conversationHistory, setConversationHistory] = useState<ConversationTurn[]>([]);
 
   const contentRef = useRef<HTMLDivElement>(null);
   const pendingMsg = useRef("");
   const retryTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const autoConfirmTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const buildContext = useCallback(
     () =>
@@ -70,7 +66,6 @@ export function useCopilot(initialMessage = "") {
   useEffect(() => {
     return () => {
       if (retryTimerRef.current) clearInterval(retryTimerRef.current);
-      if (autoConfirmTimerRef.current) clearInterval(autoConfirmTimerRef.current);
     };
   }, []);
 
@@ -96,48 +91,7 @@ export function useCopilot(initialMessage = "") {
     return () => unsub();
   }, []);
 
-  function shouldAutoConfirm(items: AIItem[]): boolean {
-    if (items.length === 0) return false;
-    const validCategoryIds = new Set(state.categories.map(c => c.id));
-    const validAccountIds = new Set(state.accounts.filter(a => a.active).map(a => a.id));
-    const validCardIds = new Set(state.cards.map(c => c.id));
-
-    return items.every(item => {
-      if (item.confidence !== "high") return false;
-      if (!item.categoryId || !validCategoryIds.has(item.categoryId)) return false;
-      if (item.amount <= 0 || item.amount > AUTO_CONFIRM_MAX_AMOUNT) return false;
-      if (item.intent === "transaction") {
-        return Boolean(item.accountId) && validAccountIds.has(item.accountId);
-      }
-      return Boolean(item.cardId) && validCardIds.has(item.cardId) && item.totalInstallments >= 1;
-    });
-  }
-
-  function stopAutoConfirm() {
-    if (autoConfirmTimerRef.current) {
-      clearInterval(autoConfirmTimerRef.current);
-      autoConfirmTimerRef.current = null;
-    }
-    setAutoConfirmIn(null);
-  }
-
-  function startAutoConfirm(onConfirm: () => void) {
-    setAutoConfirmIn(AUTO_CONFIRM_SECONDS);
-    autoConfirmTimerRef.current = setInterval(() => {
-      setAutoConfirmIn(prev => {
-        if (prev === null || prev <= 1) {
-          clearInterval(autoConfirmTimerRef.current!);
-          autoConfirmTimerRef.current = null;
-          onConfirm();
-          return null;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-  }
-
   function applyResult(next: AIResult | null) {
-    stopAutoConfirm();
     setResult(next);
     setPendingActions(next?.intent === "action" ? next.actions : []);
 
@@ -485,22 +439,33 @@ export function useCopilot(initialMessage = "") {
 
         const data: AIResult = await res.json();
 
-        if (
-          data.intent === "error" &&
-          (data.code === "HTTP_429" || data.code === "HTTP_503" || data.code === "TIMEOUT")
-        ) {
+        // 429 (cota da IA esgotada): NÃO faz retry automático. Reenviar em loop
+        // só queima mais cota e, se for o limite diário, nunca recupera (reseta
+        // só no dia seguinte). Mostra erro claro e deixa o usuário decidir.
+        if (data.intent === "error" && data.code === "HTTP_429") {
+          setLoading(false);
+          applyResult({
+            intent: "error",
+            code: "HTTP_429",
+            message:
+              typeof data.message === "string" && data.message
+                ? data.message
+                : "Limite da IA atingido. Tente novamente mais tarde.",
+          });
+          return;
+        }
+
+        // 503/timeout: sobrecarga temporária do modelo — aqui o retry automático
+        // faz sentido, pois costuma se resolver em segundos.
+        if (data.intent === "error" && (data.code === "HTTP_503" || data.code === "TIMEOUT")) {
           setLoading(false);
           setRetryReason(typeof data.message === "string" ? data.message : "");
-          const secs = data.retryAfterSec ?? (data.code === "HTTP_429" ? 30 : 15);
+          const secs = data.retryAfterSec ?? 15;
           startRetry(msg, secs);
           return;
         }
 
         applyResult(data);
-
-        if (data.intent === "launch" && shouldAutoConfirm(data.transactions)) {
-          startAutoConfirm(handleConfirmDrafts);
-        }
 
         pushHistory(msg, data);
 
@@ -513,7 +478,7 @@ export function useCopilot(initialMessage = "") {
         setLoading(false);
       }
     },
-    [buildContext, conversationHistory, handleConfirmDrafts, hints, state.accounts, state.cards, state.categories],
+    [buildContext, conversationHistory, hints, state.accounts, state.cards, state.categories],
   );
 
   function handleSend() {
@@ -574,7 +539,6 @@ export function useCopilot(initialMessage = "") {
     flashMessage,
     retryIn,
     retryReason,
-    autoConfirmIn,
     chatHistory,
     contentRef,
     isBusy,
@@ -584,7 +548,6 @@ export function useCopilot(initialMessage = "") {
     showQuestionCard,
     truncated,
     canConfirm,
-    stopAutoConfirm,
     handleSend,
     handleConfirmDrafts,
     handleConfirmActions,

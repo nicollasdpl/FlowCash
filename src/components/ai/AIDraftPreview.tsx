@@ -1,5 +1,5 @@
 "use client";
-import { AlertTriangle, Undo2, X } from "lucide-react";
+import { AlertTriangle, X } from "lucide-react";
 import CategoryIcon, { iconLabel } from "@/components/CategoryIcon";
 import type { AIItem } from "@/lib/ai/types";
 import { Package } from "lucide-react";
@@ -344,7 +344,6 @@ type AIDraftPreviewProps = {
   drafts: DraftItem[];
   mixedAnswer?: string;
   truncated?: boolean;
-  autoConfirmIn: number | null;
   categories: DraftCardProps["categories"];
   accounts: DraftCardProps["accounts"];
   cards: DraftCardProps["cards"];
@@ -354,14 +353,12 @@ type AIDraftPreviewProps = {
   onRemoveDraft: (uid: string) => void;
   onConfirm: () => void;
   onDiscard: () => void;
-  onStopAutoConfirm: () => void;
 };
 
 export function AIDraftPreview({
   drafts,
   mixedAnswer,
   truncated,
-  autoConfirmIn,
   categories,
   accounts,
   cards,
@@ -371,7 +368,6 @@ export function AIDraftPreview({
   onRemoveDraft,
   onConfirm,
   onDiscard,
-  onStopAutoConfirm,
 }: AIDraftPreviewProps) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "14px", animation: "fadeIn 0.25s ease" }}>
@@ -396,60 +392,14 @@ export function AIDraftPreview({
         </div>
       )}
 
-      {autoConfirmIn !== null && (
-        <button
-          onClick={onStopAutoConfirm}
-          aria-label="Cancelar lançamento automático"
-          style={{
-            padding: "12px 14px",
-            background: "var(--accent-10)",
-            border: "1px solid var(--border-accent)",
-            borderRadius: "14px",
-            display: "flex",
-            alignItems: "center",
-            gap: "12px",
-            cursor: "pointer",
-            textAlign: "left",
-            fontFamily: "inherit",
-            width: "100%",
-          }}
-        >
-          <div
-            style={{
-              width: "40px",
-              height: "40px",
-              borderRadius: "50%",
-              background: "var(--accent-10)",
-              border: "2px solid var(--border-accent)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: "16px",
-              fontWeight: 700,
-              color: "var(--accent)",
-              flexShrink: 0,
-            }}
-          >
-            {autoConfirmIn}
-          </div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <p style={{ fontSize: "13px", fontWeight: 700, color: "var(--accent)" }}>Lançando automaticamente</p>
-            <p style={{ fontSize: "11.5px", color: "var(--text-3)", marginTop: "2px", lineHeight: 1.4 }}>Toque para desfazer e revisar</p>
-          </div>
-          <Undo2 size={18} strokeWidth={1.5} color="var(--accent)" />
-        </button>
-      )}
+      <div style={{ display: "flex", alignItems: "center", gap: "8px", padding: "0 4px" }}>
+        <SparkleIcon size={12} />
+        <p style={{ fontSize: "10px", fontWeight: 700, color: "var(--accent)", letterSpacing: "0.08em", textTransform: "uppercase" }}>
+          {drafts.length === 1 ? "1 lançamento detectado" : `${drafts.length} lançamentos detectados`} — edite ou remova individualmente
+        </p>
+      </div>
 
-      {autoConfirmIn === null && (
-        <div style={{ display: "flex", alignItems: "center", gap: "8px", padding: "0 4px" }}>
-          <SparkleIcon size={12} />
-          <p style={{ fontSize: "10px", fontWeight: 700, color: "var(--accent)", letterSpacing: "0.08em", textTransform: "uppercase" }}>
-            {drafts.length === 1 ? "1 lançamento detectado" : `${drafts.length} lançamentos detectados`} — edite ou remova individualmente
-          </p>
-        </div>
-      )}
-
-      <div style={{ display: "flex", flexDirection: "column", gap: "14px", opacity: autoConfirmIn !== null ? 0.7 : 1, transition: "opacity 0.2s" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
         {drafts.map(draft => (
           <DraftCard
             key={draft.uid}
@@ -457,7 +407,6 @@ export function AIDraftPreview({
             categories={categories}
             accounts={accounts}
             cards={cards}
-            readOnly={autoConfirmIn !== null}
             onUpdateTx={patch => onUpdateTx(draft.uid, patch)}
             onUpdatePurchase={patch => onUpdatePurchase(draft.uid, patch)}
             onRemove={() => onRemoveDraft(draft.uid)}
@@ -465,45 +414,43 @@ export function AIDraftPreview({
         ))}
       </div>
 
-      {autoConfirmIn === null && (
-        <div style={{ display: "flex", gap: "8px", paddingTop: "2px" }}>
-          <button
-            onClick={onConfirm}
-            disabled={!canConfirm}
-            style={{
-              flex: 1,
-              padding: "14px",
-              background: canConfirm ? "var(--accent)" : "var(--bg-input)",
-              border: canConfirm ? "none" : "1px solid var(--border)",
-              borderRadius: "12px",
-              color: canConfirm ? "#06100E" : "var(--text-3)",
-              fontSize: "14px",
-              fontWeight: 700,
-              cursor: canConfirm ? "pointer" : "not-allowed",
-              fontFamily: "inherit",
-            }}
-          >
-            {drafts.length === 1 ? "Confirmar" : `Confirmar ${drafts.length}`}
-          </button>
-          <button
-            onClick={onDiscard}
-            style={{
-              flex: 1,
-              padding: "14px",
-              background: "var(--bg-input)",
-              border: "1px solid var(--border)",
-              borderRadius: "12px",
-              color: "var(--text-2)",
-              fontSize: "14px",
-              fontWeight: 600,
-              cursor: "pointer",
-              fontFamily: "inherit",
-            }}
-          >
-            Descartar tudo
-          </button>
-        </div>
-      )}
+      <div style={{ display: "flex", gap: "8px", paddingTop: "2px" }}>
+        <button
+          onClick={onConfirm}
+          disabled={!canConfirm}
+          style={{
+            flex: 1,
+            padding: "14px",
+            background: canConfirm ? "var(--accent)" : "var(--bg-input)",
+            border: canConfirm ? "none" : "1px solid var(--border)",
+            borderRadius: "12px",
+            color: canConfirm ? "#06100E" : "var(--text-3)",
+            fontSize: "14px",
+            fontWeight: 700,
+            cursor: canConfirm ? "pointer" : "not-allowed",
+            fontFamily: "inherit",
+          }}
+        >
+          {drafts.length === 1 ? "Confirmar" : `Confirmar ${drafts.length}`}
+        </button>
+        <button
+          onClick={onDiscard}
+          style={{
+            flex: 1,
+            padding: "14px",
+            background: "var(--bg-input)",
+            border: "1px solid var(--border)",
+            borderRadius: "12px",
+            color: "var(--text-2)",
+            fontSize: "14px",
+            fontWeight: 600,
+            cursor: "pointer",
+            fontFamily: "inherit",
+          }}
+        >
+          Descartar tudo
+        </button>
+      </div>
     </div>
   );
 }
