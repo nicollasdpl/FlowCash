@@ -454,7 +454,16 @@ export default function Dashboard() {
           gap: "8px", marginBottom: "14px",
         }}>
           {[
-            { label: "Receitas", value: monthIncome, color: "var(--green)", icon: "↑", href: "/transacoes?tipo=income" },
+            {
+              label: "Receitas",
+              value: monthIncome,
+              color: "var(--green)",
+              icon: "↑",
+              href: "/transacoes?tipo=income",
+              hint: totalIncomePending > 0
+                ? `+${totalIncomePending >= 1000 ? `${(totalIncomePending / 1000).toFixed(1)}k` : fmt(totalIncomePending)} a receber`
+                : undefined,
+            },
             { label: "Despesas", value: monthExpense, color: monthExpense > monthIncome ? "var(--red)" : "var(--text-1)", icon: "↓", href: "/transacoes?tipo=expense" },
             { label: "Balanço", value: monthBalance, color: isBalanceNegative(monthBalance) ? "var(--red)" : isBalancePositive(monthBalance) ? "var(--accent)" : "var(--text-2)", icon: isBalancePositive(monthBalance) ? "+" : "", prefix: true, href: null },
           ].map((m, i) => (
@@ -481,6 +490,15 @@ export default function Dashboard() {
                   ? `${(m.value / 1000).toFixed(1)}k`
                   : fmt(m.value)}
               </p>
+              {"hint" in m && m.hint && (
+                <p style={{
+                  fontSize: "9px", fontWeight: 600, color: "var(--accent)",
+                  marginTop: "3px", lineHeight: 1.2,
+                  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                }}>
+                  {m.hint}
+                </p>
+              )}
             </div>
           ))}
         </div>
@@ -512,6 +530,8 @@ export default function Dashboard() {
             </div>
             {overduePending.map((tx, i) => {
               const cat = state.categories.find(c => c.id === tx.categoryId);
+              const isExpense = tx.type === "expense";
+              const accent = isExpense ? "var(--red)" : "var(--accent)";
               return (
                 <div
                   key={tx.id}
@@ -525,14 +545,14 @@ export default function Dashboard() {
                     onClick={() => openTransaction(tx)}
                     style={{
                       width: "36px", height: "36px", borderRadius: "10px", flexShrink: 0,
-                      background: cat ? `${cat.color}18` : "rgba(255,77,106,0.1)",
+                      background: cat ? `${cat.color}18` : isExpense ? "rgba(255,77,106,0.1)" : "var(--accent-10)",
                       display: "flex", alignItems: "center", justifyContent: "center",
                       cursor: "pointer",
                     }}
                   >
                     {cat?.icon
                       ? <CategoryIcon icon={cat.icon} color={cat.color} size={15} />
-                      : <Package size={15} strokeWidth={1.5} color="var(--red)" />}
+                      : <Package size={15} strokeWidth={1.5} color={accent} />}
                   </div>
 
                   <div
@@ -545,28 +565,28 @@ export default function Dashboard() {
                     }}>
                       {tx.description}
                     </p>
-                    <p style={{ fontSize: "11px", color: "var(--red)", marginTop: "2px" }}>
-                      Venceu {fmtDate(tx.paymentDate)}
+                    <p style={{ fontSize: "11px", color: accent, marginTop: "2px" }}>
+                      {isExpense ? "Venceu" : "Atrasado"} {fmtDate(tx.paymentDate)}
                     </p>
                   </div>
 
                   <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "6px", flexShrink: 0 }}>
-                    <p className="mono" style={{ fontSize: "13px", fontWeight: 700, color: "var(--red)" }}>
+                    <p className="mono" style={{ fontSize: "13px", fontWeight: 700, color: accent }}>
                       R$ {fmt(tx.amount)}
                     </p>
                     <button
                       onClick={() => payNow(tx)}
                       style={{
                         padding: "5px 10px", minHeight: "28px", minWidth: "60px",
-                        background: "rgba(255,77,106,0.12)",
-                        color: "var(--red)",
-                        border: "1px solid var(--red-20)",
+                        background: isExpense ? "rgba(255,77,106,0.12)" : "var(--accent-10)",
+                        color: accent,
+                        border: `1px solid ${isExpense ? "var(--red-20)" : "var(--border-accent)"}`,
                         borderRadius: "8px", fontSize: "11px", fontWeight: 700,
                         cursor: "pointer", fontFamily: "inherit",
                         touchAction: "manipulation",
                       }}
                     >
-                      Pagar
+                      {isExpense ? "Pagar" : "Receber"}
                     </button>
                   </div>
                 </div>
