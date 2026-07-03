@@ -45,6 +45,54 @@ describe("sanitizeTransactions", () => {
     expect(items[0]?.categoryId).toBeNull();
   });
 
+  it("com contextCardId, despesa vira compra no cartão", () => {
+    const items = sanitizeTransactions({
+      ...base,
+      contextCardId: "card1",
+      items: [
+        {
+          intent: "transaction",
+          type: "expense",
+          amount: 80,
+          description: "Mercado",
+          categoryId: "cat1",
+          accountId: "acc1",
+          confidence: "high",
+        },
+      ],
+    });
+
+    expect(items).toHaveLength(1);
+    expect(items[0]?.intent).toBe("card_purchase");
+    if (items[0]?.intent === "card_purchase") {
+      expect(items[0].cardId).toBe("card1");
+      expect(items[0].amount).toBe(80);
+    }
+  });
+
+  it("com contextCardId, receita permanece transação", () => {
+    const items = sanitizeTransactions({
+      ...base,
+      contextCardId: "card1",
+      items: [
+        {
+          intent: "transaction",
+          type: "income",
+          amount: 100,
+          description: "Pix",
+          categoryId: "cat1",
+          accountId: "acc1",
+          confidence: "high",
+        },
+      ],
+    });
+
+    expect(items[0]?.intent).toBe("transaction");
+    if (items[0]?.intent === "transaction") {
+      expect(items[0].type).toBe("income");
+    }
+  });
+
   it("ignora amount inválido", () => {
     const items = sanitizeTransactions({
       ...base,

@@ -34,6 +34,7 @@ type DraftCardProps = {
   accounts: { id: string; name: string; icon: string; active: boolean }[];
   cards: { id: string; name: string; brand: string }[];
   readOnly?: boolean;
+  lockCardId?: string | null;
   onUpdateTx: (patch: Partial<TxDraft>) => void;
   onUpdatePurchase: (patch: Partial<PurchaseDraft>) => void;
   onRemove: () => void;
@@ -45,6 +46,7 @@ function DraftCard({
   accounts,
   cards,
   readOnly = false,
+  lockCardId,
   onUpdateTx,
   onUpdatePurchase,
   onRemove,
@@ -319,7 +321,12 @@ function DraftCard({
                 </div>
                 <div className="form-group" style={{ margin: 0 }}>
                   <label className="form-label">Cartão</label>
-                  <select className="form-input" value={purchase.cardId} onChange={e => onUpdatePurchase({ cardId: e.target.value })}>
+                  <select
+                    className="form-input"
+                    value={lockCardId ?? purchase.cardId}
+                    onChange={e => onUpdatePurchase({ cardId: e.target.value })}
+                    disabled={Boolean(lockCardId)}
+                  >
                     {cards.map(c => (
                       <option key={c.id} value={c.id}>
                         {c.name} ({c.brand})
@@ -348,6 +355,7 @@ type AIDraftPreviewProps = {
   accounts: DraftCardProps["accounts"];
   cards: DraftCardProps["cards"];
   canConfirm: boolean;
+  lockCardId?: string | null;
   onUpdateTx: (uid: string, patch: Partial<TxDraft>) => void;
   onUpdatePurchase: (uid: string, patch: Partial<PurchaseDraft>) => void;
   onRemoveDraft: (uid: string) => void;
@@ -363,6 +371,7 @@ export function AIDraftPreview({
   accounts,
   cards,
   canConfirm,
+  lockCardId,
   onUpdateTx,
   onUpdatePurchase,
   onRemoveDraft,
@@ -407,6 +416,7 @@ export function AIDraftPreview({
             categories={categories}
             accounts={accounts}
             cards={cards}
+            lockCardId={lockCardId}
             onUpdateTx={patch => onUpdateTx(draft.uid, patch)}
             onUpdatePurchase={patch => onUpdatePurchase(draft.uid, patch)}
             onRemove={() => onRemoveDraft(draft.uid)}

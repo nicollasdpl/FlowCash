@@ -22,13 +22,39 @@ import { itemToDraft, type DraftItem, type PurchaseDraft, type TxDraft } from ".
 const CHAT_HISTORY_MAX = 5;
 const CONVERSATION_HISTORY_MAX = 4;
 
+type CopilotOptions = {
+  contextCardId?: string | null;
+};
+
+function coerceItemsForCardContext(items: AIItem[], contextCardId: string): AIItem[] {
+  return items.map(item => {
+    if (item.intent === "transaction" && item.type === "expense") {
+      return {
+        intent: "card_purchase" as const,
+        amount: item.amount,
+        description: item.description,
+        categoryId: item.categoryId,
+        cardId: contextCardId,
+        purchaseDate: item.paymentDate,
+        totalInstallments: 1,
+        confidence: item.confidence,
+      };
+    }
+    if (item.intent === "card_purchase") {
+      return { ...item, cardId: contextCardId };
+    }
+    return item;
+  });
+}
+
 function normalizeHintKey(description: string): string {
   return description.toLowerCase().normalize("NFD").replace(/\p{M}/gu, "").trim();
 }
 
-export function useCopilot(initialMessage = "") {
+export function useCopilot(initialMessage = "", options: CopilotOptions = {}) {
   const router = useRouter();
   const { state, dispatch } = useApp();
+  const contextCardId = options.contextCardId ?? null;
 
   const [message, setMessage] = useState(initialMessage);
   const [loading, setLoading] = useState(false);
@@ -96,7 +122,11 @@ export function useCopilot(initialMessage = "") {
     setPendingActions(next?.intent === "action" ? next.actions : []);
 
     if (next?.intent === "launch" || next?.intent === "mixed") {
-      setDrafts(next.transactions.map(t => itemToDraft(t, newId)));
+      let items = next.transactions;
+      if (contextCardId && state.cards.some(c => c.id === contextCardId)) {
+        items = coerceItemsForCardContext(items, contextCardId);
+      }
+      setDrafts(items.map(t => itemToDraft(t, newId)));
     } else {
       setDrafts([]);
     }
@@ -428,6 +458,7 @@ export function useCopilot(initialMessage = "") {
             hints,
             conversationHistory,
             financialContext,
+            ...(contextCardId ? { contextCardId } : {}),
           }),
         });
 
@@ -478,7 +509,7 @@ export function useCopilot(initialMessage = "") {
         setLoading(false);
       }
     },
-    [buildContext, conversationHistory, hints, state.accounts, state.cards, state.categories],
+    [buildContext, conversationHistory, contextCardId, hints, state.accounts, state.cards, state.categories],
   );
 
   function handleSend() {
@@ -548,6 +579,7 @@ export function useCopilot(initialMessage = "") {
     showQuestionCard,
     truncated,
     canConfirm,
+    contextCardId,
     handleSend,
     handleConfirmDrafts,
     handleConfirmActions,

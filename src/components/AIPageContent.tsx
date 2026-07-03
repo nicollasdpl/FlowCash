@@ -9,6 +9,7 @@ import { EXAMPLE_PROMPTS, getContextualChips } from "@/components/ai/chips";
 import { SparkleIcon } from "@/components/ai/shared";
 import { useCopilot } from "@/components/ai/useCopilot";
 import { useApp } from "@/context/AppContext";
+import { parseCardIdFromPath } from "@/lib/ai/cardContext";
 import { useRouter } from "next/navigation";
 
 export default function AIPageContent() {
@@ -16,10 +17,12 @@ export default function AIPageContent() {
   const searchParams = useSearchParams();
   const initialQ = searchParams.get("q") ?? "";
   const fromPath = searchParams.get("from") ?? "/";
+  const contextCardId = parseCardIdFromPath(fromPath);
   const quickChips = getContextualChips(fromPath);
   const { state } = useApp();
+  const contextCard = contextCardId ? state.cards.find(c => c.id === contextCardId) : null;
 
-  const copilot = useCopilot(initialQ);
+  const copilot = useCopilot(initialQ, { contextCardId });
 
   useEffect(() => {
     if (initialQ) {
@@ -93,6 +96,21 @@ export default function AIPageContent() {
       </div>
 
       <div ref={copilot.contentRef} style={{ padding: "20px 16px calc(130px + var(--bottom-nav-total, 48px))" }}>
+        {contextCard && !copilot.flash && (
+          <div
+            style={{
+              marginBottom: "14px",
+              padding: "10px 14px",
+              background: "var(--accent-10)",
+              border: "1px solid var(--border-accent)",
+              borderRadius: "12px",
+            }}
+          >
+            <p style={{ fontSize: "12px", fontWeight: 600, color: "var(--accent)", lineHeight: 1.4 }}>
+              Gastos lançados aqui entram como compra no cartão <strong style={{ color: "var(--text-1)" }}>{contextCard.name}</strong>.
+            </p>
+          </div>
+        )}
         {copilot.flash && (
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "40px 0", animation: "fadeIn 0.25s ease" }}>
             <div
@@ -306,6 +324,7 @@ export default function AIPageContent() {
             accounts={accounts}
             cards={state.cards}
             canConfirm={copilot.canConfirm}
+            lockCardId={copilot.contextCardId}
             onUpdateTx={copilot.updateTx}
             onUpdatePurchase={copilot.updatePurchase}
             onRemoveDraft={copilot.removeDraft}

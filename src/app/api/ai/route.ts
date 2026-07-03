@@ -8,8 +8,11 @@ import { MAX_TX, sanitizeActions, sanitizeTransactions } from "@/lib/ai/sanitize
 import type { FinancialContext } from "@/lib/ai/types";
 import { adminAuth, adminDb } from "@/lib/firebase-admin";
 
+// gemini-flash-lite-latest: free tier bem maior (~30 RPM / ~1.000 RPD) que o
+// gemini-flash-latest (~10 RPM / ~250 RPD). Mesma cota gratuita por projeto,
+// só que com teto mais alto — reduz drasticamente o 429 no uso do copiloto.
 const GEMINI_URL =
-  "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent";
+  "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest:generateContent";
 
 export const maxDuration = 60;
 
@@ -209,6 +212,7 @@ export async function POST(req: NextRequest) {
     hints?: Record<string, HintIn>;
     financialContext?: FinancialContext;
     conversationHistory?: TurnIn[];
+    contextCardId?: string;
   };
 
   try {
@@ -217,7 +221,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ intent: "error", code: "BAD_REQUEST", message: "Body inválido." }, { status: 400 });
   }
 
-  const { message, categories = [], accounts = [], cards = [], hints = {}, financialContext, conversationHistory } = body;
+  const { message, categories = [], accounts = [], cards = [], hints = {}, financialContext, conversationHistory, contextCardId: rawContextCardId } = body;
   if (!message?.trim()) {
     return NextResponse.json({ intent: "unknown", message: "Mensagem vazia." });
   }
@@ -249,6 +253,9 @@ export async function POST(req: NextRequest) {
   const categoryIds = new Set(categoriesTyped.map(c => c.id));
   const accountIds = new Set(accountsTyped.map(a => a.id));
   const cardIds = new Set(cardsTyped.map(c => c.id));
+  const contextCardId =
+    typeof rawContextCardId === "string" && cardIds.has(rawContextCardId) ? rawContextCardId : null;
+  const contextCard = contextCardId ? cardsTyped.find(c => c.id === contextCardId) : null;
 
   if (intentHint === "question" && isFinancialContext(financialContext) && isLocalAnswerCandidate(message)) {
     const local = tryLocalAnswer(message, financialContext);
@@ -331,6 +338,14 @@ export async function POST(req: NextRequest) {
       ? `\nREGRA DE CONFIDENCE: se a descrição bater com uma preferência confirmada 2+ vezes acima, use confidence="high" para categoryId e conta/cartão correspondentes.`
       : "";
 
+  const cardContextRules = contextCard
+    ? `\n\nCONTEXTO DO APP: o usuário abriu o copiloto na página do cartão id="${contextCard.id}" (${contextCard.name}).
+REGRA OBRIGATÓRIA NESTE CONTEXTO:
+- Todo gasto, compra ou despesa → intent=card_purchase com cardId="${contextCard.id}" (NUNCA transaction type=expense).
+- Parcelado → card_purchase com totalInstallments informado.
+- Receitas explícitas (salário, pix recebido) podem ser transaction type=income em conta.`
+    : "";
+
   const prompt = `Você é um assistente financeiro pessoal brasileiro.
 
 INSTRUÇÃO CRÍTICA: responda APENAS com JSON válido seguindo o schema. NUNCA texto livre.
@@ -347,7 +362,7 @@ CARTÕES:
 ${cardsList}${historyBlock}
 
 MENSAGEM ATUAL: "${message.trim()}"${financialContextBlock}
-${intentInstructions}${confidenceRules}
+${intentInstructions}${confidenceRules}${cardContextRules}
 
 REGRAS DE LANÇAMENTO:
 - Bandeira ou "cartão" → card_purchase
@@ -554,6 +569,7 @@ EXEMPLOS ACTION:
     firstAccountId,
     firstCardId,
     today,
+    contextCardId: contextCardId ?? undefined,
   });
 
   if (sanitized.length === 0) {

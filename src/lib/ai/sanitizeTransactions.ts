@@ -12,10 +12,14 @@ export type SanitizeInput = {
   firstAccountId: string;
   firstCardId: string;
   today: string;
+  /** Quando o copiloto foi aberto na página de um cartão, despesas viram compras nele. */
+  contextCardId?: string;
 };
 
 export function sanitizeTransactions(input: SanitizeInput): AIItem[] {
-  const { items, categoryIds, accountIds, cardIds, firstAccountId, firstCardId, today } = input;
+  const { items, categoryIds, accountIds, cardIds, firstAccountId, firstCardId, today, contextCardId } = input;
+  const forcedCardId =
+    contextCardId && cardIds.has(contextCardId) ? contextCardId : null;
   const sanitized: AIItem[] = [];
 
   for (const raw of items.slice(0, MAX_TX)) {
@@ -44,14 +48,34 @@ export function sanitizeTransactions(input: SanitizeInput): AIItem[] {
 
     if (intent === "transaction") {
       const type = r.type === "income" ? "income" : "expense";
+      const paymentDate = typeof r.paymentDate === "string" && r.paymentDate ? r.paymentDate : today;
+      const competenceDate =
+        typeof r.competenceDate === "string" && r.competenceDate ? r.competenceDate : paymentDate;
+
+      // Copiloto aberto no cartão: despesa → compra nesse cartão (não PIX/conta).
+      if (forcedCardId && type === "expense") {
+        const totalInstallments =
+          typeof r.totalInstallments === "number" && r.totalInstallments > 0
+            ? Math.floor(r.totalInstallments)
+            : 1;
+        sanitized.push({
+          intent: "card_purchase",
+          amount,
+          description,
+          categoryId,
+          cardId: forcedCardId,
+          purchaseDate: paymentDate,
+          totalInstallments,
+          confidence,
+        });
+        continue;
+      }
+
       const rawAccountId = typeof r.accountId === "string" ? r.accountId : "";
       const validRawAccount = Boolean(rawAccountId) && accountIds.has(rawAccountId);
       const accountId = validRawAccount ? rawAccountId : firstAccountId;
       if (!validRawAccount) confidence = "low";
 
-      const paymentDate = typeof r.paymentDate === "string" && r.paymentDate ? r.paymentDate : today;
-      const competenceDate =
-        typeof r.competenceDate === "string" && r.competenceDate ? r.competenceDate : paymentDate;
       const status = r.status === "pending" || r.status === "overdue" ? "pending" : "paid";
 
       sanitized.push({
@@ -69,8 +93,8 @@ export function sanitizeTransactions(input: SanitizeInput): AIItem[] {
     } else {
       const rawCardId = typeof r.cardId === "string" ? r.cardId : "";
       const validRawCard = Boolean(rawCardId) && cardIds.has(rawCardId);
-      const cardId = validRawCard ? rawCardId : firstCardId;
-      if (!validRawCard) confidence = "low";
+      const cardId = forcedCardId ?? (validRawCard ? rawCardId : firstCardId);
+      if (!validRawCard && !forcedCardId) confidence = "low";
 
       const purchaseDate = typeof r.purchaseDate === "string" && r.purchaseDate ? r.purchaseDate : today;
       const totalInstallments =
