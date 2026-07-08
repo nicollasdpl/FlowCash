@@ -5,6 +5,7 @@ import { useApp } from "@/context/AppContext";
 import Sidebar from "./Sidebar";
 import BottomNav from "./BottomNav";
 import AIAssistant from "./AIAssistant";
+import NotificationRunner from "./NotificationRunner";
 import LoginScreen from "./LoginScreen";
 import { Wallet } from "lucide-react";
 
@@ -78,6 +79,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       </main>
       <BottomNav />
       <AIAssistant />
+      <NotificationRunner />
     </div>
   );
 }

@@ -17,6 +17,7 @@ import type {
 import { SEED_INVOICE_PAYMENT_CATEGORY_ID } from "@/types/financial";
 import { generateInstallments, generateSubscriptionInstallment, getCompetenceMonth } from "@/engine/invoiceEngine";
 import { addMonths } from "@/engine/financialEngine";
+import { DEFAULT_NOTIFICATION_PREFS } from "@/lib/notifications/types";
 
 export type {
   Account, Transaction, CreditCard, CardPurchase, CardInstallment,
@@ -25,8 +26,9 @@ export type {
 
 // ─── STATE ────────────────────────────────────────────────────────────────────
 
-interface AppState {
+export interface AppState {
   userName: string;
+  notificationPrefs: import("@/lib/notifications/types").NotificationPrefs;
   accounts: Account[];
   transactions: Transaction[];
   cards: CreditCard[];
@@ -40,6 +42,7 @@ interface AppState {
 type Action =
   | { type: "LOAD"; payload: AppState }
   | { type: "SET_USER_NAME"; payload: string }
+  | { type: "SET_NOTIFICATION_PREFS"; payload: import("@/lib/notifications/types").NotificationPrefs }
   | { type: "ADD_ACCOUNT"; payload: Account }
   | { type: "UPD_ACCOUNT"; payload: Account }
   | { type: "DEL_ACCOUNT"; payload: string }
@@ -87,6 +90,7 @@ export const SEED_CATEGORY_IDS = new Set(SEED_CATEGORIES.map(c => c.id));
 
 const seed: AppState = {
   userName: "",
+  notificationPrefs: DEFAULT_NOTIFICATION_PREFS,
   accounts: [],
   transactions: [],
   cards: [],
@@ -144,10 +148,20 @@ function reducer(state: AppState, action: Action): AppState {
       const categories = baseCategories.some(c => c.id === SEED_INVOICE_PAYMENT_CATEGORY_ID)
         ? baseCategories
         : [...baseCategories, systemInvoiceCat];
-      return { ...seed, ...action.payload, categories };
+      return {
+        ...seed,
+        ...action.payload,
+        categories,
+        notificationPrefs: {
+          ...DEFAULT_NOTIFICATION_PREFS,
+          ...(action.payload.notificationPrefs ?? {}),
+        },
+      };
     }
     case "SET_USER_NAME":
       return { ...state, userName: action.payload };
+    case "SET_NOTIFICATION_PREFS":
+      return { ...state, notificationPrefs: action.payload };
 
     case "ADD_ACCOUNT":
       return { ...state, accounts: [...state.accounts, action.payload] };

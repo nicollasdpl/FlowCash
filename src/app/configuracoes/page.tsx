@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useApp } from "@/context/AppContext";
 import CategoryIcon from "@/components/CategoryIcon";
 import { Landmark, BarChart2, TrendingUp, ArrowUpDown, CreditCard, Target, RefreshCw } from "lucide-react";
+import NotificationSettingsCard from "@/components/NotificationSettingsCard";
 
 export default function Configuracoes() {
   const { state, dispatch, user, signOut, syncNow, syncState, lastSyncedAt, lastSyncError } = useApp();
@@ -189,6 +190,8 @@ export default function Configuracoes() {
           </div>
         </div>
       </div>
+
+      <NotificationSettingsCard />
 
       {/* Dados */}
       <div className="card fade-up-3" style={{ overflow: "hidden", marginBottom: "14px" }}>
