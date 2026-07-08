@@ -1,5 +1,5 @@
 import type { FinanceAlert } from "./types";
-import { alertDigestKey, formatAlertDigest } from "./buildAlerts";
+import { formatAlertDigest } from "./buildAlerts";
 
 const SW_PATH = "/sw.js";
 
@@ -26,31 +26,6 @@ export async function registerNotificationServiceWorker(): Promise<ServiceWorker
   } catch (err) {
     console.warn("[notifications] service worker registration failed:", err);
     return null;
-  }
-}
-
-function dedupeStorageKey(uid: string): string {
-  return `flowcash_notif_digest_${uid}`;
-}
-
-function wasDigestSentToday(uid: string, digestKey: string): boolean {
-  try {
-    const raw = localStorage.getItem(dedupeStorageKey(uid));
-    if (!raw) return false;
-    const parsed = JSON.parse(raw) as { date: string; key: string };
-    const today = new Date().toISOString().split("T")[0]!;
-    return parsed.date === today && parsed.key === digestKey;
-  } catch {
-    return false;
-  }
-}
-
-function markDigestSent(uid: string, digestKey: string) {
-  try {
-    const today = new Date().toISOString().split("T")[0]!;
-    localStorage.setItem(dedupeStorageKey(uid), JSON.stringify({ date: today, key: digestKey }));
-  } catch {
-    // ignore
   }
 }
 
@@ -84,7 +59,7 @@ export async function showNotificationNow(
   }
 }
 
-/** Teste manual — ignora limite de 1 por dia. Usa alertas reais ou mensagem de exemplo. */
+/** Teste local imediato (fallback se push servidor falhar). */
 export async function testFinanceNotification(
   alerts: FinanceAlert[],
 ): Promise<{ ok: boolean; hint: string }> {
@@ -111,7 +86,7 @@ export async function testFinanceNotification(
     return {
       ok,
       hint: ok
-        ? "Notificação enviada com seus lembretes atuais."
+        ? "Notificação local enviada com seus lembretes atuais."
         : "Não foi possível exibir a notificação.",
     };
   }
@@ -129,12 +104,9 @@ export async function testFinanceNotification(
   };
 }
 
-export async function deliverFinanceAlerts(uid: string, alerts: FinanceAlert[]): Promise<boolean> {
+export async function deliverFinanceAlerts(_uid: string, alerts: FinanceAlert[]): Promise<boolean> {
   if (alerts.length === 0) return false;
   if (!notificationsSupported() || Notification.permission !== "granted") return false;
-
-  const digestKey = alertDigestKey(alerts);
-  if (wasDigestSentToday(uid, digestKey)) return false;
 
   const { title, body } = formatAlertDigest(alerts);
   if (!body) return false;
@@ -143,7 +115,7 @@ export async function deliverFinanceAlerts(uid: string, alerts: FinanceAlert[]):
     body,
     icon: "/icon-192.png",
     badge: "/icon-192.png",
-    tag: `flowcash-${digestKey.slice(0, 32)}`,
+    tag: "flowcash-local",
     data: { url: "/" },
     requireInteraction: alerts.some(a => a.kind === "overdue"),
   };
@@ -155,7 +127,6 @@ export async function deliverFinanceAlerts(uid: string, alerts: FinanceAlert[]):
     } else {
       new Notification(title, options);
     }
-    markDigestSent(uid, digestKey);
     return true;
   } catch (err) {
     console.warn("[notifications] deliver failed:", err);

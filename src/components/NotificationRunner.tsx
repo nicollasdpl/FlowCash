@@ -2,9 +2,11 @@
 import { useCallback, useEffect, useRef } from "react";
 import { useApp } from "@/context/AppContext";
 import { buildFinanceAlerts } from "@/lib/notifications/buildAlerts";
-import { deliverFinanceAlerts, registerNotificationServiceWorker } from "@/lib/notifications/deliver";
+import { deliverFinanceAlerts, registerNotificationServiceWorker, showNotificationNow } from "@/lib/notifications/deliver";
+import { listenForegroundMessages, syncPushSubscription } from "@/lib/notifications/fcmClient";
+import "@/lib/firebase";
 
-/** Checa alertas financeiros ao abrir/voltar ao app e dispara notificação local (PWA). */
+/** Checa alertas ao abrir o app (local) e mantém registro FCM para push com app fechado. */
 export default function NotificationRunner() {
   const { state, user, syncState } = useApp();
   const prefs = state.notificationPrefs;
@@ -13,6 +15,33 @@ export default function NotificationRunner() {
   useEffect(() => {
     void registerNotificationServiceWorker();
   }, []);
+
+  useEffect(() => {
+    if (!user || !prefs.enabled) return;
+    let cancelled = false;
+    void (async () => {
+      const idToken = await user.getIdToken();
+      const result = await syncPushSubscription(idToken, true);
+      if (!cancelled && !result.ok) {
+        console.warn("[notifications] push sync:", result.hint);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user, prefs.enabled]);
+
+  useEffect(() => {
+    if (!user || !prefs.enabled) {
+      if (user && !prefs.enabled) {
+        void user.getIdToken().then(idToken => syncPushSubscription(idToken, false));
+      }
+      return;
+    }
+    return listenForegroundMessages((title, body) => {
+      void showNotificationNow(title, body, { tag: "flowcash-foreground" });
+    });
+  }, [user, prefs.enabled]);
 
   const runCheck = useCallback(async () => {
     if (!user || !prefs.enabled) return;

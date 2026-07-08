@@ -14,6 +14,8 @@ import {
   requestNotificationPermission,
   testFinanceNotification,
 } from "@/lib/notifications/deliver";
+import { syncPushSubscription } from "@/lib/notifications/fcmClient";
+import "@/lib/firebase";
 
 const TOGGLE_ITEMS: { key: keyof Omit<NotificationPrefs, "enabled">; label: string; desc: string }[] = [
   { key: "overdue", label: "Contas em atraso", desc: "Despesas com data já passada" },
@@ -26,12 +28,13 @@ const TOGGLE_ITEMS: { key: keyof Omit<NotificationPrefs, "enabled">; label: stri
 ];
 
 export default function NotificationSettingsCard() {
-  const { state, dispatch } = useApp();
+  const { state, dispatch, user } = useApp();
   const prefs = state.notificationPrefs ?? DEFAULT_NOTIFICATION_PREFS;
   const supported = notificationsSupported();
   const perm = notificationPermission();
   const [testHint, setTestHint] = useState<string | null>(null);
   const [testing, setTesting] = useState(false);
+  const [pushHint, setPushHint] = useState<string | null>(null);
 
   function update(patch: Partial<NotificationPrefs>) {
     dispatch({
@@ -48,9 +51,19 @@ export default function NotificationSettingsCard() {
       if (result !== "granted") return;
       await registerNotificationServiceWorker();
       update({ enabled: true });
+      if (user) {
+        const idToken = await user.getIdToken();
+        const sync = await syncPushSubscription(idToken, true);
+        setPushHint(sync.ok ? "Push ativo — lembretes chegam com o app fechado." : sync.hint ?? null);
+      }
       return;
     }
 
+    if (user) {
+      const idToken = await user.getIdToken();
+      await syncPushSubscription(idToken, false);
+    }
+    setPushHint(null);
     update({ enabled: false });
   }
 
@@ -61,10 +74,31 @@ export default function NotificationSettingsCard() {
   async function handleTestNotification() {
     setTesting(true);
     setTestHint(null);
-    const alerts = buildFinanceAlerts(
-      state,
-      { ...prefs, enabled: true },
-    );
+
+    if (user) {
+      try {
+        const idToken = await user.getIdToken();
+        const res = await fetch("/api/push/test", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${idToken}` },
+        });
+        const data = await res.json() as { ok?: boolean; hint?: string };
+        if (data.ok && data.hint) {
+          setTestHint(data.hint);
+          setTesting(false);
+          return;
+        }
+        if (data.hint) {
+          setTestHint(data.hint);
+          setTesting(false);
+          return;
+        }
+      } catch {
+        // fallback local abaixo
+      }
+    }
+
+    const alerts = buildFinanceAlerts(state, { ...prefs, enabled: true });
     const result = await testFinanceNotification(alerts);
     setTestHint(result.hint);
     setTesting(false);
@@ -72,7 +106,7 @@ export default function NotificationSettingsCard() {
 
   const permLabel =
     perm === "granted"
-      ? "Permissão concedida"
+      ? "Permissão concedida · push com app fechado ativo após ativar"
       : perm === "denied"
         ? "Bloqueado no navegador — libere nas configurações do Chrome"
         : perm === "default"
@@ -102,7 +136,7 @@ export default function NotificationSettingsCard() {
           <div style={{ flex: 1 }}>
             <p style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-1)" }}>Lembretes financeiros</p>
             <p style={{ fontSize: "11.5px", color: "var(--text-3)", marginTop: "3px", lineHeight: 1.4 }}>
-              Ao abrir o app, avisa sobre vencimentos e faturas (máx. 1 por dia). Com o app totalmente fechado, os lembretes automáticos ainda não chegam — use o teste abaixo para validar a permissão.
+              Push automático às 8h, 12h e 18h (horário de Brasília), mesmo com o app fechado. Ao abrir o app, também avisa se houver pendências.
             </p>
           </div>
           <button
@@ -135,9 +169,14 @@ export default function NotificationSettingsCard() {
           </button>
         </div>
 
-        <p style={{ fontSize: "11px", color: permColor, marginBottom: "12px", lineHeight: 1.4 }}>
+        <p style={{ fontSize: "11px", color: permColor, marginBottom: pushHint ? "4px" : "12px", lineHeight: 1.4 }}>
           {permLabel}
         </p>
+        {pushHint && (
+          <p style={{ fontSize: "11px", color: "var(--accent)", marginBottom: "12px", lineHeight: 1.4 }}>
+            {pushHint}
+          </p>
+        )}
 
         <button
           type="button"
@@ -151,7 +190,7 @@ export default function NotificationSettingsCard() {
         {testHint && (
           <p style={{
             fontSize: "11px",
-            color: testHint.includes("enviada") ? "var(--accent)" : "var(--red)",
+            color: testHint.includes("enviad") ? "var(--accent)" : "var(--red)",
             lineHeight: 1.4,
             marginBottom: prefs.enabled ? "14px" : "0",
           }}>
