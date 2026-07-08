@@ -136,7 +136,7 @@ export default function NotificationSettingsCard() {
           <div style={{ flex: 1 }}>
             <p style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-1)" }}>Lembretes financeiros</p>
             <p style={{ fontSize: "11.5px", color: "var(--text-3)", marginTop: "3px", lineHeight: 1.4 }}>
-              Push automático às 8h (horário de Brasília), mesmo com o app fechado. Ao abrir o app, também avisa se houver pendências.
+              Push automático às 8h, 12h e 18h (horário de Brasília) via Firebase, mesmo com o app fechado. Ao abrir o app, também avisa se houver pendências.
             </p>
           </div>
           <button

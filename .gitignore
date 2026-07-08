@@ -39,6 +39,10 @@ yarn-error.log*
 # fcm (gerado no build)
 public/fcm-init.js
 
+# firebase functions
+functions/lib/
+functions/node_modules/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
