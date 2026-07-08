@@ -1,9 +1,21 @@
-/* FlowCash PWA — service worker (notificações locais + FCM em background) */
-importScripts("https://www.gstatic.com/firebasejs/11.6.0/firebase-app-compat.js");
-importScripts("https://www.gstatic.com/firebasejs/11.6.0/firebase-messaging-compat.js");
+/* FlowCash SW v3 — não bloqueia o app se FCM falhar */
+const SW_VERSION = "v3";
 
-function initFcm() {
+self.addEventListener("install", event => {
+  self.skipWaiting();
+  event.waitUntil(initFcmSafe());
+});
+
+self.addEventListener("activate", event => {
+  event.waitUntil(self.clients.claim());
+});
+
+function initFcmSafe() {
   try {
+    importScripts(
+      "https://www.gstatic.com/firebasejs/11.6.0/firebase-app-compat.js",
+      "https://www.gstatic.com/firebasejs/11.6.0/firebase-messaging-compat.js",
+    );
     importScripts("/fcm-init.js");
     const messaging = firebase.messaging();
     messaging.onBackgroundMessage(payload => {
@@ -21,19 +33,10 @@ function initFcm() {
       });
     });
   } catch (err) {
-    console.warn("[sw] FCM init skipped:", err);
+    console.warn(`[sw ${SW_VERSION}] FCM opcional indisponível:`, err);
   }
+  return Promise.resolve();
 }
-
-initFcm();
-
-self.addEventListener("install", () => {
-  self.skipWaiting();
-});
-
-self.addEventListener("activate", event => {
-  event.waitUntil(self.clients.claim());
-});
 
 self.addEventListener("notificationclick", event => {
   event.notification.close();

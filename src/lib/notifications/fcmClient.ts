@@ -17,9 +17,13 @@ export async function fcmSupported(): Promise<boolean> {
 function getMessagingInstance(): Messaging | null {
   if (typeof window === "undefined") return null;
   if (messagingInstance) return messagingInstance;
-  const app = getApp();
-  messagingInstance = getMessaging(app);
-  return messagingInstance;
+  try {
+    const app = getApp();
+    messagingInstance = getMessaging(app);
+    return messagingInstance;
+  } catch {
+    return null;
+  }
 }
 
 export async function getFcmToken(): Promise<string | null> {
@@ -93,12 +97,15 @@ export async function syncPushSubscription(
 }
 
 export function listenForegroundMessages(onPayload: (title: string, body: string) => void) {
-  const messaging = getMessagingInstance();
-  if (!messaging) return () => {};
-
-  return onMessage(messaging, payload => {
-    const title = payload.notification?.title || "FlowCash";
-    const body = payload.notification?.body || "";
-    onPayload(title, body);
-  });
+  try {
+    const messaging = getMessagingInstance();
+    if (!messaging) return () => {};
+    return onMessage(messaging, payload => {
+      const title = payload.notification?.title || "FlowCash";
+      const body = payload.notification?.body || "";
+      onPayload(title, body);
+    });
+  } catch {
+    return () => {};
+  }
 }

@@ -22,10 +22,23 @@ export async function requestNotificationPermission(): Promise<NotificationPermi
 export async function registerNotificationServiceWorker(): Promise<ServiceWorkerRegistration | null> {
   if (typeof window === "undefined" || !("serviceWorker" in navigator)) return null;
   try {
-    return await navigator.serviceWorker.register(SW_PATH, { scope: "/" });
+    return await navigator.serviceWorker.register(SW_PATH, {
+      scope: "/",
+      updateViaCache: "none",
+    });
   } catch (err) {
     console.warn("[notifications] service worker registration failed:", err);
-    return null;
+    try {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map(r => r.unregister()));
+      return await navigator.serviceWorker.register(SW_PATH, {
+        scope: "/",
+        updateViaCache: "none",
+      });
+    } catch (retryErr) {
+      console.warn("[notifications] service worker retry failed:", retryErr);
+      return null;
+    }
   }
 }
 

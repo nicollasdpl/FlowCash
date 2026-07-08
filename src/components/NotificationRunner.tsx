@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef } from "react";
 import { useApp } from "@/context/AppContext";
 import { buildFinanceAlerts } from "@/lib/notifications/buildAlerts";
 import { deliverFinanceAlerts, registerNotificationServiceWorker, showNotificationNow } from "@/lib/notifications/deliver";
-import { listenForegroundMessages, syncPushSubscription } from "@/lib/notifications/fcmClient";
+import { listenForegroundMessages, syncPushSubscription, fcmSupported } from "@/lib/notifications/fcmClient";
 import "@/lib/firebase";
 
 /** Checa alertas ao abrir o app (local) e mantém registro FCM para push com app fechado. */
@@ -38,9 +38,18 @@ export default function NotificationRunner() {
       }
       return;
     }
-    return listenForegroundMessages((title, body) => {
-      void showNotificationNow(title, body, { tag: "flowcash-foreground" });
+    let cancelled = false;
+    let unsubscribe: (() => void) | undefined;
+    void fcmSupported().then(supported => {
+      if (cancelled || !supported) return;
+      unsubscribe = listenForegroundMessages((title, body) => {
+        void showNotificationNow(title, body, { tag: "flowcash-foreground" });
+      });
     });
+    return () => {
+      cancelled = true;
+      unsubscribe?.();
+    };
   }, [user, prefs.enabled]);
 
   const runCheck = useCallback(async () => {
