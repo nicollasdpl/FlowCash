@@ -1,8 +1,6 @@
 import { onSchedule } from "firebase-functions/v2/scheduler";
-import { defineSecret } from "firebase-functions/params";
 import { logger } from "firebase-functions";
 
-const cronSecret = defineSecret("NOTIFICATION_CRON_SECRET");
 const APP_URL = "https://flowcash-rho.vercel.app";
 
 /** 8h, 12h e 18h (Brasília) — chama a API do FlowCash para enviar push FCM. */
@@ -13,12 +11,11 @@ export const financeNotifications = onSchedule(
     region: "southamerica-east1",
     memory: "256MiB",
     timeoutSeconds: 120,
-    secrets: [cronSecret],
   },
   async () => {
-    const secret = cronSecret.value();
+    const secret = process.env.NOTIFICATION_CRON_SECRET;
     if (!secret) {
-      logger.error("NOTIFICATION_CRON_SECRET não configurado nas Functions");
+      logger.error("NOTIFICATION_CRON_SECRET não configurado (functions/.env.flowcash-39f72)");
       return;
     }
 

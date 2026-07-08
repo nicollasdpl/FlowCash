@@ -42,6 +42,8 @@ public/fcm-init.js
 # firebase functions
 functions/lib/
 functions/node_modules/
+functions/.env*
+!functions/.env.example
 
 # typescript
 *.tsbuildinfo
