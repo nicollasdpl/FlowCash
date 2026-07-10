@@ -356,7 +356,8 @@ select.form-input {
   right: 0;
   top: var(--vv-top, 0px);
   height: var(--vv-height, 100dvh);
-  z-index: 100;
+  /* Acima do BottomNav (200) e do FAB do Copiloto (300) */
+  z-index: 400;
   background: rgba(0, 0, 0, 0.75);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
@@ -774,7 +775,8 @@ select.form-input {
   }
 
   .modal-footer {
-    padding-bottom: max(16px, env(safe-area-inset-bottom, 0px));
+    /* Overlay cobre a bottom nav — só precisa do safe-area do aparelho */
+    padding-bottom: max(20px, env(safe-area-inset-bottom, 0px));
     gap: 8px;
   }
 
