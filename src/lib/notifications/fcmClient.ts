@@ -41,13 +41,6 @@ export async function getFcmToken(): Promise<{ token: string | null; error?: str
     return { token: null, error: "Chave VAPID ausente no build. Redeploy necessário." };
   }
 
-  if (!process.env.NEXT_PUBLIC_FIREBASE_API_KEY || !process.env.NEXT_PUBLIC_FIREBASE_APP_ID) {
-    return {
-      token: null,
-      error: "Config Firebase incompleta no build (API_KEY/APP_ID).",
-    };
-  }
-
   if (typeof Notification !== "undefined" && Notification.permission !== "granted") {
     return { token: null, error: "Permissão de notificação não concedida." };
   }
