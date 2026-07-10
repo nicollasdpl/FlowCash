@@ -47,6 +47,7 @@ export default function CartaoDetail() {
   const [selectedMonth, setSelectedMonth] = useState(currentMonth());
   const [payError, setPayError] = useState("");
   const [payWarning, setPayWarning] = useState("");
+  const [showPayConfirm, setShowPayConfirm] = useState(false);
 
   // Ao abrir o cartão, foca na fatura em aberto (não no mês do calendário).
   useEffect(() => {
@@ -93,7 +94,7 @@ export default function CartaoDetail() {
     dispatch({ type: "DEL_PURCHASE", payload: purchaseId });
   }
 
-  function payInvoice() {
+  function requestPayInvoice() {
     if (!card) return;
     setPayError("");
     setPayWarning("");
@@ -103,10 +104,24 @@ export default function CartaoDetail() {
       return;
     }
 
+    const pending = installmentsThisMonth.filter(i => !i.paid);
+    if (pending.length === 0) return;
+
+    setShowPayConfirm(true);
+  }
+
+  function confirmPayInvoice() {
+    if (!card || !card.paymentAccountId) return;
+    setShowPayConfirm(false);
+    setPayError("");
+    setPayWarning("");
+
     const pendingInsts = installmentsThisMonth.filter(i => !i.paid);
     if (pendingInsts.length === 0) return;
 
     const total = pendingInsts.reduce((s, i) => s + i.amount, 0);
+    const { dueDate: noteDueDate } = getInvoiceDates(selectedMonth, card.closingDay, card.dueDay);
+    const invoiceLabelText = monthTabLabel(noteDueDate);
 
     const paymentAccount = state.accounts.find(a => a.id === card.paymentAccountId);
     if (paymentAccount) {
@@ -117,8 +132,7 @@ export default function CartaoDetail() {
     }
 
     const todayDate = today();
-    const { dueDate: noteDueDate } = getInvoiceDates(selectedMonth, card.closingDay, card.dueDay);
-    const invoiceNote = `Fatura ${card.name} ${monthTabLabel(noteDueDate)}`;
+    const invoiceNote = `Fatura ${card.name} ${invoiceLabelText}`;
 
     // Marca todas as parcelas da fatura como pagas. O vínculo de cada parcela
     // com sua compra permanece — o histórico por categoria é preservado.
@@ -140,7 +154,7 @@ export default function CartaoDetail() {
         accountId: card.paymentAccountId,
         type: "expense",
         amount: total,
-        description: `Pagamento Fatura ${card.name} ${monthTabLabel(noteDueDate)}`,
+        description: `Pagamento Fatura ${card.name} ${invoiceLabelText}`,
         categoryId: SEED_INVOICE_PAYMENT_CATEGORY_ID,
         competenceDate: todayDate,
         paymentDate: todayDate,
@@ -181,6 +195,14 @@ export default function CartaoDetail() {
   const pendingInsts = installmentsThisMonth.filter(i => !i.paid);
   const allPaid = pendingInsts.length === 0 && installmentsThisMonth.length > 0;
   const pendingTotal = pendingInsts.reduce((s, i) => s + i.amount, 0);
+  const paymentAccount = state.accounts.find(a => a.id === card.paymentAccountId);
+  const payConfirmDueDate = getInvoiceDates(selectedMonth, card.closingDay, card.dueDay).dueDate;
+  const payConfirmLabel = monthTabLabel(payConfirmDueDate);
+  const payConfirmBalance = paymentAccount
+    ? getCurrentBalance(paymentAccount, state.transactions)
+    : null;
+  const payConfirmInsufficient =
+    payConfirmBalance !== null && payConfirmBalance < pendingTotal;
 
   return (
     <>
@@ -353,7 +375,7 @@ export default function CartaoDetail() {
                 </p>
               )}
               <button
-                onClick={payInvoice}
+                onClick={requestPayInvoice}
                 disabled={allPaid}
                 style={{
                   width: "100%", padding: "11px 16px", borderRadius: "10px",
@@ -506,6 +528,103 @@ export default function CartaoDetail() {
         <Plus size={17} strokeWidth={2.5} />
         Nova Compra
       </button>
+
+      {/* ── Modal confirmação pagamento ── */}
+      {showPayConfirm && (
+        <div
+          className="modal-overlay"
+          onClick={() => setShowPayConfirm(false)}
+          role="presentation"
+        >
+          <div
+            className="modal"
+            onClick={e => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="pay-confirm-title"
+          >
+            <div className="modal-header">
+              <p id="pay-confirm-title" style={{ fontSize: "16px", fontWeight: 700, color: "var(--text-1)" }}>
+                Confirmar pagamento
+              </p>
+              <button
+                onClick={() => setShowPayConfirm(false)}
+                style={{
+                  background: "none", border: "none", color: "var(--text-3)",
+                  cursor: "pointer", fontSize: "22px", lineHeight: 1,
+                  padding: "4px 8px", touchAction: "manipulation",
+                }}
+                aria-label="Fechar"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="modal-body" style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+              <p style={{ fontSize: "13px", color: "var(--text-2)", lineHeight: 1.5 }}>
+                Marcar a fatura como paga e debitar a conta vinculada?
+              </p>
+
+              <div style={{
+                padding: "14px 16px", borderRadius: "12px",
+                background: "rgba(255,255,255,0.03)", border: "1px solid var(--border)",
+                display: "flex", flexDirection: "column", gap: "10px",
+              }}>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: "12px" }}>
+                  <span style={{ fontSize: "12px", color: "var(--text-3)" }}>Cartão</span>
+                  <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-1)", textAlign: "right" }}>
+                    {card.name}
+                  </span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: "12px" }}>
+                  <span style={{ fontSize: "12px", color: "var(--text-3)" }}>Fatura</span>
+                  <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-1)" }}>
+                    {payConfirmLabel}
+                  </span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: "12px" }}>
+                  <span style={{ fontSize: "12px", color: "var(--text-3)" }}>Conta</span>
+                  <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-1)", textAlign: "right" }}>
+                    {paymentAccount?.name ?? "—"}
+                  </span>
+                </div>
+                <div style={{
+                  display: "flex", justifyContent: "space-between", gap: "12px",
+                  paddingTop: "10px", borderTop: "1px solid var(--border)",
+                }}>
+                  <span style={{ fontSize: "12px", color: "var(--text-3)" }}>Valor</span>
+                  <span className="mono" style={{ fontSize: "16px", fontWeight: 700, color: "var(--green)" }}>
+                    R$ {fmt(pendingTotal)}
+                  </span>
+                </div>
+              </div>
+
+              {payConfirmInsufficient && (
+                <p style={{ fontSize: "12px", color: "var(--amber)", lineHeight: 1.4 }}>
+                  Saldo insuficiente na conta (R$ {fmt(payConfirmBalance!)}). Ela ficará negativa após o pagamento.
+                </p>
+              )}
+            </div>
+
+            <div className="modal-footer" style={{ justifyContent: "stretch" }}>
+              <button
+                className="btn-secondary"
+                onClick={() => setShowPayConfirm(false)}
+                style={{ flex: 1, justifyContent: "center" }}
+              >
+                Cancelar
+              </button>
+              <button
+                className="btn-primary"
+                onClick={confirmPayInvoice}
+                style={{ flex: 1, justifyContent: "center" }}
+              >
+                Confirmar pagamento
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

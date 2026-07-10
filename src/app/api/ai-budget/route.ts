@@ -2,13 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminAuth } from "@/lib/firebase-admin";
 
 // Sugestão de orçamentos por IA. Endpoint próprio (não polui o copiloto /api/ai).
-// Auth: Bearer idToken. Sem rate limit próprio. Modelo: gemini-flash-latest
-// (o gemini-2.0-flash retorna 404 nesta chave — família 2.0 vetada p/ novos usuários).
+// Auth: Bearer idToken. Sem rate limit próprio. Modelo: gemini-flash-lite-latest
+// (free tier maior que o flash; o gemini-2.0-flash retorna 404 nesta chave).
 
 export const maxDuration = 30;
 
 const GEMINI_URL =
-  "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent";
+  "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest:generateContent";
 
 const SCHEMA = {
   type: "object",
