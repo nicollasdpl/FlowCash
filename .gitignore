@@ -36,6 +36,9 @@ yarn-error.log*
 # vercel
 .vercel
 
+# fcm — gerado/servido via env, nunca commitado
+public/fcm-init.js
+
 # firebase functions
 functions/lib/
 functions/node_modules/
