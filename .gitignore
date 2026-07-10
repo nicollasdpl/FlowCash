@@ -36,9 +36,6 @@ yarn-error.log*
 # vercel
 .vercel
 
-# fcm (gerado no build)
-public/fcm-init.js
-
 # firebase functions
 functions/lib/
 functions/node_modules/

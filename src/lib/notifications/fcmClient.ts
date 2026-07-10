@@ -26,26 +26,52 @@ function getMessagingInstance(): Messaging | null {
   }
 }
 
-export async function getFcmToken(): Promise<string | null> {
-  const vapidKey = process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY;
+export async function getFcmToken(): Promise<{ token: string | null; error?: string }> {
+  const vapidKey = process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY?.trim();
   if (!vapidKey) {
-    console.warn("[fcm] NEXT_PUBLIC_FIREBASE_VAPID_KEY ausente");
-    return null;
+    return { token: null, error: "Chave VAPID ausente no build. Redeploy necessário." };
   }
+
   const supported = await fcmSupported();
-  if (!supported) return null;
+  if (!supported) {
+    return { token: null, error: "Push FCM não é suportado neste navegador." };
+  }
+
+  if (typeof Notification !== "undefined" && Notification.permission !== "granted") {
+    return { token: null, error: "Permissão de notificação não concedida." };
+  }
 
   const messaging = getMessagingInstance();
-  if (!messaging) return null;
+  if (!messaging) {
+    return { token: null, error: "Firebase Messaging não inicializou." };
+  }
 
   const registration = await registerNotificationServiceWorker();
-  if (!registration) return null;
+  if (!registration) {
+    return { token: null, error: "Service worker não registrou." };
+  }
 
   try {
-    return await getToken(messaging, { vapidKey, serviceWorkerRegistration: registration });
+    await navigator.serviceWorker.ready;
+    // Garante que o SW ativo está controlando a página antes do getToken
+    if (registration.waiting) {
+      registration.waiting.postMessage({ type: "SKIP_WAITING" });
+    }
+    await new Promise(r => setTimeout(r, 400));
+
+    const token = await getToken(messaging, {
+      vapidKey,
+      serviceWorkerRegistration: registration,
+    });
+
+    if (!token) {
+      return { token: null, error: "FCM retornou token vazio. Tente fechar e reabrir o app." };
+    }
+    return { token };
   } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
     console.warn("[fcm] getToken failed:", err);
-    return null;
+    return { token: null, error: `Falha no token FCM: ${msg}` };
   }
 }
 
@@ -77,16 +103,16 @@ export async function syncPushSubscription(
   enabled: boolean,
 ): Promise<{ ok: boolean; hint?: string }> {
   if (!enabled) {
-    const token = await getFcmToken();
+    const { token } = await getFcmToken();
     if (token) await unregisterPushTokenWithServer(idToken, token);
     return { ok: true };
   }
 
-  const token = await getFcmToken();
+  const { token, error } = await getFcmToken();
   if (!token) {
     return {
       ok: false,
-      hint: "Não foi possível obter o token push. Verifique a chave VAPID no Firebase.",
+      hint: error ?? "Não foi possível obter o token push.",
     };
   }
 

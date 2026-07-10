@@ -75,32 +75,52 @@ export default function NotificationSettingsCard() {
     setTesting(true);
     setTestHint(null);
 
+    const permResult = await requestNotificationPermission();
+    if (permResult !== "granted") {
+      setTestHint("Permissão negada. Libere nas configurações do Chrome.");
+      setTesting(false);
+      return;
+    }
+
+    await registerNotificationServiceWorker();
+
+    // Sempre tenta registrar o token FCM antes do teste no servidor
     if (user) {
       try {
         const idToken = await user.getIdToken();
-        const res = await fetch("/api/push/test", {
-          method: "POST",
-          headers: { Authorization: `Bearer ${idToken}` },
-        });
-        const data = await res.json() as { ok?: boolean; hint?: string };
-        if (data.ok && data.hint) {
-          setTestHint(data.hint);
-          setTesting(false);
-          return;
+        const sync = await syncPushSubscription(idToken, true);
+        if (!sync.ok) {
+          setPushHint(sync.hint ?? null);
+        } else {
+          setPushHint("Push ativo — lembretes chegam com o app fechado.");
+          if (!prefs.enabled) update({ enabled: true });
         }
-        if (data.hint) {
-          setTestHint(data.hint);
-          setTesting(false);
-          return;
+
+        if (sync.ok) {
+          const res = await fetch("/api/push/test", {
+            method: "POST",
+            headers: { Authorization: `Bearer ${idToken}` },
+          });
+          const data = await res.json() as { ok?: boolean; hint?: string };
+          if (data.ok) {
+            setTestHint(data.hint ?? "Push enviado.");
+            setTesting(false);
+            return;
+          }
         }
       } catch {
-        // fallback local abaixo
+        // cai no fallback local
       }
     }
 
+    // Fallback: notificação local (funciona mesmo sem token FCM)
     const alerts = buildFinanceAlerts(state, { ...prefs, enabled: true });
     const result = await testFinanceNotification(alerts);
-    setTestHint(result.hint);
+    setTestHint(
+      result.ok
+        ? `${result.hint} (local — push com app fechado ainda não registrou o dispositivo)`
+        : result.hint,
+    );
     setTesting(false);
   }
 
@@ -173,7 +193,12 @@ export default function NotificationSettingsCard() {
           {permLabel}
         </p>
         {pushHint && (
-          <p style={{ fontSize: "11px", color: "var(--accent)", marginBottom: "12px", lineHeight: 1.4 }}>
+          <p style={{
+            fontSize: "11px",
+            color: pushHint.includes("ativo") || pushHint.includes("Push ativo") ? "var(--accent)" : "var(--red)",
+            marginBottom: "12px",
+            lineHeight: 1.4,
+          }}>
             {pushHint}
           </p>
         )}
@@ -190,7 +215,7 @@ export default function NotificationSettingsCard() {
         {testHint && (
           <p style={{
             fontSize: "11px",
-            color: testHint.includes("enviad") ? "var(--accent)" : "var(--red)",
+            color: testHint.includes("enviad") || testHint.includes("local") ? "var(--accent)" : "var(--red)",
             lineHeight: 1.4,
             marginBottom: prefs.enabled ? "14px" : "0",
           }}>

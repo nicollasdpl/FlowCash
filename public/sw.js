@@ -1,5 +1,5 @@
-/* FlowCash SW v3 — não bloqueia o app se FCM falhar */
-const SW_VERSION = "v3";
+/* FlowCash SW v4 — FCM em background sem travar o app */
+const SW_VERSION = "v4";
 
 self.addEventListener("install", event => {
   self.skipWaiting();
@@ -8,6 +8,10 @@ self.addEventListener("install", event => {
 
 self.addEventListener("activate", event => {
   event.waitUntil(self.clients.claim());
+});
+
+self.addEventListener("message", event => {
+  if (event.data?.type === "SKIP_WAITING") self.skipWaiting();
 });
 
 function initFcmSafe() {
