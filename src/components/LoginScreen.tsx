@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useApp } from "@/context/AppContext";
-import { Wallet, Cloud, Lock, BarChart2, LoaderCircle } from "lucide-react";
+import { Cloud, Lock, BarChart2, LoaderCircle } from "lucide-react";
 
 export default function LoginScreen() {
   const { signIn } = useApp();
@@ -39,15 +39,18 @@ export default function LoginScreen() {
       <div style={{ maxWidth: "360px", width: "100%", textAlign: "center" }}>
 
         {/* Logo */}
-        <div style={{
-          width: "72px", height: "72px", borderRadius: "22px",
-          background: "var(--accent-10)", border: "1px solid var(--border-accent)",
-          display: "flex", alignItems: "center", justifyContent: "center",
-          margin: "0 auto 24px",
-          color: "var(--accent)",
-        }}>
-          <Wallet size={34} strokeWidth={1.5} />
-        </div>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/icon-192.png"
+          alt="FlowCash"
+          width={72}
+          height={72}
+          style={{
+            borderRadius: "22px",
+            margin: "0 auto 24px",
+            boxShadow: "0 0 28px rgba(0, 229, 195, 0.25)",
+          }}
+        />
 
         <h1 style={{ fontSize: "28px", fontWeight: 800, color: "var(--text-1)", letterSpacing: "-0.04em", marginBottom: "8px" }}>
           FlowCash
