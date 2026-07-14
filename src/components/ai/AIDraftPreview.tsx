@@ -3,7 +3,6 @@ import { AlertTriangle, X } from "lucide-react";
 import CategoryIcon, { iconLabel } from "@/components/CategoryIcon";
 import type { AIItem } from "@/lib/ai/types";
 import { Package } from "lucide-react";
-import { AIMixedAnswerBanner } from "./AIChatThread";
 import { SparkleIcon, fmt } from "./shared";
 
 export type TxDraft = {
@@ -349,7 +348,6 @@ function DraftCard({
 
 type AIDraftPreviewProps = {
   drafts: DraftItem[];
-  mixedAnswer?: string;
   truncated?: boolean;
   categories: DraftCardProps["categories"];
   accounts: DraftCardProps["accounts"];
@@ -365,7 +363,6 @@ type AIDraftPreviewProps = {
 
 export function AIDraftPreview({
   drafts,
-  mixedAnswer,
   truncated,
   categories,
   accounts,
@@ -380,8 +377,6 @@ export function AIDraftPreview({
 }: AIDraftPreviewProps) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "14px", animation: "fadeIn 0.25s ease" }}>
-      {mixedAnswer && <AIMixedAnswerBanner answer={mixedAnswer} />}
-
       {truncated && (
         <div
           style={{

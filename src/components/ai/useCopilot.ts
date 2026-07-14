@@ -1,6 +1,5 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import { useApp, newId } from "@/context/AppContext";
 import type { CardPurchase, Transaction } from "@/context/AppContext";
 import { auth, db } from "@/lib/firebase";
@@ -52,7 +51,6 @@ function normalizeHintKey(description: string): string {
 }
 
 export function useCopilot(initialMessage = "", options: CopilotOptions = {}) {
-  const router = useRouter();
   const { state, dispatch } = useApp();
   const contextCardId = options.contextCardId ?? null;
 
@@ -130,6 +128,15 @@ export function useCopilot(initialMessage = "", options: CopilotOptions = {}) {
     } else {
       setDrafts([]);
     }
+  }
+
+  function discardPending() {
+    setChatHistory(prev => {
+      const last = prev[prev.length - 1];
+      if (last?.kind === "message" && !last.a) return prev.slice(0, -1);
+      return prev;
+    });
+    applyResult(null);
   }
 
   async function persistHints(items: DraftItem[]) {
@@ -237,6 +244,11 @@ export function useCopilot(initialMessage = "", options: CopilotOptions = {}) {
     if (data.intent === "question" || data.intent === "mixed") {
       setChatHistory(prev =>
         [...prev, { kind: "message" as const, q: msg, a: data.answer ?? "" }].slice(-CHAT_HISTORY_MAX),
+      );
+    } else if (data.intent === "launch" || data.intent === "action") {
+      // Mostra a mensagem do usuário enquanto o preview de confirmação aparece
+      setChatHistory(prev =>
+        [...prev, { kind: "message" as const, q: msg, a: "" }].slice(-CHAT_HISTORY_MAX),
       );
     }
 
@@ -351,9 +363,14 @@ export function useCopilot(initialMessage = "", options: CopilotOptions = {}) {
     void persistHints(drafts);
 
     const lastQ = conversationHistory.filter(t => t.role === "user").slice(-1)[0]?.content ?? message;
-    setChatHistory(prev =>
-      [...prev, { kind: "launch" as const, q: lastQ, summary: summarizeLaunch(savedItems) }].slice(-CHAT_HISTORY_MAX),
-    );
+    setChatHistory(prev => {
+      const last = prev[prev.length - 1];
+      const withoutPending =
+        last?.kind === "message" && last.q === lastQ && !last.a ? prev.slice(0, -1) : prev;
+      return [...withoutPending, { kind: "launch" as const, q: lastQ, summary: summarizeLaunch(savedItems) }].slice(
+        -CHAT_HISTORY_MAX,
+      );
+    });
 
     setFlashCount(saved);
     setFlashMessage(saved > 1 ? `${saved} lançamentos com sucesso!` : "Lançado com sucesso!");
@@ -362,9 +379,9 @@ export function useCopilot(initialMessage = "", options: CopilotOptions = {}) {
     setMessage("");
     setTimeout(() => {
       setFlash(false);
-      router.back();
-    }, 1400);
-  }, [drafts, dispatch, state.cards, conversationHistory, message, router]);
+      contentRef.current?.scrollTo({ top: contentRef.current.scrollHeight, behavior: "smooth" });
+    }, 1200);
+  }, [drafts, dispatch, state.cards, conversationHistory, message]);
 
   const handleConfirmActions = useCallback(() => {
     if (pendingActions.length === 0) return;
@@ -395,16 +412,34 @@ export function useCopilot(initialMessage = "", options: CopilotOptions = {}) {
     setFlashCount(pendingActions.length);
     setFlashMessage("Ação concluída!");
     setFlash(true);
+
+    const lastQ = conversationHistory.filter(t => t.role === "user").slice(-1)[0]?.content ?? message;
+    setChatHistory(prev => {
+      const last = prev[prev.length - 1];
+      const withoutPending =
+        last?.kind === "message" && last.q === lastQ && !last.a ? prev.slice(0, -1) : prev;
+      return [
+        ...withoutPending,
+        { kind: "launch" as const, q: lastQ, summary: "Ação concluída" },
+      ].slice(-CHAT_HISTORY_MAX);
+    });
+
     applyResult(null);
     setMessage("");
     setTimeout(() => {
       setFlash(false);
+      contentRef.current?.scrollTo({ top: contentRef.current.scrollHeight, behavior: "smooth" });
     }, 1200);
-  }, [pendingActions, dispatch, state.transactions]);
+  }, [pendingActions, dispatch, state.transactions, conversationHistory, message]);
 
   const sendMessage = useCallback(
     async (msg: string) => {
       setLoading(true);
+      setChatHistory(prev => {
+        const last = prev[prev.length - 1];
+        if (last?.kind === "message" && !last.a) return prev.slice(0, -1);
+        return prev;
+      });
       applyResult(null);
       setRetryIn(null);
 
@@ -515,6 +550,7 @@ export function useCopilot(initialMessage = "", options: CopilotOptions = {}) {
   function handleSend() {
     const msg = message.trim();
     if (!msg || loading || retryIn !== null) return;
+    setMessage("");
     void sendMessage(msg);
   }
 
@@ -555,7 +591,6 @@ export function useCopilot(initialMessage = "", options: CopilotOptions = {}) {
   const hasCards = (result?.intent === "launch" || result?.intent === "mixed") && drafts.length > 0;
   const hasActions = result?.intent === "action" && pendingActions.length > 0;
   const hasError = result?.intent === "error" || result?.intent === "unknown";
-  const showQuestionCard = result?.intent === "question" && !flash;
   const truncated = (result?.intent === "launch" || result?.intent === "mixed") && result.truncated === true;
 
   return {
@@ -576,7 +611,6 @@ export function useCopilot(initialMessage = "", options: CopilotOptions = {}) {
     hasCards,
     hasActions,
     hasError,
-    showQuestionCard,
     truncated,
     canConfirm,
     contextCardId,
@@ -587,6 +621,7 @@ export function useCopilot(initialMessage = "", options: CopilotOptions = {}) {
     updatePurchase,
     removeDraft,
     applyResult,
+    discardPending,
     sendMessage,
   };
 }

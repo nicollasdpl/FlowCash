@@ -2,7 +2,7 @@
 import { useSearchParams } from "next/navigation";
 import { useEffect } from "react";
 import { AIActionPreview } from "@/components/ai/AIActionPreview";
-import { AIAnswerCard, AIChatThread } from "@/components/ai/AIChatThread";
+import { AIChatThread } from "@/components/ai/AIChatThread";
 import { AIDraftPreview } from "@/components/ai/AIDraftPreview";
 import { AIInputBar } from "@/components/ai/AIInputBar";
 import { EXAMPLE_PROMPTS, getContextualChips } from "@/components/ai/chips";
@@ -132,7 +132,7 @@ export default function AIPageContent() {
               ✓
             </div>
             <p style={{ fontSize: "16px", fontWeight: 700, color: "var(--green)" }}>{copilot.flashMessage}</p>
-            <p style={{ fontSize: "12px", color: "var(--text-3)", marginTop: "4px" }}>Voltando...</p>
+            <p style={{ fontSize: "12px", color: "var(--text-3)", marginTop: "4px" }}>Pode continuar no copiloto</p>
           </div>
         )}
 
@@ -152,7 +152,7 @@ export default function AIPageContent() {
                   key={chip.label}
                   onClick={() => {
                     copilot.setMessage(chip.text);
-                    copilot.applyResult(null);
+                    copilot.discardPending();
                   }}
                   style={{
                     display: "inline-flex",
@@ -183,7 +183,7 @@ export default function AIPageContent() {
                   key={ex}
                   onClick={() => {
                     copilot.setMessage(ex);
-                    copilot.applyResult(null);
+                    copilot.discardPending();
                   }}
                   style={{
                     display: "block",
@@ -284,7 +284,7 @@ export default function AIPageContent() {
               {(copilot.result.intent === "error" || copilot.result.intent === "unknown") ? copilot.result.message : ""}
             </p>
             <button
-              onClick={() => copilot.applyResult(null)}
+              onClick={() => copilot.discardPending()}
               style={{
                 marginTop: "12px",
                 padding: "8px 14px",
@@ -303,22 +303,17 @@ export default function AIPageContent() {
           </div>
         )}
 
-        {copilot.showQuestionCard && copilot.result?.intent === "question" && (
-          <AIAnswerCard answer={copilot.result.answer} local={copilot.result.local} />
-        )}
-
         {copilot.hasActions && copilot.result?.intent === "action" && !copilot.flash && (
           <AIActionPreview
             actions={copilot.pendingActions}
             onConfirm={copilot.handleConfirmActions}
-            onDiscard={() => copilot.applyResult(null)}
+            onDiscard={() => copilot.discardPending()}
           />
         )}
 
         {copilot.hasCards && !copilot.flash && (
           <AIDraftPreview
             drafts={copilot.drafts}
-            mixedAnswer={copilot.result?.intent === "mixed" ? copilot.result.answer : undefined}
             truncated={copilot.truncated}
             categories={categories}
             accounts={accounts}
@@ -330,7 +325,7 @@ export default function AIPageContent() {
             onRemoveDraft={copilot.removeDraft}
             onConfirm={copilot.handleConfirmDrafts}
             onDiscard={() => {
-              copilot.applyResult(null);
+              copilot.discardPending();
               copilot.setMessage("");
             }}
           />

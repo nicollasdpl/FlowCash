@@ -6,8 +6,13 @@ export function AIChatThread({ history }: { history: ChatTurn[] }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginBottom: "16px" }}>
-      {history.map((turn, i) => (
+      {history.map((turn, i) => {
+        const prev = i > 0 ? history[i - 1] : null;
+        const showUserBubble = !prev || prev.q !== turn.q;
+
+        return (
         <div key={i} style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+          {showUserBubble && (
           <div style={{ display: "flex", justifyContent: "flex-end" }}>
             <div
               style={{
@@ -25,6 +30,7 @@ export function AIChatThread({ history }: { history: ChatTurn[] }) {
               {turn.q}
             </div>
           </div>
+          )}
 
           {turn.kind === "message" && turn.a && (
             <div style={{ display: "flex", gap: "8px", alignItems: "flex-start" }}>
@@ -102,62 +108,8 @@ export function AIChatThread({ history }: { history: ChatTurn[] }) {
             </div>
           )}
         </div>
-      ))}
-    </div>
-  );
-}
-
-export function AIAnswerCard({ answer, local }: { answer: string; local?: boolean }) {
-  return (
-    <div
-      style={{
-        padding: "14px 16px",
-        background: "var(--bg-card)",
-        border: "1px solid var(--border-accent)",
-        borderRadius: "14px",
-        marginBottom: "14px",
-        animation: "fadeIn 0.25s ease",
-      }}
-    >
-      <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "10px" }}>
-        <SparkleIcon size={12} />
-        <p
-          style={{
-            fontSize: "10px",
-            fontWeight: 700,
-            color: "var(--accent)",
-            letterSpacing: "0.08em",
-            textTransform: "uppercase",
-            margin: 0,
-          }}
-        >
-          Resposta{local ? " · instantânea" : ""}
-        </p>
-      </div>
-      <div style={{ fontSize: "13px", color: "var(--text-2)", lineHeight: 1.55 }}>
-        <Markdown text={answer} />
-      </div>
-    </div>
-  );
-}
-
-export function AIMixedAnswerBanner({ answer }: { answer: string }) {
-  return (
-    <div
-      style={{
-        padding: "12px 14px",
-        background: "var(--bg-card)",
-        border: "1px solid var(--border-accent)",
-        borderRadius: "12px",
-        marginBottom: "4px",
-      }}
-    >
-      <p style={{ fontSize: "10px", fontWeight: 700, color: "var(--accent)", marginBottom: "6px", letterSpacing: "0.06em", textTransform: "uppercase" }}>
-        Resposta
-      </p>
-      <div style={{ fontSize: "13px", color: "var(--text-2)", lineHeight: 1.5 }}>
-        <Markdown text={answer} />
-      </div>
+        );
+      })}
     </div>
   );
 }

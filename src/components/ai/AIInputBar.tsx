@@ -77,6 +77,15 @@ export function AIInputBar({ message, loading, disabled, bottomOffset = "0px", o
     rec.start();
   }
 
+  function syncTextareaHeight(el: HTMLTextAreaElement) {
+    el.style.height = "0px";
+    el.style.height = Math.min(Math.max(el.scrollHeight, 44), 96) + "px";
+  }
+
+  useEffect(() => {
+    if (inputRef.current) syncTextareaHeight(inputRef.current);
+  }, [message]);
+
   return (
     <div
       style={{
@@ -90,7 +99,7 @@ export function AIInputBar({ message, loading, disabled, bottomOffset = "0px", o
         padding: "10px 12px",
         paddingBottom: "calc(10px + env(safe-area-inset-bottom, 0px))",
         display: "flex",
-        alignItems: "flex-end",
+        alignItems: "center",
         gap: "8px",
       }}
     >
@@ -103,6 +112,7 @@ export function AIInputBar({ message, loading, disabled, bottomOffset = "0px", o
           style={{
             width: "44px",
             height: "44px",
+            alignSelf: "flex-end",
             flexShrink: 0,
             borderRadius: "13px",
             background: listening ? "var(--red-10)" : "var(--bg-input)",
@@ -124,8 +134,7 @@ export function AIInputBar({ message, loading, disabled, bottomOffset = "0px", o
         value={message}
         onChange={e => {
           onChange(e.target.value);
-          e.target.style.height = "auto";
-          e.target.style.height = Math.min(e.target.scrollHeight, 96) + "px";
+          syncTextareaHeight(e.target);
         }}
         onKeyDown={handleKey}
         placeholder="Ex: gastei 50 no iFood e 30 de uber…"
@@ -133,26 +142,31 @@ export function AIInputBar({ message, loading, disabled, bottomOffset = "0px", o
         rows={1}
         style={{
           flex: 1,
+          minWidth: 0,
           background: "var(--bg-input)",
           border: "1px solid var(--border)",
           borderRadius: "14px",
-          padding: "11px 14px",
-          fontSize: "14px",
+          padding: "10px 14px",
+          fontSize: "15px",
           color: "var(--text-1)",
           fontFamily: "inherit",
           resize: "none",
           outline: "none",
-          lineHeight: 1.4,
+          lineHeight: "22px",
+          height: "44px",
           minHeight: "44px",
           maxHeight: "96px",
           overflowY: "auto",
           opacity: disabled ? 0.5 : 1,
+          boxSizing: "border-box",
+          WebkitAppearance: "none",
+          appearance: "none",
         }}
         onFocus={e => {
-          (e.target as HTMLTextAreaElement).style.borderColor = "var(--accent)";
+          e.target.style.borderColor = "var(--accent)";
         }}
         onBlur={e => {
-          (e.target as HTMLTextAreaElement).style.borderColor = "var(--border)";
+          e.target.style.borderColor = "var(--border)";
         }}
       />
 
@@ -163,6 +177,7 @@ export function AIInputBar({ message, loading, disabled, bottomOffset = "0px", o
         style={{
           width: "44px",
           height: "44px",
+          alignSelf: "flex-end",
           flexShrink: 0,
           borderRadius: "13px",
           background: message.trim() && !disabled ? "var(--accent)" : "var(--bg-input)",
