@@ -94,6 +94,7 @@ function ImportarFaturaContent() {
   const [formatLabel, setFormatLabel] = useState("");
   const [drafts, setDrafts] = useState<ImportDraftLine[]>([]);
   const [adding, setAdding] = useState(false);
+  const [readingFile, setReadingFile] = useState(false);
   const [hasParsed, setHasParsed] = useState(false);
 
   const installmentsThisMonth = useMemo(() => {
@@ -187,16 +188,28 @@ function ImportarFaturaContent() {
 
   async function onFile(file: File) {
     setError("");
-    const name = file.name.toLowerCase();
-    if (name.endsWith(".pdf")) {
-      setError(
-        "PDF: abra o arquivo, selecione todo o texto (Ctrl+A) e cole abaixo. Em breve suporte direto a PDF.",
-      );
-      return;
+    setInfo("");
+    setReadingFile(true);
+    try {
+      const name = file.name.toLowerCase();
+      let text: string;
+      if (name.endsWith(".pdf") || file.type === "application/pdf") {
+        const { extractTextFromPdfFile } = await import(
+          "@/lib/invoiceImport/extractPdfText"
+        );
+        text = await extractTextFromPdfFile(file);
+        setInfo(`PDF lido: ${file.name}`);
+      } else {
+        text = await file.text();
+      }
+      setPaste(text);
+      applyText(text);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Falha ao ler o arquivo.";
+      setError(msg);
+    } finally {
+      setReadingFile(false);
     }
-    const text = await file.text();
-    setPaste(text);
-    applyText(text);
   }
 
   function handleDraftChange(key: string, next: ImportDraftLine) {
@@ -325,14 +338,14 @@ function ImportarFaturaContent() {
               marginBottom: 16,
             }}
           >
-            Envie o CSV exportado pelo FlowCash ou cole o texto do extrato Bradesco
-            para comparar com esta fatura e adicionar o que faltar.
+            Envie o PDF do extrato Bradesco ou o CSV do FlowCash. O app lê o PDF
+            direto e compara com esta fatura.
           </p>
 
           <input
             ref={fileRef}
             type="file"
-            accept=".csv,.txt,text/csv,text/plain,.pdf"
+            accept=".pdf,.csv,.txt,application/pdf,text/csv,text/plain"
             style={{ display: "none" }}
             onChange={e => {
               const f = e.target.files?.[0];
@@ -343,6 +356,7 @@ function ImportarFaturaContent() {
 
           <button
             type="button"
+            disabled={readingFile}
             onClick={() => fileRef.current?.click()}
             style={{
               width: "100%",
@@ -354,17 +368,18 @@ function ImportarFaturaContent() {
               fontWeight: 700,
               fontSize: 14,
               fontFamily: "inherit",
-              cursor: "pointer",
+              cursor: readingFile ? "wait" : "pointer",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
               gap: 8,
               minHeight: 52,
               marginBottom: 16,
+              opacity: readingFile ? 0.7 : 1,
             }}
           >
             <Upload size={18} strokeWidth={1.75} />
-            Escolher CSV ou TXT
+            {readingFile ? "Lendo arquivo…" : "Escolher PDF, CSV ou TXT"}
           </button>
 
           <label
@@ -375,7 +390,7 @@ function ImportarFaturaContent() {
               marginBottom: 6,
             }}
           >
-            Ou cole o texto do extrato
+            Ou cole o texto (fallback)
           </label>
           <textarea
             value={paste}

@@ -16,9 +16,13 @@ const IGNORE_PATTERNS = [
   /^xxxx/i,
   /^--\s*\d+\s+of/i,
   /valores\s+sujeitos/i,
+  /^nicollas\s+paula/i,
+  /^data:\s*\d/i,
+  /^hist[oó]rico/i,
+  /^origem/i,
+  /^paula$/i,
 ];
 
-/** DD/MM or DD/MM/YYYY embedded at line start. Year default = referenceYear. */
 function parseBradescoDate(token: string, referenceYear: number): string | null {
   const m = token.match(/^(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?$/);
   if (!m) return null;
@@ -47,10 +51,63 @@ function extractInstallmentHint(
   return { cleanDesc: desc.trim() };
 }
 
+const AMOUNT_RE = String.raw`([-−]?\d{1,3}(?:\.\d{3})*,\d{2}|[-−]?\d+,\d{2})`;
+const DATE_RE = String.raw`(\d{1,2}/\d{1,2}(?:/\d{2,4})?)`;
+
+type Classified =
+  | { kind: "charge"; date: string; amount: number; midDesc: string; raw: string }
+  | { kind: "date_desc"; date: string; text: string }
+  | { kind: "amount_line"; amount: number; text: string; raw: string }
+  | { kind: "text"; text: string }
+  | { kind: "skip" };
+
+function classifyLine(line: string, referenceYear: number): Classified {
+  if (shouldIgnore(line)) return { kind: "skip" };
+
+  // DD/MM [DESC] VALOR
+  const full = line.match(new RegExp(`^${DATE_RE}\\s+(.*?)${AMOUNT_RE}\\s*$`));
+  if (full) {
+    const date = parseBradescoDate(full[1], referenceYear);
+    const midDesc = (full[2] ?? "").trim();
+    const amount = parsePtBrAmount(full[3].replace("−", "-"));
+    if (!date || amount === null) return { kind: "skip" };
+    if (amount <= 0) return { kind: "skip" };
+    if (midDesc && shouldIgnore(midDesc)) return { kind: "skip" };
+    return { kind: "charge", date, amount, midDesc, raw: line };
+  }
+
+  // DD/MM DESC  (sem valor — comum no texto colado quebrado)
+  const dateOnly = line.match(new RegExp(`^${DATE_RE}\\s+(.+)$`));
+  if (dateOnly) {
+    const date = parseBradescoDate(dateOnly[1], referenceYear);
+    const text = dateOnly[2].trim();
+    if (!date || !text || shouldIgnore(text)) return { kind: "skip" };
+    return { kind: "date_desc", date, text };
+  }
+
+  // DESC VALOR sem data (continuação colada: "COMER 64,80")
+  const amtOnly = line.match(new RegExp(`^(.+?)\\s+${AMOUNT_RE}\\s*$`));
+  if (amtOnly) {
+    const amount = parsePtBrAmount(amtOnly[2].replace("−", "-"));
+    const text = amtOnly[1].trim();
+    if (amount !== null && amount > 0) {
+      return { kind: "amount_line", amount, text, raw: line };
+    }
+  }
+
+  return { kind: "text", text: line };
+}
+
+function isShortContinuation(text: string): boolean {
+  const t = text.trim();
+  if (!t || shouldIgnore(t)) return false;
+  const words = t.split(/\s+/);
+  // Fragmentos curtíssimos do PDF (CI, SILVA, COMER, JUNDI, ESSENCIA)
+  return words.length === 1 && t.length <= 14;
+}
+
 /**
- * Parser heurístico do extrato Bradesco (texto colado ou extraído do PDF).
- * Linhas típicas: `08/07 EDCAS COMERCIO E COMER 64,80` ou data numa linha e
- * descrição/valor nas seguintes.
+ * Parser do extrato Bradesco (PDF extraído ou texto colado).
  */
 export function parseBradescoExtract(
   text: string,
@@ -61,65 +118,113 @@ export function parseBradescoExtract(
     .map(l => l.replace(/\s+/g, " ").trim())
     .filter(Boolean);
 
-  // Junta continuação de descrição quebrada (linha sem data nem valor no fim
-  // cola na anterior se a anterior tinha data mas sem valor ainda).
-  const merged: string[] = [];
-  for (const line of rawLines) {
-    const hasDate = /^\d{1,2}\/\d{1,2}/.test(line);
-    const hasAmount = /[-−]?\s*\d{1,3}(?:\.\d{3})*,\d{2}\s*$/.test(line) ||
-      /[-−]?\s*\d+,\d{2}\s*$/.test(line);
-
-    if (!hasDate && merged.length > 0 && !hasAmount) {
-      // possível continuação do histórico
-      const prev = merged[merged.length - 1];
-      const prevHasAmount = /,\d{2}\s*$/.test(prev);
-      if (/^\d{1,2}\/\d{1,2}/.test(prev) && !prevHasAmount) {
-        merged[merged.length - 1] = `${prev} ${line}`;
-        continue;
-      }
-    }
-
-    if (!hasDate && merged.length > 0 && hasAmount) {
-      const prev = merged[merged.length - 1];
-      if (/^\d{1,2}\/\d{1,2}/.test(prev) && !/,\d{2}\s*$/.test(prev)) {
-        merged[merged.length - 1] = `${prev} ${line}`;
-        continue;
-      }
-    }
-
-    merged.push(line);
-  }
-
+  const classified = rawLines.map(l => classifyLine(l, referenceYear));
+  const used = new Set<number>();
   const result: ImportedLine[] = [];
   let idx = 0;
 
-  for (const line of merged) {
-    // Padrão: DD/MM[YYYY] DESC VALOR
-    const m = line.match(
-      /^(\d{1,2}\/\d{1,2}(?:\/\d{2,4})?)\s+(.+?)\s+([-−]?\d{1,3}(?:\.\d{3})*,\d{2}|[-−]?\d+,\d{2})\s*$/,
-    );
-    if (!m) continue;
-
-    const date = parseBradescoDate(m[1], referenceYear);
-    if (!date) continue;
-
-    let desc = m[2].trim();
-    if (shouldIgnore(desc) || shouldIgnore(line)) continue;
-
-    const amountRaw = m[3].replace("−", "-");
-    const amount = parsePtBrAmount(amountRaw);
-    if (amount === null || amount <= 0) continue; // ignora créditos/pagamentos negativos
-
+  function pushLine(
+    date: string,
+    amount: number,
+    description: string,
+    raw: string,
+  ) {
+    const desc = description.replace(/\s+/g, " ").trim();
+    if (!desc || shouldIgnore(desc)) return;
     const { cleanDesc, installmentHint } = extractInstallmentHint(desc);
-
     result.push({
       id: `br_${idx++}_${date}_${Math.round(amount * 100)}`,
       date,
       description: cleanDesc,
       amount,
       installmentHint,
-      raw: line,
+      raw,
     });
+  }
+
+  for (let i = 0; i < classified.length; i++) {
+    if (used.has(i)) continue;
+    const row = classified[i];
+
+    // Caso A: linha completa DATE+DESC+VALOR (ou DATE+VALOR do PDF)
+    if (row.kind === "charge") {
+      used.add(i);
+      let description = row.midDesc;
+
+      if (!row.midDesc) {
+        // PDF: descrição acima e/ou abaixo da linha data+valor
+        const before: string[] = [];
+        for (let j = i - 1; j >= 0; j--) {
+          if (used.has(j)) break;
+          const prev = classified[j];
+          if (prev.kind !== "text") break;
+          before.unshift(prev.text);
+          used.add(j);
+        }
+        const after: string[] = [];
+        const maxAfter = before.length > 0 ? 1 : 2;
+        for (let j = i + 1; j < classified.length; j++) {
+          if (used.has(j)) break;
+          const next = classified[j];
+          if (next.kind !== "text") break;
+          if (!isShortContinuation(next.text)) break;
+          after.push(next.text);
+          used.add(j);
+          if (after.length >= maxAfter) break;
+        }
+        description = [...before, ...after].join(" ");
+      } else {
+        // Sufixo curto na linha seguinte (ex.: "CI")
+        const next = classified[i + 1];
+        if (
+          next?.kind === "text" &&
+          !used.has(i + 1) &&
+          isShortContinuation(next.text)
+        ) {
+          description = `${row.midDesc} ${next.text}`;
+          used.add(i + 1);
+        }
+      }
+
+      pushLine(row.date, row.amount, description, row.raw);
+      continue;
+    }
+
+    // Caso B: "08/07 EDCAS..." + "COMER 64,80"
+    if (row.kind === "date_desc") {
+      let amount: number | null = null;
+      let extra = "";
+      let raw = row.text;
+      for (let j = i + 1; j < Math.min(i + 4, classified.length); j++) {
+        if (used.has(j)) continue;
+        const next = classified[j];
+        if (next.kind === "amount_line") {
+          amount = next.amount;
+          extra = next.text;
+          raw = next.raw;
+          used.add(j);
+          // Pegar mais um text curto depois, se houver
+          const k = j + 1;
+          if (
+            classified[k]?.kind === "text" &&
+            !used.has(k) &&
+            isShortContinuation(classified[k].text)
+          ) {
+            extra = `${extra} ${classified[k].text}`.trim();
+            used.add(k);
+          }
+          break;
+        }
+        if (next.kind === "charge" || next.kind === "date_desc") break;
+        if (next.kind === "text") {
+          extra = `${extra} ${next.text}`.trim();
+          used.add(j);
+        }
+      }
+      if (amount === null) continue;
+      used.add(i);
+      pushLine(row.date, amount, `${row.text} ${extra}`.trim(), raw);
+    }
   }
 
   return result;

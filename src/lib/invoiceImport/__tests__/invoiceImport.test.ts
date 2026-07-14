@@ -66,6 +66,35 @@ describe("parseBradescoExtract", () => {
     });
     expect(lines.every(l => !/saldo|pagto|total/i.test(l.description))).toBe(true);
   });
+
+  it("reassembles Bradesco PDF split description layout", () => {
+    const pdfLike = `
+EDCAS COMERCIO E
+08/07  64,80
+COMER
+08/07  JUPIARA COMERCIO DE  23,00
+COMERCIAL MORADA
+06/07  25,80
+JUNDI
+JIM.COM LETICIA DA
+05/07  13,83
+SILVA
+05/07  SALDO ANTERIOR  2.298,22
+03/07  PAGTO ANTECIPADO PIX  -2.298,22
+26/06  CINEPOLIS OPERADORA DE 42,00
+CI
+08/05  OPAQUE 3/5  95,00
+`;
+    const lines = parseBradescoExtract(pdfLike, 2026);
+    expect(lines.find(l => l.amount === 64.8)?.description).toMatch(/EDCAS/i);
+    expect(lines.find(l => l.amount === 64.8)?.description).toMatch(/COMER/i);
+    expect(lines.find(l => l.amount === 25.8)?.description).toMatch(/MORADA/i);
+    expect(lines.find(l => l.amount === 13.83)?.description).toMatch(/JIM/i);
+    expect(lines.find(l => l.amount === 42)?.description).toMatch(/CINEPOLIS/i);
+    expect(lines.find(l => l.amount === 42)?.description).toMatch(/CI/i);
+    expect(lines.some(l => /saldo|pagto/i.test(l.description))).toBe(false);
+    expect(lines).toHaveLength(6);
+  });
 });
 
 describe("matchInvoiceLines", () => {

@@ -7,13 +7,15 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "vitest run"
+    "test": "vitest run",
+    "postinstall": "node -e \"const fs=require('fs');const p=require('path');const src=p.join('node_modules','pdfjs-dist','build','pdf.worker.min.mjs');const dest=p.join('public','pdf.worker.min.mjs');if(fs.existsSync(src)){fs.mkdirSync('public',{recursive:true});fs.copyFileSync(src,dest);}\""
   },
   "dependencies": {
     "firebase": "^12.13.0",
     "firebase-admin": "^13.10.0",
     "lucide-react": "^1.16.0",
     "next": "16.2.6",
+    "pdfjs-dist": "^6.1.200",
     "react": "19.2.4",
     "react-dom": "19.2.4"
   },
