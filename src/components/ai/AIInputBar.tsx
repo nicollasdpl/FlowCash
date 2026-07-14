@@ -24,6 +24,7 @@ export function AIInputBar({ message, loading, disabled, bottomOffset = "0px", o
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const [listening, setListening] = useState(false);
   const [voiceSupported, setVoiceSupported] = useState(false);
+  const [focused, setFocused] = useState(false);
   const recognitionRef = useRef<{ stop: () => void } | null>(null);
 
   useEffect(() => {
@@ -78,13 +79,15 @@ export function AIInputBar({ message, loading, disabled, bottomOffset = "0px", o
   }
 
   function syncTextareaHeight(el: HTMLTextAreaElement) {
-    el.style.height = "0px";
-    el.style.height = Math.min(Math.max(el.scrollHeight, 44), 96) + "px";
+    el.style.height = "auto";
+    el.style.height = `${Math.min(Math.max(el.scrollHeight, 24), 72)}px`;
   }
 
   useEffect(() => {
     if (inputRef.current) syncTextareaHeight(inputRef.current);
   }, [message]);
+
+  const canSend = Boolean(message.trim()) && !disabled;
 
   return (
     <div
@@ -99,7 +102,7 @@ export function AIInputBar({ message, loading, disabled, bottomOffset = "0px", o
         padding: "10px 12px",
         paddingBottom: "calc(10px + env(safe-area-inset-bottom, 0px))",
         display: "flex",
-        alignItems: "center",
+        alignItems: "flex-end",
         gap: "8px",
       }}
     >
@@ -110,11 +113,10 @@ export function AIInputBar({ message, loading, disabled, bottomOffset = "0px", o
           disabled={disabled}
           aria-label={listening ? "Parar gravação" : "Entrada por voz"}
           style={{
-            width: "44px",
-            height: "44px",
-            alignSelf: "flex-end",
+            width: "48px",
+            height: "48px",
             flexShrink: 0,
-            borderRadius: "13px",
+            borderRadius: "14px",
             background: listening ? "var(--red-10)" : "var(--bg-input)",
             border: `1px solid ${listening ? "var(--red-20)" : "var(--border)"}`,
             color: listening ? "var(--red)" : "var(--text-2)",
@@ -129,64 +131,81 @@ export function AIInputBar({ message, loading, disabled, bottomOffset = "0px", o
         </button>
       )}
 
-      <textarea
-        ref={inputRef}
-        value={message}
-        onChange={e => {
-          onChange(e.target.value);
-          syncTextareaHeight(e.target);
-        }}
-        onKeyDown={handleKey}
-        placeholder="Ex: gastei 50 no iFood e 30 de uber…"
-        disabled={disabled}
-        rows={1}
+      {/*
+        Borda/padding no wrapper — no Android, height fixo na textarea
+        ignora padding e o texto cola/corta nas bordas.
+      */}
+      <div
+        onClick={() => inputRef.current?.focus()}
         style={{
           flex: 1,
           minWidth: 0,
-          background: "var(--bg-input)",
-          border: "1px solid var(--border)",
+          display: "flex",
+          alignItems: "center",
+          background: focused ? "var(--bg-input-focus)" : "var(--bg-input)",
+          border: `1px solid ${focused ? "var(--accent)" : "var(--border)"}`,
           borderRadius: "14px",
-          padding: "10px 14px",
-          fontSize: "15px",
-          color: "var(--text-1)",
-          fontFamily: "inherit",
-          resize: "none",
-          outline: "none",
-          lineHeight: "22px",
-          height: "44px",
-          minHeight: "44px",
-          maxHeight: "96px",
-          overflowY: "auto",
-          opacity: disabled ? 0.5 : 1,
+          padding: "12px 14px",
+          minHeight: "48px",
           boxSizing: "border-box",
-          WebkitAppearance: "none",
-          appearance: "none",
+          opacity: disabled ? 0.5 : 1,
+          transition: "border-color 0.15s ease, background 0.15s ease",
         }}
-        onFocus={e => {
-          e.target.style.borderColor = "var(--accent)";
-        }}
-        onBlur={e => {
-          e.target.style.borderColor = "var(--border)";
-        }}
-      />
+      >
+        <textarea
+          ref={inputRef}
+          value={message}
+          onChange={e => {
+            onChange(e.target.value);
+            syncTextareaHeight(e.target);
+          }}
+          onKeyDown={handleKey}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
+          placeholder="Ex: gastei 50 no iFood e 30 de uber…"
+          disabled={disabled}
+          rows={1}
+          style={{
+            flex: 1,
+            width: "100%",
+            minWidth: 0,
+            border: "none",
+            outline: "none",
+            background: "transparent",
+            padding: 0,
+            margin: 0,
+            fontSize: "15px",
+            lineHeight: "24px",
+            color: "var(--text-1)",
+            fontFamily: "inherit",
+            resize: "none",
+            height: "24px",
+            minHeight: "24px",
+            maxHeight: "72px",
+            overflowY: "auto",
+            display: "block",
+            WebkitAppearance: "none",
+            appearance: "none",
+          }}
+        />
+      </div>
 
       <button
         type="button"
         onClick={onSend}
-        disabled={!message.trim() || disabled}
+        disabled={!canSend}
         style={{
-          width: "44px",
-          height: "44px",
-          alignSelf: "flex-end",
+          width: "48px",
+          height: "48px",
           flexShrink: 0,
-          borderRadius: "13px",
-          background: message.trim() && !disabled ? "var(--accent)" : "var(--bg-input)",
-          border: `1px solid ${message.trim() && !disabled ? "transparent" : "var(--border)"}`,
-          color: message.trim() && !disabled ? "#06100E" : "var(--text-3)",
+          borderRadius: "14px",
+          background: canSend ? "var(--accent)" : "var(--bg-input)",
+          border: `1px solid ${canSend ? "transparent" : "var(--border)"}`,
+          color: canSend ? "#06100E" : "var(--text-3)",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          cursor: message.trim() && !disabled ? "pointer" : "default",
+          cursor: canSend ? "pointer" : "default",
           fontFamily: "inherit",
         }}
       >
