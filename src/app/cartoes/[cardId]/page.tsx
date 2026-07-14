@@ -11,33 +11,14 @@ import {
 import {
   getCardInvoices, getInstallmentsByMonth, getInvoiceDates, getDefaultInvoiceMonth,
 } from "@/engine/invoiceEngine";
-import { Pencil, Package, Plus, Trash2, Download } from "lucide-react";
+import { Pencil, Package, Plus, Trash2, Download, Upload } from "lucide-react";
 import CategoryIcon from "@/components/CategoryIcon";
-
-function fmt(v: number) {
-  return v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-
-function formatDate(d: string) {
-  if (!d) return "—";
-  const [y, m, day] = d.split("-");
-  return `${day}/${m}/${y}`;
-}
-
-function csvEscape(value: string) {
-  if (/[;"\n\r]/.test(value)) return `"${value.replace(/"/g, '""')}"`;
-  return value;
-}
-
-function downloadTextFile(filename: string, content: string, mime: string) {
-  const blob = new Blob([content], { type: mime });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
-}
+import {
+  csvEscape,
+  downloadTextFile,
+  formatDateBr as formatDate,
+  formatPtBrAmount as fmt,
+} from "@/lib/invoiceImport/csvShared";
 
 const MONTHS_LONG  = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
 const MONTHS_SHORT = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
@@ -443,19 +424,19 @@ export default function CartaoDetail() {
           </div>
 
           {/* Ações da fatura */}
-          {installmentsThisMonth.length > 0 && (
-            <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--border)" }}>
-              {payError && (
-                <p style={{ fontSize: "11.5px", color: "var(--red)", marginBottom: "8px", lineHeight: 1.4 }}>
-                  {payError}
-                </p>
-              )}
-              {payWarning && (
-                <p style={{ fontSize: "11.5px", color: "var(--amber)", marginBottom: "8px", lineHeight: 1.4 }}>
-                  {payWarning}
-                </p>
-              )}
-              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+          <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--border)" }}>
+            {payError && (
+              <p style={{ fontSize: "11.5px", color: "var(--red)", marginBottom: "8px", lineHeight: 1.4 }}>
+                {payError}
+              </p>
+            )}
+            {payWarning && (
+              <p style={{ fontSize: "11.5px", color: "var(--amber)", marginBottom: "8px", lineHeight: 1.4 }}>
+                {payWarning}
+              </p>
+            )}
+            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+              {installmentsThisMonth.length > 0 && (
                 <button
                   onClick={requestPayInvoice}
                   disabled={allPaid}
@@ -472,6 +453,26 @@ export default function CartaoDetail() {
                 >
                   {allPaid ? "✓ Fatura já paga" : `Pagar Fatura · R$ ${fmt(pendingTotal)}`}
                 </button>
+              )}
+              <button
+                onClick={() => router.push(`/cartoes/${card.id}/importar?month=${selectedMonth}`)}
+                style={{
+                  width: "100%", padding: "11px 16px", borderRadius: "10px",
+                  fontSize: "13px", fontWeight: 600, fontFamily: "inherit",
+                  cursor: "pointer",
+                  background: "var(--accent-10)",
+                  color: "var(--accent)",
+                  border: "1px solid var(--border-accent)",
+                  minHeight: "44px",
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: "8px",
+                  touchAction: "manipulation",
+                  WebkitTapHighlightColor: "transparent",
+                }}
+              >
+                <Upload size={15} strokeWidth={1.75} />
+                Importar / comparar extrato
+              </button>
+              {installmentsThisMonth.length > 0 && (
                 <button
                   onClick={exportInvoice}
                   style={{
@@ -490,9 +491,9 @@ export default function CartaoDetail() {
                   <Download size={15} strokeWidth={1.75} />
                   Exportar fatura (CSV)
                 </button>
-              </div>
+              )}
             </div>
-          )}
+          </div>
 
           {/* Lista de parcelas */}
           {installmentsThisMonth.length === 0 ? (
