@@ -26,12 +26,28 @@ export interface AppInvoiceLine {
   categoryName: string;
 }
 
-export type MatchStatus = "matched" | "only_bank" | "only_app" | "ambiguous";
+export type MatchStatus =
+  | "matched"
+  | "near_match"
+  | "only_bank"
+  | "only_app"
+  | "ambiguous";
 
 export interface MatchPair {
   imported: ImportedLine;
   app: AppInvoiceLine;
   score: number;
+  /** true quando o usuário vinculou manualmente. */
+  manual?: boolean;
+}
+
+/** Par com valor quase igual (ex.: 147,07 vs 146,99). */
+export interface NearMatchPair {
+  imported: ImportedLine;
+  app: AppInvoiceLine;
+  score: number;
+  /** bank - app (positivo = banco cobra mais). */
+  amountDiff: number;
 }
 
 export interface AmbiguousCandidate {
@@ -41,6 +57,7 @@ export interface AmbiguousCandidate {
 
 export interface MatchResult {
   matched: MatchPair[];
+  nearMatches: NearMatchPair[];
   onlyBank: ImportedLine[];
   onlyApp: AppInvoiceLine[];
   ambiguous: AmbiguousCandidate[];
@@ -65,6 +82,14 @@ export interface ImportDraftLine {
   covered?: boolean;
   /** Aviso se competenceMonth ≠ mês da fatura aberta. */
   competenceWarning?: string;
+  /** Descrição original do extrato (para cache de estabelecimento). */
+  sourceDescription?: string;
+  /** Categoria veio de sugestão da IA. */
+  aiSuggested?: boolean;
+  /** Usuário trocou a categoria manualmente (IA não sobrescreve). */
+  catEdited?: boolean;
+  /** Confiança da sugestão local ("low" dispara IA). */
+  catConfidence?: "high" | "low";
 }
 
 export type ImportReviewMode = "compare" | "import";

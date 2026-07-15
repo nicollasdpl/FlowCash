@@ -1,12 +1,17 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import type {
   AppInvoiceLine,
   ImportDraftLine,
   ImportReviewMode,
+  ImportedLine,
   MatchResult,
+  NearMatchPair,
 } from "@/lib/invoiceImport/types";
+import { nearAmountTolerance } from "@/lib/invoiceImport/matchInvoiceLines";
+import { roundCents } from "@/lib/invoiceImport/csvShared";
 import ImportLineEditor from "./ImportLineEditor";
 
 interface CategoryOpt {
@@ -25,6 +30,7 @@ interface Props {
   categories: CategoryOpt[];
   onSelectAllOnlyBank: (selected: boolean) => void;
   onAddSelected: () => void;
+  onManualLink?: (importedId: string, installmentId: string) => void;
   adding?: boolean;
 }
 
@@ -49,6 +55,80 @@ function SectionTitle({ children, count, tone }: { children: React.ReactNode; co
         {children}
       </span>
       <span style={{ fontSize: 12, color: "var(--text-3)", fontWeight: 600 }}>{count}</span>
+    </div>
+  );
+}
+
+function compatibleAppLines(
+  imported: ImportedLine,
+  onlyApp: AppInvoiceLine[],
+): AppInvoiceLine[] {
+  return onlyApp.filter(app => {
+    const diff = Math.abs(roundCents(imported.amount) - roundCents(app.amount));
+    return diff === 0 || diff <= nearAmountTolerance(imported.amount);
+  });
+}
+
+function LinkPicker({
+  imported,
+  targets,
+  onLink,
+}: {
+  imported: ImportedLine;
+  targets: AppInvoiceLine[];
+  onLink: (importedId: string, installmentId: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  if (targets.length === 0) return null;
+
+  return (
+    <div style={{ marginTop: 8 }}>
+      <button
+        type="button"
+        onClick={() => setOpen(v => !v)}
+        style={{
+          background: "none",
+          border: "1px solid var(--border)",
+          borderRadius: 8,
+          padding: "6px 10px",
+          fontSize: 12,
+          color: "var(--accent)",
+          cursor: "pointer",
+          fontFamily: "inherit",
+        }}
+      >
+        {open ? "Fechar" : "Vincular"} ({targets.length})
+      </button>
+      {open && (
+        <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 6 }}>
+          {targets.map(t => (
+            <button
+              key={t.installmentId}
+              type="button"
+              onClick={() => {
+                onLink(imported.id, t.installmentId);
+                setOpen(false);
+              }}
+              style={{
+                textAlign: "left",
+                padding: "8px 10px",
+                borderRadius: 8,
+                border: "1px solid var(--border)",
+                background: "var(--bg-input)",
+                color: "var(--text-1)",
+                fontSize: 12,
+                cursor: "pointer",
+                fontFamily: "inherit",
+              }}
+            >
+              <span style={{ fontWeight: 600 }}>{t.description}</span>
+              {" · "}
+              R$ {fmt(t.amount)}
+              {t.date ? ` · ${t.date.split("-").reverse().join("/")}` : ""}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -103,6 +183,7 @@ export default function ImportReview({
   categories,
   onSelectAllOnlyBank,
   onAddSelected,
+  onManualLink,
   adding,
 }: Props) {
   const selectedCount = drafts.filter(d => d.selected && !d.covered).length;
@@ -191,6 +272,59 @@ export default function ImportReview({
         ))
       )}
 
+      {match.nearMatches.length > 0 && (
+        <>
+          <SectionTitle count={match.nearMatches.length} tone="var(--warning)">
+            Quase batendo
+          </SectionTitle>
+          {match.nearMatches.map((pair: NearMatchPair) => (
+            <div
+              key={pair.imported.id + pair.app.installmentId}
+              style={{
+                padding: "12px 16px",
+                borderTop: "1px solid var(--border)",
+                background: "var(--amber-10)",
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 14, fontWeight: 600 }}>{pair.app.description}</div>
+                  <div style={{ fontSize: 11, color: "var(--text-3)", marginTop: 2 }}>
+                    Extrato: {pair.imported.description}
+                  </div>
+                  <div style={{ fontSize: 11, color: "var(--amber)", marginTop: 4 }}>
+                    Diferença: R$ {fmt(Math.abs(pair.amountDiff))}
+                    {pair.amountDiff > 0 ? " (banco cobra mais)" : " (app cobra mais)"}
+                  </div>
+                </div>
+                <div style={{ textAlign: "right", flexShrink: 0 }}>
+                  <div style={{ fontSize: 12, color: "var(--text-3)" }}>App</div>
+                  <div style={{ fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
+                    R$ {fmt(pair.app.amount)}
+                  </div>
+                  <div style={{ fontSize: 12, color: "var(--text-3)", marginTop: 4 }}>Banco</div>
+                  <div style={{ fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
+                    R$ {fmt(pair.imported.amount)}
+                  </div>
+                  <Link
+                    href={`/cartoes/${cardId}/compras/${pair.app.purchaseId}/editar`}
+                    style={{
+                      fontSize: 11,
+                      color: "var(--accent)",
+                      textDecoration: "none",
+                      display: "block",
+                      marginTop: 6,
+                    }}
+                  >
+                    Usar valor do banco
+                  </Link>
+                </div>
+              </div>
+            </div>
+          ))}
+        </>
+      )}
+
       <SectionTitle count={drafts.length} tone="var(--amber)">
         Só no extrato
       </SectionTitle>
@@ -220,13 +354,36 @@ export default function ImportReview({
         <Empty>Nada faltando no app.</Empty>
       ) : (
         drafts.map(d => (
-          <ImportLineEditor
-            key={d.key}
-            draft={d}
-            categories={categories}
-            mode={mode}
-            onChange={next => onDraftChange(d.key, next)}
-          />
+          <div key={d.key}>
+            <ImportLineEditor
+              draft={d}
+              categories={categories}
+              mode={mode}
+              onChange={next => onDraftChange(d.key, next)}
+            />
+            {onManualLink && (
+              <div style={{ padding: "0 16px 12px", borderTop: "1px solid var(--border-subtle)" }}>
+                <LinkPicker
+                  imported={{
+                    id: d.key,
+                    date: d.date,
+                    description: d.sourceDescription ?? d.description,
+                    amount: d.amount,
+                  }}
+                  targets={compatibleAppLines(
+                    {
+                      id: d.key,
+                      date: d.date,
+                      description: d.sourceDescription ?? d.description,
+                      amount: d.amount,
+                    },
+                    match.onlyApp,
+                  )}
+                  onLink={onManualLink}
+                />
+              </div>
+            )}
+          </div>
         ))
       )}
 
@@ -241,8 +398,15 @@ export default function ImportReview({
                 {a.imported.description} · R$ {fmt(a.imported.amount)}
               </div>
               <div style={{ fontSize: 12, color: "var(--text-3)", marginTop: 4 }}>
-                {a.candidates.length} candidatos no app — resolva editando ou ignorando.
+                {a.candidates.length} candidatos no app — escolha o par correto:
               </div>
+              {onManualLink && (
+                <LinkPicker
+                  imported={a.imported}
+                  targets={a.candidates}
+                  onLink={onManualLink}
+                />
+              )}
             </div>
           ))}
         </>

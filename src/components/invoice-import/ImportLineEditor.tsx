@@ -91,6 +91,17 @@ export default function ImportLineEditor({
                   </option>
                 ))}
               </select>
+              {draft.aiSuggested && (
+                <span
+                  style={{
+                    fontSize: 11,
+                    color: "var(--accent)",
+                    fontWeight: 600,
+                  }}
+                >
+                  Sugerido por IA
+                </span>
+              )}
               <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
                 <label style={chipLabel}>
                   <input

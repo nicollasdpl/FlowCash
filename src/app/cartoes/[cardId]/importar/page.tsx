@@ -10,10 +10,16 @@ import {
 } from "@/engine/invoiceEngine";
 import { parseImportText } from "@/lib/invoiceImport/parseImportFile";
 import {
+  applyManualLinks,
   buildAppInvoiceLines,
   matchInvoiceLines,
 } from "@/lib/invoiceImport/matchInvoiceLines";
-import { suggestCategoryId } from "@/lib/invoiceImport/suggestCategory";
+import { suggestCategory } from "@/lib/invoiceImport/suggestCategory";
+import {
+  buildCacheEntries,
+  buildMerchantMap,
+  type MerchantMap,
+} from "@/lib/invoiceImport/merchantHistory";
 import type {
   ImportDraftLine,
   ImportReviewMode,
@@ -26,6 +32,7 @@ import { Upload } from "lucide-react";
 function emptyMatch(): MatchResult {
   return {
     matched: [],
+    nearMatches: [],
     onlyBank: [],
     onlyApp: [],
     ambiguous: [],
@@ -38,9 +45,10 @@ function draftsFromOnlyBank(
   categories: Array<{ id: string; name: string; type: string; isSystem?: boolean }>,
   cardClosingDay: number,
   selectedMonth: string,
+  merchantMap: MerchantMap,
 ): ImportDraftLine[] {
   return lines.map(line => {
-    const categoryId = suggestCategoryId(line.description, categories);
+    const suggestion = suggestCategory(line.description, categories, merchantMap);
     let amount = line.amount;
     let installments = 1;
     let isSubscription = !!line.isSubscriptionHint;
@@ -66,10 +74,12 @@ function draftsFromOnlyBank(
       date: line.date,
       description: line.description,
       amount,
-      categoryId,
+      categoryId: suggestion.categoryId,
       totalInstallments: installments,
       isSubscription,
       competenceWarning,
+      sourceDescription: line.description,
+      catConfidence: suggestion.confidence,
     };
   });
 }
@@ -78,7 +88,7 @@ function ImportarFaturaContent() {
   const { cardId } = useParams<{ cardId: string }>();
   const searchParams = useSearchParams();
   const router = useRouter();
-  const { state, dispatch } = useApp();
+  const { state, dispatch, user } = useApp();
   const fileRef = useRef<HTMLInputElement>(null);
 
   const card = state.cards.find(c => c.id === cardId);
@@ -96,6 +106,8 @@ function ImportarFaturaContent() {
   const [adding, setAdding] = useState(false);
   const [readingFile, setReadingFile] = useState(false);
   const [hasParsed, setHasParsed] = useState(false);
+  const [manualLinks, setManualLinks] = useState<Record<string, string>>({});
+  const aiRequestedRef = useRef(false);
 
   const installmentsThisMonth = useMemo(() => {
     if (!card || !competenceMonth) return [];
@@ -105,6 +117,11 @@ function ImportarFaturaContent() {
   const expenseCategories = useMemo(
     () => state.categories.filter(c => c.type === "expense" && !c.isSystem),
     [state.categories],
+  );
+
+  const merchantMap = useMemo(
+    () => buildMerchantMap(state.purchases, state.merchantCategoryCache),
+    [state.purchases, state.merchantCategoryCache],
   );
 
   const appLines = useMemo(
@@ -119,8 +136,9 @@ function ImportarFaturaContent() {
 
   const match = useMemo(() => {
     if (!hasParsed) return emptyMatch();
-    return matchInvoiceLines(imported, appLines);
-  }, [imported, appLines, hasParsed]);
+    const base = matchInvoiceLines(imported, appLines, { merchantMap });
+    return applyManualLinks(base, manualLinks);
+  }, [imported, appLines, hasParsed, merchantMap, manualLinks]);
 
   useEffect(() => {
     if (!card || !hasParsed || !competenceMonth) return;
@@ -131,6 +149,7 @@ function ImportarFaturaContent() {
         state.categories,
         card.closingDay,
         competenceMonth,
+        merchantMap,
       );
       return next.map(d => {
         const old = prevMap.get(d.key);
@@ -146,10 +165,66 @@ function ImportarFaturaContent() {
           isSubscription: old.isSubscription,
           covered: old.covered,
           competenceWarning: d.competenceWarning,
+          sourceDescription: old.sourceDescription ?? d.sourceDescription,
+          aiSuggested: old.aiSuggested,
+          catEdited: old.catEdited,
+          catConfidence: old.catConfidence ?? d.catConfidence,
         };
       });
     });
-  }, [match.onlyBank, card, hasParsed, state.categories, competenceMonth]);
+  }, [match.onlyBank, card, hasParsed, state.categories, competenceMonth, merchantMap]);
+
+  // IA em lote: 1 chamada por import para as linhas de baixa confiança.
+  useEffect(() => {
+    if (!hasParsed || aiRequestedRef.current || !user) return;
+    const lowDrafts = drafts.filter(
+      d => d.catConfidence === "low" && !d.catEdited && !d.covered,
+    );
+    if (lowDrafts.length === 0) return;
+    aiRequestedRef.current = true;
+
+    void (async () => {
+      try {
+        const idToken = await user.getIdToken();
+        const res = await fetch("/api/ai-categorize", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${idToken}`,
+          },
+          body: JSON.stringify({
+            items: lowDrafts.map(d => ({
+              id: d.key,
+              description: d.sourceDescription ?? d.description,
+            })),
+            categories: expenseCategories.map(c => ({ id: c.id, name: c.name })),
+          }),
+        });
+        if (!res.ok) return; // fallback silencioso: mantém sugestão local
+        const data = (await res.json()) as {
+          results?: { id: string; categoryId: string }[];
+        };
+        const byId = new Map(
+          (data.results ?? []).map(r => [r.id, r.categoryId]),
+        );
+        if (byId.size === 0) return;
+        setDrafts(prev =>
+          prev.map(d => {
+            const aiCat = byId.get(d.key);
+            if (!aiCat || d.catEdited || d.covered) return d;
+            return {
+              ...d,
+              categoryId: aiCat,
+              aiSuggested: true,
+              catConfidence: "high",
+            };
+          }),
+        );
+      } catch {
+        // rede/token falhou: segue com a sugestão local
+      }
+    })();
+  }, [drafts, hasParsed, user, expenseCategories]);
 
   const applyText = useCallback(
     (text: string) => {
@@ -173,6 +248,8 @@ function ImportarFaturaContent() {
       }
       setImported(lines);
       setHasParsed(true);
+      setManualLinks({});
+      aiRequestedRef.current = false;
       setFormatLabel(
         format === "flowcash_csv"
           ? "CSV FlowCash"
@@ -213,11 +290,25 @@ function ImportarFaturaContent() {
   }
 
   function handleDraftChange(key: string, next: ImportDraftLine) {
-    setDrafts(prev => prev.map(d => (d.key === key ? next : d)));
+    setDrafts(prev =>
+      prev.map(d => {
+        if (d.key !== key) return d;
+        // Categoria trocada pelo usuário: IA não sobrescreve mais.
+        if (next.categoryId !== d.categoryId) {
+          return { ...next, catEdited: true, aiSuggested: false };
+        }
+        return next;
+      }),
+    );
   }
 
   function handleSelectAll(selected: boolean) {
     setDrafts(prev => prev.map(d => (d.covered ? d : { ...d, selected })));
+  }
+
+  function handleManualLink(importedId: string, installmentId: string) {
+    setManualLinks(prev => ({ ...prev, [importedId]: installmentId }));
+    setDrafts(prev => prev.filter(d => d.key !== importedId));
   }
 
   function handleAddSelected() {
@@ -243,6 +334,11 @@ function ImportarFaturaContent() {
           createdAt: new Date().toISOString(),
         };
         dispatch({ type: "ADD_PURCHASE", payload: { purchase, card } });
+      }
+      // Aprende: estabelecimento do extrato → categoria confirmada pelo usuário.
+      const cacheEntries = buildCacheEntries(toAdd);
+      if (Object.keys(cacheEntries).length > 0) {
+        dispatch({ type: "MERGE_MERCHANT_CACHE", payload: cacheEntries });
       }
       const addedKeys = new Set(toAdd.map(d => d.key));
       setImported(prev => prev.filter(l => !addedKeys.has(l.id)));
@@ -489,6 +585,7 @@ function ImportarFaturaContent() {
             }))}
             onSelectAllOnlyBank={handleSelectAll}
             onAddSelected={handleAddSelected}
+            onManualLink={handleManualLink}
             adding={adding}
           />
         </>

@@ -15,6 +15,7 @@ function baseState(overrides: Partial<AppState> = {}): AppState {
     goals: [],
     categories: [{ id: "cat1", name: "Moradia", type: "expense", color: "#f00", icon: "Home" }],
     budgets: [],
+    merchantCategoryCache: {},
     ...overrides,
   };
 }

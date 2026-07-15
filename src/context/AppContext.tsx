@@ -37,6 +37,8 @@ export interface AppState {
   goals: Goal[];
   categories: Category[];
   budgets: Budget[];
+  /** Aprendizado do import: estabelecimento normalizado → categoryId. */
+  merchantCategoryCache: Record<string, string>;
 }
 
 type Action =
@@ -66,7 +68,8 @@ type Action =
   | { type: "UPD_CATEGORY"; payload: Category }
   | { type: "DEL_CATEGORY"; payload: string }
   | { type: "BULK_ADD_TX"; payload: Transaction[] }
-  | { type: "ADD_INSTALLMENTS"; payload: CardInstallment[] };
+  | { type: "ADD_INSTALLMENTS"; payload: CardInstallment[] }
+  | { type: "MERGE_MERCHANT_CACHE"; payload: Record<string, string> };
 
 // ─── SEED ─────────────────────────────────────────────────────────────────────
 
@@ -99,6 +102,7 @@ const seed: AppState = {
   goals: [],
   categories: SEED_CATEGORIES,
   budgets: [],
+  merchantCategoryCache: {},
 };
 
 // ─── SEED ICON MIGRATION ──────────────────────────────────────────────────────
@@ -152,6 +156,7 @@ function reducer(state: AppState, action: Action): AppState {
         ...seed,
         ...action.payload,
         categories,
+        merchantCategoryCache: action.payload.merchantCategoryCache ?? {},
         notificationPrefs: {
           ...DEFAULT_NOTIFICATION_PREFS,
           ...(action.payload.notificationPrefs ?? {}),
@@ -263,6 +268,12 @@ function reducer(state: AppState, action: Action): AppState {
       return { ...state, budgets: state.budgets.map(b => b.id === action.payload.id ? action.payload : b) };
     case "DEL_BUDGET":
       return { ...state, budgets: state.budgets.filter(b => b.id !== action.payload) };
+
+    case "MERGE_MERCHANT_CACHE":
+      return {
+        ...state,
+        merchantCategoryCache: { ...state.merchantCategoryCache, ...action.payload },
+      };
 
     case "ADD_CATEGORY":
       return { ...state, categories: [...state.categories, action.payload] };
