@@ -16,6 +16,8 @@ import {
   ArrowDown, ArrowUp, ChevronDown, ChevronUp, Plus,
 } from "lucide-react";
 import CategoryIcon from "@/components/CategoryIcon";
+import { CopilotFab } from "@/components/CopilotFab";
+import { FabStack } from "@/components/FabStack";
 import { CategoryDonutSection, buildCatSlices } from "@/components/CategoryDonutSection";
 import { buildConsumptionCatSlices } from "@/app/relatorios/consumptionByCategory";
 
@@ -324,7 +326,7 @@ export default function Dashboard() {
       <div
         style={{
           padding: "16px",
-          paddingBottom: "calc(var(--fab-bottom) + var(--copilot-fab-size) + var(--fab-stack-gap) + var(--copilot-fab-size) + 16px)",
+          paddingBottom: "calc(var(--fab-bottom) + var(--fab-stack-h-dual) + 16px)",
           maxWidth: "680px",
           margin: "0 auto",
         }}
@@ -970,32 +972,18 @@ export default function Dashboard() {
 
       </div>
 
-      {/* ── FAB Nova transação (ícone) ── */}
-      <button
-        onClick={() => router.push("/transacoes/nova")}
-        aria-label="Nova transação"
-        style={{
-          position: "fixed",
-          bottom: "var(--fab-bottom)",
-          right: "var(--fab-right)",
-          zIndex: 50,
-          width: "var(--copilot-fab-size)",
-          height: "var(--copilot-fab-size)",
-          borderRadius: "50%",
-          background: "var(--accent)",
-          color: "#06100E",
-          border: "none",
-          cursor: "pointer",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          boxShadow: "0 4px 16px rgba(0,229,160,0.45), 0 0 0 1px rgba(0,229,160,0.15)",
-          touchAction: "manipulation",
-          WebkitTapHighlightColor: "transparent",
-        }}
-      >
-        <Plus size={22} strokeWidth={2.5} />
-      </button>
+      {/* ── FABs: Copiloto + Nova transação ── */}
+      <FabStack>
+        <CopilotFab />
+        <button
+          type="button"
+          className="page-fab-icon"
+          onClick={() => router.push("/transacoes/nova")}
+          aria-label="Nova transação"
+        >
+          <Plus size={22} strokeWidth={2.5} />
+        </button>
+      </FabStack>
     </>
   );
 }

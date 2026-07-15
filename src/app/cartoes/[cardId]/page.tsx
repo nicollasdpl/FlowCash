@@ -13,6 +13,8 @@ import {
 } from "@/engine/invoiceEngine";
 import { Pencil, Package, Plus, Trash2, Download, Upload } from "lucide-react";
 import CategoryIcon from "@/components/CategoryIcon";
+import { CopilotFab } from "@/components/CopilotFab";
+import { FabStack } from "@/components/FabStack";
 import {
   csvEscape,
   downloadTextFile,
@@ -315,7 +317,7 @@ export default function CartaoDetail() {
 
       {/* ── Content ── */}
       <div style={{
-        padding: "16px 16px calc(var(--fab-bottom) + var(--page-fab-h) + var(--fab-stack-gap) + var(--copilot-fab-size) + 16px)",
+        padding: "16px 16px calc(var(--fab-bottom) + var(--fab-stack-h) + 16px)",
       }}>
 
         {/* ── Resumo do limite ── */}
@@ -601,35 +603,19 @@ export default function CartaoDetail() {
         </div>
       </div>
 
-      {/* ── FAB Nova Compra ── */}
-      <button
-        onClick={() => router.push(`/cartoes/${card.id}/nova-compra`)}
-        style={{
-          position: "fixed",
-          bottom: "var(--fab-bottom)",
-          right: "var(--fab-right)",
-          zIndex: 50,
-          height: "48px",
-          padding: "0 20px",
-          borderRadius: "24px",
-          background: card.color,
-          color: "#fff",
-          border: "none",
-          cursor: "pointer",
-          fontFamily: "inherit",
-          fontSize: "14px",
-          fontWeight: 700,
-          display: "flex",
-          alignItems: "center",
-          gap: "7px",
-          boxShadow: `0 4px 16px ${card.color}66`,
-          touchAction: "manipulation",
-          WebkitTapHighlightColor: "transparent",
-        }}
-      >
-        <Plus size={17} strokeWidth={2.5} />
-        Nova Compra
-      </button>
+      {/* ── FABs: Copiloto + Nova Compra ── */}
+      <FabStack>
+        <CopilotFab />
+        <button
+          type="button"
+          className="page-fab-pill"
+          onClick={() => router.push(`/cartoes/${card.id}/nova-compra`)}
+          style={{ background: card.color, boxShadow: `0 4px 16px ${card.color}66` }}
+        >
+          <Plus size={17} strokeWidth={2.5} />
+          Nova Compra
+        </button>
+      </FabStack>
 
       {/* ── Modal confirmação pagamento (portal no body: acima da nav/FAB) ── */}
       {portalReady && showPayConfirm && createPortal(
