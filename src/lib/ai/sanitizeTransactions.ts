@@ -93,14 +93,32 @@ export function sanitizeTransactions(input: SanitizeInput): AIItem[] {
     } else {
       const rawCardId = typeof r.cardId === "string" ? r.cardId : "";
       const validRawCard = Boolean(rawCardId) && cardIds.has(rawCardId);
-      const cardId = forcedCardId ?? (validRawCard ? rawCardId : firstCardId);
-      if (!validRawCard && !forcedCardId) confidence = "low";
-
       const purchaseDate = typeof r.purchaseDate === "string" && r.purchaseDate ? r.purchaseDate : today;
       const totalInstallments =
         typeof r.totalInstallments === "number" && r.totalInstallments > 0
           ? Math.floor(r.totalInstallments)
           : 1;
+
+      // Fora da página do cartão: sem cardId válido, não inventa o 1º cartão —
+      // vira despesa na conta (padrão do dashboard).
+      if (!forcedCardId && !validRawCard) {
+        sanitized.push({
+          intent: "transaction",
+          type: "expense",
+          amount,
+          description,
+          categoryId,
+          accountId: firstAccountId,
+          competenceDate: purchaseDate,
+          paymentDate: purchaseDate,
+          status: "paid",
+          confidence: "low",
+        });
+        continue;
+      }
+
+      const cardId = forcedCardId ?? (validRawCard ? rawCardId : firstCardId);
+      if (!validRawCard && !forcedCardId) confidence = "low";
 
       sanitized.push({
         intent,

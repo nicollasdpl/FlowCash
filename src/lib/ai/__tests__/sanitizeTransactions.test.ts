@@ -93,6 +93,49 @@ describe("sanitizeTransactions", () => {
     }
   });
 
+  it("sem contextCardId, card_purchase sem cardId vira transaction na conta", () => {
+    const items = sanitizeTransactions({
+      ...base,
+      items: [
+        {
+          intent: "card_purchase",
+          amount: 40,
+          description: "iFood",
+          categoryId: "cat1",
+          confidence: "high",
+        },
+      ],
+    });
+
+    expect(items).toHaveLength(1);
+    expect(items[0]?.intent).toBe("transaction");
+    if (items[0]?.intent === "transaction") {
+      expect(items[0].type).toBe("expense");
+      expect(items[0].accountId).toBe("acc1");
+    }
+  });
+
+  it("sem contextCardId, card_purchase com cardId válido permanece compra", () => {
+    const items = sanitizeTransactions({
+      ...base,
+      items: [
+        {
+          intent: "card_purchase",
+          amount: 40,
+          description: "iFood no cartão",
+          categoryId: "cat1",
+          cardId: "card1",
+          confidence: "high",
+        },
+      ],
+    });
+
+    expect(items[0]?.intent).toBe("card_purchase");
+    if (items[0]?.intent === "card_purchase") {
+      expect(items[0].cardId).toBe("card1");
+    }
+  });
+
   it("ignora amount inválido", () => {
     const items = sanitizeTransactions({
       ...base,

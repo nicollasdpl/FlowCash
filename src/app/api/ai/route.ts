@@ -344,7 +344,12 @@ REGRA OBRIGATÓRIA NESTE CONTEXTO:
 - Todo gasto, compra ou despesa → intent=card_purchase com cardId="${contextCard.id}" (NUNCA transaction type=expense).
 - Parcelado → card_purchase com totalInstallments informado.
 - Receitas explícitas (salário, pix recebido) podem ser transaction type=income em conta.`
-    : "";
+    : `\n\nCONTEXTO DO APP: o usuário abriu o copiloto fora da página de um cartão (ex.: dashboard).
+REGRA OBRIGATÓRIA NESTE CONTEXTO:
+- Padrão de gasto/despesa/compra → intent=transaction type=expense com accountId (NÃO use card_purchase).
+- Só use card_purchase se a mensagem citar explicitamente: "cartão", "no crédito", "crédito", bandeira (visa/master/elo/amex) ou parcelamento ("em Nx", "parcelei", "parcelado").
+- "gastei", "paguei", "comprei" sem mencionar cartão → transaction na conta.
+- Receita/salário/pix recebido → transaction type=income.`;
 
   const prompt = `Você é um assistente financeiro pessoal brasileiro.
 
@@ -365,9 +370,9 @@ MENSAGEM ATUAL: "${message.trim()}"${financialContextBlock}
 ${intentInstructions}${confidenceRules}${cardContextRules}
 
 REGRAS DE LANÇAMENTO:
-- Bandeira ou "cartão" → card_purchase
+- Padrão: gasto → transaction type=expense na conta (accountId)
+- Só card_purchase se citar "cartão"/"crédito"/bandeira OU parcelamento ("em Nx", "parcelei")
 - Parcelado → card_purchase, totalInstallments=X
-- Banco sem "cartão" → transaction com accountId
 - Receita/salário/pix recebido → transaction type=income
 - "hoje"→${today} | "ontem"→${yesterday} | sem data→${today}
 - Status: paid (padrão) | pending se "vou pagar"/"pendente"
