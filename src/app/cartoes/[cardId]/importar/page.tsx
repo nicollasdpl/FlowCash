@@ -240,7 +240,7 @@ function ImportarFaturaContent() {
       const { format, lines } = parseImportText(text, { referenceYear: year });
       if (lines.length === 0) {
         setError(
-          "Não encontrei lançamentos. Use o CSV exportado pelo FlowCash ou cole o texto do extrato Bradesco.",
+          "Não encontrei lançamentos. Use CSV do Nubank, CSV exportado pelo FlowCash ou cole o texto do extrato Bradesco.",
         );
         setHasParsed(false);
         setImported([]);
@@ -253,9 +253,11 @@ function ImportarFaturaContent() {
       setFormatLabel(
         format === "flowcash_csv"
           ? "CSV FlowCash"
-          : format === "bradesco"
-            ? "Extrato Bradesco"
-            : "Formato detectado",
+          : format === "nubank_csv"
+            ? "CSV Nubank"
+            : format === "bradesco"
+              ? "Extrato Bradesco"
+              : "Formato detectado",
       );
       setInfo(`${lines.length} lançamento(s) lido(s).`);
       setMode("compare");
@@ -434,8 +436,8 @@ function ImportarFaturaContent() {
               marginBottom: 16,
             }}
           >
-            Envie o PDF do extrato Bradesco ou o CSV do FlowCash. O app lê o PDF
-            direto e compara com esta fatura.
+            Envie o PDF do extrato Bradesco, o CSV do Nubank ou o CSV do FlowCash.
+            O app lê o PDF direto e compara com esta fatura.
           </p>
 
           <input
