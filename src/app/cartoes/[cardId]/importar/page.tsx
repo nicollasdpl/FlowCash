@@ -22,7 +22,6 @@ import {
 } from "@/lib/invoiceImport/merchantHistory";
 import type {
   ImportDraftLine,
-  ImportReviewMode,
   ImportedLine,
   MatchResult,
 } from "@/lib/invoiceImport/types";
@@ -99,7 +98,6 @@ function ImportarFaturaContent() {
   const [paste, setPaste] = useState("");
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
-  const [mode, setMode] = useState<ImportReviewMode>("compare");
   const [imported, setImported] = useState<ImportedLine[]>([]);
   const [formatLabel, setFormatLabel] = useState("");
   const [drafts, setDrafts] = useState<ImportDraftLine[]>([]);
@@ -260,7 +258,6 @@ function ImportarFaturaContent() {
               : "Formato detectado",
       );
       setInfo(`${lines.length} lançamento(s) lido(s).`);
-      setMode("compare");
     },
     [competenceMonth],
   );
@@ -346,7 +343,6 @@ function ImportarFaturaContent() {
       setImported(prev => prev.filter(l => !addedKeys.has(l.id)));
       setDrafts(prev => prev.filter(d => !addedKeys.has(d.key)));
       setInfo(`${toAdd.length} compra(s) adicionada(s).`);
-      setMode("compare");
     } finally {
       setAdding(false);
     }
@@ -575,8 +571,6 @@ function ImportarFaturaContent() {
           </div>
           <ImportReview
             cardId={card.id}
-            mode={mode}
-            onModeChange={setMode}
             match={match}
             drafts={drafts}
             onDraftChange={handleDraftChange}

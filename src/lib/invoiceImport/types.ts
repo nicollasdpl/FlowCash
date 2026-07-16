@@ -90,6 +90,4 @@ export interface ImportDraftLine {
   catEdited?: boolean;
   /** Confiança da sugestão local ("low" dispara IA). */
   catConfidence?: "high" | "low";
-}
-
-export type ImportReviewMode = "compare" | "import";
+};

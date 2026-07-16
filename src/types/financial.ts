@@ -15,6 +15,13 @@ export type InvoiceStatus = "open" | "closed" | "overdue" | "paid";
 // das compras originais). Não editável nem deletável; oculta em formulários.
 export const SEED_INVOICE_PAYMENT_CATEGORY_ID = "system_invoice_payment";
 
+// Categoria de RECEITA usada para dinheiro de empréstimo/financiamento.
+// O dinheiro entra de verdade (afeta o saldo), mas NÃO é renda real — por isso
+// é marcada com excludeFromReports e não soma nos totais de "Receitas".
+export const SEED_LOAN_INCOME_CATEGORY_ID = "loan_income";
+// Categoria de DESPESA para as parcelas do empréstimo (saída real do dinheiro).
+export const SEED_LOAN_EXPENSE_CATEGORY_ID = "loan_expense";
+
 // ─── CONTA BANCÁRIA ───────────────────────────────────────────────────────────
 // Onde o dinheiro EXISTE fisicamente.
 export interface Account {
@@ -36,6 +43,7 @@ export interface Category {
   color: string;
   icon: string;
   isSystem?: boolean;             // categoria de sistema: não editável/deletável, oculta em formulários
+  excludeFromReports?: boolean;   // não soma nos totais de relatório (ex.: empréstimo não conta como receita), mas ainda afeta o saldo
 }
 
 // ─── TRANSAÇÃO ────────────────────────────────────────────────────────────────

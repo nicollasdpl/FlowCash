@@ -140,13 +140,20 @@ export default function Dashboard() {
     [state.transactions, selectedMonth]
   );
 
+  // Categorias que não contam nos relatórios (ex.: Empréstimo). O dinheiro
+  // ainda entra no saldo, mas não infla "Receitas".
+  const excludedReportCatIds = useMemo(
+    () => new Set(state.categories.filter(c => c.excludeFromReports).map(c => c.id)),
+    [state.categories]
+  );
+
   // Receita por CAIXA (estilo Mobills): só conta quando entrou de fato
-  // (status "paid" + paymentDate no mês).
+  // (status "paid" + paymentDate no mês). Empréstimo não conta como receita.
   const monthIncome = useMemo(() =>
     state.transactions
-      .filter(t => t.type === "income" && t.status === "paid" && t.paymentDate.startsWith(selectedMonth))
+      .filter(t => t.type === "income" && t.status === "paid" && t.paymentDate.startsWith(selectedMonth) && !excludedReportCatIds.has(t.categoryId))
       .reduce((s, t) => s + t.amount, 0),
-    [state.transactions, selectedMonth]
+    [state.transactions, selectedMonth, excludedReportCatIds]
   );
   // Despesa = MESMA base do donut: getSpentByCategory (competência + parcelas de
   // cartão, exclui "Pagamento de Fatura"). Assim "Despesas" bate com o Total do relatório.

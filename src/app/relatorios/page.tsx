@@ -122,16 +122,22 @@ export default function Relatorios() {
     [selectedMonth],
   );
 
+  // Categorias excluídas dos relatórios (ex.: Empréstimo não conta como receita).
+  const excludedReportCatIds = useMemo(
+    () => new Set(state.categories.filter(c => c.excludeFromReports).map(c => c.id)),
+    [state.categories]
+  );
+
   // ── Dados por mês (paymentDate p/ resumo, competenceDate p/ categoria) ───
   const monthData = useMemo(() => months.map(month => {
     const paidIncome = state.transactions
-      .filter(t => t.type === "income" && t.status === "paid" && t.paymentDate.startsWith(month))
+      .filter(t => t.type === "income" && t.status === "paid" && t.paymentDate.startsWith(month) && !excludedReportCatIds.has(t.categoryId))
       .reduce((s, t) => s + t.amount, 0);
     const paidExpense = state.transactions
       .filter(t => t.type === "expense" && t.status === "paid" && t.paymentDate.startsWith(month))
       .reduce((s, t) => s + t.amount, 0);
     return { month, income: paidIncome, expense: paidExpense };
-  }), [months, state.transactions]);
+  }), [months, state.transactions, excludedReportCatIds]);
 
   const selectedData = monthData[2];
   const balance      = selectedData.income - selectedData.expense;

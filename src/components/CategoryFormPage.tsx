@@ -56,6 +56,7 @@ export default function CategoryFormPage({ category }: Props) {
       icon,
       color,
       type: isSeed ? (category?.type ?? type) : type,
+      ...(category?.excludeFromReports ? { excludeFromReports: true } : {}),
     };
     dispatch({ type: category ? "UPD_CATEGORY" : "ADD_CATEGORY", payload: cat });
     router.push("/configuracoes");

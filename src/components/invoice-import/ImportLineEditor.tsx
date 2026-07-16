@@ -13,7 +13,6 @@ interface CategoryOpt {
 interface Props {
   draft: ImportDraftLine;
   categories: CategoryOpt[];
-  mode: "compare" | "import";
   competenceWarning?: string;
   onChange: (next: ImportDraftLine) => void;
 }
@@ -25,11 +24,10 @@ function fmt(v: number) {
 export default function ImportLineEditor({
   draft,
   categories,
-  mode,
   competenceWarning,
   onChange,
 }: Props) {
-  const editable = mode === "import" && !draft.covered;
+  const editable = !draft.covered;
 
   return (
     <div
@@ -37,20 +35,18 @@ export default function ImportLineEditor({
         padding: "12px 16px",
         borderTop: "1px solid var(--border)",
         opacity: draft.covered ? 0.55 : 1,
-        background: draft.selected && mode === "import" ? "var(--accent-10)" : "transparent",
+        background: draft.selected && editable ? "var(--accent-10)" : "transparent",
       }}
     >
       <div style={{ display: "flex", alignItems: "flex-start", gap: "10px" }}>
-        {mode === "import" && (
-          <input
-            type="checkbox"
-            checked={draft.selected && !draft.covered}
-            disabled={draft.covered}
-            onChange={e => onChange({ ...draft, selected: e.target.checked })}
-            style={{ width: 18, height: 18, marginTop: 4, accentColor: "var(--accent)", cursor: "pointer" }}
-            aria-label="Selecionar para adicionar"
-          />
-        )}
+        <input
+          type="checkbox"
+          checked={draft.selected && !draft.covered}
+          disabled={draft.covered}
+          onChange={e => onChange({ ...draft, selected: e.target.checked })}
+          style={{ width: 18, height: 18, marginTop: 4, accentColor: "var(--accent)", cursor: "pointer" }}
+          aria-label="Selecionar para adicionar"
+        />
 
         <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: "8px" }}>
           {editable ? (
@@ -82,7 +78,7 @@ export default function ImportLineEditor({
               </div>
               <select
                 value={draft.categoryId}
-                onChange={e => onChange({ ...draft, categoryId: e.target.value })}
+                onChange={e => onChange({ ...draft, categoryId: e.target.value, catEdited: true })}
                 style={inputStyle}
               >
                 {categories.map(c => (
@@ -92,13 +88,7 @@ export default function ImportLineEditor({
                 ))}
               </select>
               {draft.aiSuggested && (
-                <span
-                  style={{
-                    fontSize: 11,
-                    color: "var(--accent)",
-                    fontWeight: 600,
-                  }}
-                >
+                <span style={{ fontSize: 11, color: "var(--accent)", fontWeight: 600 }}>
                   Sugerido por IA
                 </span>
               )}
@@ -150,7 +140,14 @@ export default function ImportLineEditor({
                 <span style={{ fontSize: 14, fontWeight: 600, color: "var(--text-1)" }}>
                   {draft.description}
                 </span>
-                <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text-1)", fontVariantNumeric: "tabular-nums" }}>
+                <span
+                  style={{
+                    fontSize: 14,
+                    fontWeight: 700,
+                    color: "var(--text-1)",
+                    fontVariantNumeric: "tabular-nums",
+                  }}
+                >
                   R$ {fmt(draft.amount)}
                 </span>
               </div>
@@ -162,9 +159,14 @@ export default function ImportLineEditor({
                     ? ` · ${draft.totalInstallments}x`
                     : " · À vista"}
               </span>
-              {draft.covered && (
-                <span style={{ fontSize: 11, color: "var(--amber)" }}>Marcado como já coberto</span>
-              )}
+              <span style={{ fontSize: 11, color: "var(--amber)" }}>Marcado como já coberto</span>
+              <button
+                type="button"
+                onClick={() => onChange({ ...draft, covered: false, selected: true })}
+                style={linkBtn}
+              >
+                Desfazer
+              </button>
             </>
           )}
 

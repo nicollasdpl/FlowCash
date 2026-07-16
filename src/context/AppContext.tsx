@@ -14,7 +14,7 @@ import type {
   Account, Transaction, CreditCard, CardPurchase, CardInstallment,
   Goal, Category, Budget,
 } from "@/types/financial";
-import { SEED_INVOICE_PAYMENT_CATEGORY_ID } from "@/types/financial";
+import { SEED_INVOICE_PAYMENT_CATEGORY_ID, SEED_LOAN_INCOME_CATEGORY_ID, SEED_LOAN_EXPENSE_CATEGORY_ID } from "@/types/financial";
 import { generateInstallments, generateSubscriptionInstallment, getCompetenceMonth } from "@/engine/invoiceEngine";
 import { addMonths } from "@/engine/financialEngine";
 import { DEFAULT_NOTIFICATION_PREFS } from "@/lib/notifications/types";
@@ -87,6 +87,8 @@ const SEED_CATEGORIES: Category[] = [
   { id: "cat_freelance",   name: "Pets",          type: "expense", color: "#8BC34A", icon: "PawPrint" },
   { id: "cat_investimento",name: "Investimentos", type: "income",  color: "#00E5A0", icon: "TrendingUp" },
   { id: SEED_INVOICE_PAYMENT_CATEGORY_ID, name: "Pagamento de Fatura", type: "expense", color: "#6B7280", icon: "CreditCard", isSystem: true },
+  { id: SEED_LOAN_INCOME_CATEGORY_ID, name: "Empréstimo", type: "income", color: "#00E5A0", icon: "Landmark", excludeFromReports: true },
+  { id: SEED_LOAN_EXPENSE_CATEGORY_ID, name: "Empréstimos", type: "expense", color: "#F59E0B", icon: "Landmark" },
 ];
 
 export const SEED_CATEGORY_IDS = new Set(SEED_CATEGORIES.map(c => c.id));
@@ -146,12 +148,19 @@ function reducer(state: AppState, action: Action): AppState {
             return { ...cat, icon: "Tag" };
           })
         : seed.categories;
-      // Garante que a categoria de sistema "Pagamento de Fatura" sempre exista,
-      // inclusive em estados já persistidos antes desta versão.
-      const systemInvoiceCat = seed.categories.find(c => c.id === SEED_INVOICE_PAYMENT_CATEGORY_ID)!;
-      const categories = baseCategories.some(c => c.id === SEED_INVOICE_PAYMENT_CATEGORY_ID)
-        ? baseCategories
-        : [...baseCategories, systemInvoiceCat];
+      // Garante que categorias seed importantes sempre existam, inclusive em
+      // estados já persistidos antes desta versão: "Pagamento de Fatura" e as
+      // categorias de empréstimo (receita que não conta como renda + despesa).
+      const ensuredSeedIds = [
+        SEED_INVOICE_PAYMENT_CATEGORY_ID,
+        SEED_LOAN_INCOME_CATEGORY_ID,
+        SEED_LOAN_EXPENSE_CATEGORY_ID,
+      ];
+      const categories = ensuredSeedIds.reduce((cats, id) => {
+        if (cats.some(c => c.id === id)) return cats;
+        const seedCat = seed.categories.find(c => c.id === id);
+        return seedCat ? [...cats, seedCat] : cats;
+      }, baseCategories);
       return {
         ...seed,
         ...action.payload,
