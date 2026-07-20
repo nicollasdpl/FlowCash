@@ -2,7 +2,8 @@
 import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useApp } from "@/context/AppContext";
-import { currentMonth, addMonths, fmt, getProjectedBalance, today, isBalanceNegative, isBalancePositive } from "@/engine/financialEngine";
+import { currentMonth, addMonths, fmt, today, isBalanceNegative, isBalancePositive } from "@/engine/financialEngine";
+import { getSpentByCategory } from "@/engine/budgetEngine";
 import { Search, TrendingUp, Package, RefreshCw, Pencil, Trash2, SlidersHorizontal, X, ArrowLeftRight } from "lucide-react";
 import CategoryIcon from "@/components/CategoryIcon";
 import type { Transaction, TransactionType } from "@/types/financial";
@@ -19,12 +20,6 @@ const WEEKDAYS = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "
 function fullMonthLabel(yyyymm: string) {
   const [y, m] = yyyymm.split("-").map(Number);
   return `${MONTH_NAMES[m - 1]} ${y}`;
-}
-
-function endOfMonth(yyyymm: string) {
-  const [y, m] = yyyymm.split("-").map(Number);
-  const last = new Date(y, m, 0);
-  return `${yyyymm}-${String(last.getDate()).padStart(2, "0")}`;
 }
 
 function addDays(dateStr: string, delta: number): string {
@@ -124,18 +119,42 @@ export default function Transacoes() {
     [state.transactions, selectedMonth]
   );
 
-  const income = summaryBase.filter(t => t.type === "income").reduce((s, t) => s + t.amount, 0);
-  const expense = summaryBase.filter(t => t.type === "expense").reduce((s, t) => s + t.amount, 0);
+  // Mesma regra do dashboard: receita por caixa (pago + paymentDate),
+  // sem Empréstimo/Reembolso (excludeFromReports).
+  const excludedReportCatIds = useMemo(
+    () => new Set(state.categories.filter(c => c.excludeFromReports).map(c => c.id)),
+    [state.categories],
+  );
 
-  const totalProjected = useMemo(() => {
-    const eom = endOfMonth(selectedMonth);
-    return state.accounts
-      .filter(a => a.active)
-      .reduce(
-        (s, a) => s + getProjectedBalance(a, state.transactions, eom, state.cards, state.installments),
-        0,
-      );
-  }, [state.accounts, state.transactions, state.cards, state.installments, selectedMonth]);
+  const income = useMemo(
+    () =>
+      state.transactions
+        .filter(
+          t =>
+            t.type === "income" &&
+            t.status === "paid" &&
+            t.paymentDate.startsWith(selectedMonth) &&
+            !excludedReportCatIds.has(t.categoryId),
+        )
+        .reduce((s, t) => s + t.amount, 0),
+    [state.transactions, selectedMonth, excludedReportCatIds],
+  );
+
+  // Mesma base do dashboard/donut: competência + parcelas de cartão.
+  const expense = useMemo(
+    () =>
+      Object.values(
+        getSpentByCategory(
+          selectedMonth,
+          state.transactions,
+          state.installments,
+          state.purchases,
+        ),
+      ).reduce((s, v) => s + v, 0),
+    [selectedMonth, state.transactions, state.installments, state.purchases],
+  );
+
+  const monthBalance = income - expense;
 
   const categoryMap = useMemo(() => {
     const map = new Map<string, string>();
@@ -334,23 +353,23 @@ export default function Transacoes() {
           style={{
             padding: "13px 14px",
             gridColumn: "1 / -1",
-            background: isBalanceNegative(totalProjected) ? "var(--red-10)" : "var(--accent-10)",
-            borderColor: isBalanceNegative(totalProjected) ? "var(--red-20)" : "var(--border-accent)",
+            background: isBalanceNegative(monthBalance) ? "var(--red-10)" : "var(--accent-10)",
+            borderColor: isBalanceNegative(monthBalance) ? "var(--red-20)" : "var(--border-accent)",
           }}
         >
           <p style={{
             fontSize: "10px",
-            color: isBalanceNegative(totalProjected) ? "var(--red)" : isBalancePositive(totalProjected) ? "var(--accent)" : "var(--text-2)",
+            color: isBalanceNegative(monthBalance) ? "var(--red)" : isBalancePositive(monthBalance) ? "var(--accent)" : "var(--text-2)",
             fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase",
             marginBottom: "4px",
           }}>
-            Projetado
+            Balanço
           </p>
           <p className="mono" style={{
             fontSize: "17px", fontWeight: 700,
-            color: isBalanceNegative(totalProjected) ? "var(--red)" : isBalancePositive(totalProjected) ? "var(--green)" : "var(--text-2)",
+            color: isBalanceNegative(monthBalance) ? "var(--red)" : isBalancePositive(monthBalance) ? "var(--green)" : "var(--text-2)",
           }}>
-            {isBalanceNegative(totalProjected) ? "−" : ""}R$ {fmt(Math.abs(totalProjected))}
+            {isBalanceNegative(monthBalance) ? "−" : ""}R$ {fmt(Math.abs(monthBalance))}
           </p>
         </div>
       </div>
