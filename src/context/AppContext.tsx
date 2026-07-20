@@ -61,6 +61,7 @@ type Action =
   | { type: "UPD_CARD"; payload: CreditCard }
   | { type: "DEL_CARD"; payload: string }
   | { type: "ADD_PURCHASE"; payload: { purchase: CardPurchase; card: CreditCard } }
+  | { type: "UPD_PURCHASE"; payload: { purchase: CardPurchase; card: CreditCard } }
   | { type: "DEL_PURCHASE"; payload: string }
   | { type: "PAY_INSTALLMENT"; payload: { installmentId: string; paidAt: string } }
   | { type: "UNPAY_INSTALLMENT"; payload: string }
@@ -241,6 +242,53 @@ function reducer(state: AppState, action: Action): AppState {
         ...state,
         purchases: [...state.purchases, purchase],
         installments: [...state.installments, ...newInstallments],
+      };
+    }
+    case "UPD_PURCHASE": {
+      const { purchase, card } = action.payload;
+      const prev = state.purchases.find(p => p.id === purchase.id);
+      if (!prev) return state;
+
+      const structuralChange =
+        prev.amount !== purchase.amount ||
+        prev.totalInstallments !== purchase.totalInstallments ||
+        prev.purchaseDate !== purchase.purchaseDate ||
+        prev.cardId !== purchase.cardId ||
+        Boolean(prev.isSubscription) !== Boolean(purchase.isSubscription);
+
+      // Categoria/descrição: só atualiza a compra — parcelas (e paid) ficam intactas.
+      if (!structuralChange) {
+        return {
+          ...state,
+          purchases: state.purchases.map(p => (p.id === purchase.id ? purchase : p)),
+        };
+      }
+
+      const paidBefore = state.installments
+        .filter(i => i.purchaseId === purchase.id && i.paid)
+        .map(i => ({ n: i.installmentNumber, paidAt: i.paidAt }));
+
+      const withoutOld = state.installments.filter(i => i.purchaseId !== purchase.id);
+      let regenerated: CardInstallment[];
+      if (purchase.isSubscription) {
+        const firstCm = getCompetenceMonth(purchase.purchaseDate, card.closingDay);
+        regenerated = Array.from({ length: 12 }, (_, i) =>
+          generateSubscriptionInstallment(purchase, card, addMonths(firstCm, i))
+        );
+      } else {
+        regenerated = generateInstallments(purchase, card, withoutOld);
+      }
+
+      const withPaid = regenerated.map(inst => {
+        const prevPaid = paidBefore.find(p => p.n === inst.installmentNumber);
+        if (!prevPaid) return inst;
+        return { ...inst, paid: true, paidAt: prevPaid.paidAt };
+      });
+
+      return {
+        ...state,
+        purchases: state.purchases.map(p => (p.id === purchase.id ? purchase : p)),
+        installments: [...withoutOld, ...withPaid],
       };
     }
     case "DEL_PURCHASE": {

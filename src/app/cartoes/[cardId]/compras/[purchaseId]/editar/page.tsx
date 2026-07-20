@@ -71,11 +71,6 @@ export default function EditarCompra() {
     const targetCard = state.cards.find(c => c.id === selectedCardId);
     if (!targetCard) return setError("Cartão não encontrado.");
 
-    // Guarda quais parcelas já estavam pagas (DEL+ADD recria a série).
-    const paidBefore = state.installments
-      .filter(i => i.purchaseId === purchase.id && i.paid)
-      .map(i => ({ n: i.installmentNumber, paidAt: i.paidAt }));
-
     const updatedPurchase: CardPurchase = {
       id: purchase.id,
       cardId: selectedCardId,
@@ -88,19 +83,8 @@ export default function EditarCompra() {
       isSubscription: purchase.isSubscription,
     };
 
-    dispatch({ type: "DEL_PURCHASE", payload: purchase.id });
-    dispatch({ type: "ADD_PURCHASE", payload: { purchase: updatedPurchase, card: targetCard } });
-
-    for (const p of paidBefore) {
-      if (p.n < 1 || p.n > inst) continue;
-      dispatch({
-        type: "PAY_INSTALLMENT",
-        payload: {
-          installmentId: `${purchase.id}_inst_${p.n}`,
-          paidAt: p.paidAt ?? new Date().toISOString().slice(0, 10),
-        },
-      });
-    }
+    // UPD_PURCHASE: categoria/descrição não recria parcelas; valor/parcelas/data preservam "pago".
+    dispatch({ type: "UPD_PURCHASE", payload: { purchase: updatedPurchase, card: targetCard } });
 
     router.push(`/cartoes/${selectedCardId}`);
   }
@@ -145,8 +129,8 @@ export default function EditarCompra() {
             borderRadius: "12px",
           }}>
             <p style={{ fontSize: "12px", color: "var(--amber)", lineHeight: 1.5 }}>
-              Esta compra tem parcelas já pagas. Ao salvar, o status pago das
-              parcelas é mantido (mai/jun do PicPay, por exemplo).
+              Mudar só a categoria não mexe nas parcelas. Se alterar valor, parcelas ou data,
+              o status “pago” das parcelas é mantido.
             </p>
           </div>
         )}
