@@ -22,6 +22,11 @@ export const SEED_LOAN_INCOME_CATEGORY_ID = "loan_income";
 // Categoria de DESPESA para as parcelas do empréstimo (saída real do dinheiro).
 export const SEED_LOAN_EXPENSE_CATEGORY_ID = "loan_expense";
 
+// Reembolso: você pagou no cartão por alguém e recebeu PIX de volta.
+// Receita NÃO conta como renda; despesa no cartão fica separada do gasto real.
+export const SEED_REIMBURSEMENT_INCOME_CATEGORY_ID = "reimbursement_income";
+export const SEED_REIMBURSEMENT_EXPENSE_CATEGORY_ID = "reimbursement_expense";
+
 // ─── CONTA BANCÁRIA ───────────────────────────────────────────────────────────
 // Onde o dinheiro EXISTE fisicamente.
 export interface Account {

@@ -14,7 +14,13 @@ import type {
   Account, Transaction, CreditCard, CardPurchase, CardInstallment,
   Goal, Category, Budget,
 } from "@/types/financial";
-import { SEED_INVOICE_PAYMENT_CATEGORY_ID, SEED_LOAN_INCOME_CATEGORY_ID, SEED_LOAN_EXPENSE_CATEGORY_ID } from "@/types/financial";
+import {
+  SEED_INVOICE_PAYMENT_CATEGORY_ID,
+  SEED_LOAN_INCOME_CATEGORY_ID,
+  SEED_LOAN_EXPENSE_CATEGORY_ID,
+  SEED_REIMBURSEMENT_INCOME_CATEGORY_ID,
+  SEED_REIMBURSEMENT_EXPENSE_CATEGORY_ID,
+} from "@/types/financial";
 import { generateInstallments, generateSubscriptionInstallment, getCompetenceMonth } from "@/engine/invoiceEngine";
 import { addMonths } from "@/engine/financialEngine";
 import { DEFAULT_NOTIFICATION_PREFS } from "@/lib/notifications/types";
@@ -89,6 +95,8 @@ const SEED_CATEGORIES: Category[] = [
   { id: SEED_INVOICE_PAYMENT_CATEGORY_ID, name: "Pagamento de Fatura", type: "expense", color: "#6B7280", icon: "CreditCard", isSystem: true },
   { id: SEED_LOAN_INCOME_CATEGORY_ID, name: "Empréstimo", type: "income", color: "#00E5A0", icon: "Landmark", excludeFromReports: true },
   { id: SEED_LOAN_EXPENSE_CATEGORY_ID, name: "Empréstimos", type: "expense", color: "#F59E0B", icon: "Landmark" },
+  { id: SEED_REIMBURSEMENT_INCOME_CATEGORY_ID, name: "Reembolso", type: "income", color: "#38BDF8", icon: "RefreshCw", excludeFromReports: true },
+  { id: SEED_REIMBURSEMENT_EXPENSE_CATEGORY_ID, name: "Reembolso", type: "expense", color: "#38BDF8", icon: "RefreshCw" },
 ];
 
 export const SEED_CATEGORY_IDS = new Set(SEED_CATEGORIES.map(c => c.id));
@@ -155,6 +163,8 @@ function reducer(state: AppState, action: Action): AppState {
         SEED_INVOICE_PAYMENT_CATEGORY_ID,
         SEED_LOAN_INCOME_CATEGORY_ID,
         SEED_LOAN_EXPENSE_CATEGORY_ID,
+        SEED_REIMBURSEMENT_INCOME_CATEGORY_ID,
+        SEED_REIMBURSEMENT_EXPENSE_CATEGORY_ID,
       ];
       const categories = ensuredSeedIds.reduce((cats, id) => {
         if (cats.some(c => c.id === id)) return cats;
