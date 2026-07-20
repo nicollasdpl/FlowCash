@@ -3,6 +3,7 @@ import { useState, useMemo, useEffect, type ReactNode } from "react";
 import { useApp } from "@/context/AppContext";
 import { addMonths, currentMonth, fmt, isBalanceNegative, isBalancePositive } from "@/engine/financialEngine";
 import { getSpentByCategory } from "@/engine/budgetEngine";
+import { SEED_INVOICE_PAYMENT_CATEGORY_ID } from "@/types/financial";
 import { getConsumptionByCategory, buildConsumptionCatSlices } from "@/app/relatorios/consumptionByCategory";
 import { auth } from "@/lib/firebase";
 import DonutChart, { type Segment } from "@/components/DonutChart";
@@ -134,7 +135,13 @@ export default function Relatorios() {
       .filter(t => t.type === "income" && t.status === "paid" && t.paymentDate.startsWith(month) && !excludedReportCatIds.has(t.categoryId))
       .reduce((s, t) => s + t.amount, 0);
     const paidExpense = state.transactions
-      .filter(t => t.type === "expense" && t.status === "paid" && t.paymentDate.startsWith(month))
+      .filter(
+        t =>
+          t.type === "expense" &&
+          t.status === "paid" &&
+          t.paymentDate.startsWith(month) &&
+          t.categoryId !== SEED_INVOICE_PAYMENT_CATEGORY_ID,
+      )
       .reduce((s, t) => s + t.amount, 0);
     return { month, income: paidIncome, expense: paidExpense };
   }), [months, state.transactions, excludedReportCatIds]);
@@ -177,28 +184,41 @@ export default function Relatorios() {
   }, [categoryView, spentByCatSelected, consumptionByCatSelected, state.categories]);
 
   // ── Projeção (só mês corrente) ───────────────────────────────────────────
+  // Mesma base do dashboard: gasto por competência (conta + cartão),
+  // sem "Pagamento de Fatura" — senão fatura paga + fatura aberta incham o total.
   const projection = useMemo(() => {
     if (!atCurrentMonth) return null;
 
-    // Realizado: despesas já pagas com pagamento no mês.
-    const realized = state.transactions
-      .filter(t => t.type === "expense" && t.status === "paid" && t.paymentDate.startsWith(selectedMonth))
-      .reduce((s, t) => s + t.amount, 0);
-
-    // Futuro conhecido: despesas a pagar (pending/overdue) no mês
-    // + parcelas de cartão não pagas com competência no mês.
-    const pendingTx = state.transactions
-      .filter(t => t.type === "expense" && t.status !== "paid" && t.paymentDate.startsWith(selectedMonth))
-      .reduce((s, t) => s + t.amount, 0);
-    const unpaidInstallments = state.installments
+    const projected = Object.values(spentByCatSelected).reduce((s, v) => s + v, 0);
+    const income = selectedData.income;
+    const openInvoices = state.installments
       .filter(i => i.competenceMonth === selectedMonth && !i.paid)
       .reduce((s, i) => s + i.amount, 0);
-    const futureKnown = pendingTx + unpaidInstallments;
+    const pendingTx = state.transactions
+      .filter(
+        t =>
+          t.type === "expense" &&
+          t.status !== "paid" &&
+          t.paymentDate.startsWith(selectedMonth) &&
+          t.categoryId !== SEED_INVOICE_PAYMENT_CATEGORY_ID,
+      )
+      .reduce((s, t) => s + t.amount, 0);
 
-    const projected = realized + futureKnown;
-    const income    = selectedData.income;
-    return { projected, realized, futureKnown, income, danger: projected > income && income > 0 };
-  }, [atCurrentMonth, selectedMonth, state.transactions, state.installments, selectedData.income]);
+    return {
+      projected,
+      openInvoices,
+      pendingTx,
+      income,
+      danger: projected > income && income > 0,
+    };
+  }, [
+    atCurrentMonth,
+    selectedMonth,
+    spentByCatSelected,
+    selectedData.income,
+    state.installments,
+    state.transactions,
+  ]);
 
   // ── Donut + lista de categorias (mês selecionado vs anterior) ────────────
   type CatRow = { id: string; name: string; color: string; icon: string; spent: number; prevSpent: number; pct: number; variation: number | null };
@@ -432,7 +452,7 @@ export default function Relatorios() {
       {projection && (
         <div className="card fade-up-3" style={{ padding: "16px 18px", marginBottom: "16px" }}>
           <p style={{ fontSize: "10px", fontWeight: 700, color: "var(--text-3)", letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: "8px" }}>
-            Projeção de fechamento
+            Gasto projetado do mês
           </p>
           <div style={{ display: "flex", alignItems: "baseline", gap: "12px", marginBottom: "10px", flexWrap: "wrap" }}>
             <p className="mono" style={{
@@ -442,12 +462,25 @@ export default function Relatorios() {
               R$ {fmt(projection.projected)}
             </p>
             <p style={{ fontSize: "11.5px", color: "var(--text-3)" }}>
-              estimado até o fim do mês
+              compromissos até o fim do mês
             </p>
           </div>
           <p style={{ fontSize: "12px", color: "var(--text-3)", lineHeight: 1.5 }}>
-            Baseado em gastos realizados + compromissos futuros do mês.
-            Receita do mês: <span style={{ color: "var(--green)", fontWeight: 600 }}>R$ {fmt(projection.income)}</span>.
+            Contas + cartão do mês (mesma base do dashboard). Não soma pagamento de fatura.
+            {projection.openInvoices > 0 && (
+              <>
+                {" "}Faturas ainda abertas:{" "}
+                <span style={{ fontWeight: 600, color: "var(--text-2)" }}>R$ {fmt(projection.openInvoices)}</span>.
+              </>
+            )}
+            {projection.pendingTx > 0 && (
+              <>
+                {" "}A pagar na conta:{" "}
+                <span style={{ fontWeight: 600, color: "var(--text-2)" }}>R$ {fmt(projection.pendingTx)}</span>.
+              </>
+            )}
+            {" "}Receita do mês:{" "}
+            <span style={{ color: "var(--green)", fontWeight: 600 }}>R$ {fmt(projection.income)}</span>.
           </p>
           {projection.danger && (
             <div style={{
@@ -459,7 +492,7 @@ export default function Relatorios() {
             }}>
               <AlertTriangle size={16} strokeWidth={1.5} color="var(--red)" />
               <p style={{ fontSize: "12.5px", color: "var(--red)", fontWeight: 600, lineHeight: 1.4 }}>
-                Você pode fechar o mês no negativo.
+                O gasto do mês está acima da receita.
               </p>
             </div>
           )}
