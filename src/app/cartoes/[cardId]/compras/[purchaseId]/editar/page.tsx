@@ -4,6 +4,12 @@ import { useRouter, useParams } from "next/navigation";
 import { useApp } from "@/context/AppContext";
 import type { CardPurchase } from "@/context/AppContext";
 import { iconLabel } from "@/components/CategoryIcon";
+import { parsePtBrAmount } from "@/lib/invoiceImport/csvShared";
+
+function formatAmountInput(v: number): string {
+  // Sem separador de milhar — evita "1.240,62" virar 1,24 no parse antigo.
+  return v.toFixed(2).replace(".", ",");
+}
 
 export default function EditarCompra() {
   const { cardId, purchaseId } = useParams<{ cardId: string; purchaseId: string }>();
@@ -14,7 +20,7 @@ export default function EditarCompra() {
 
   const [description, setDescription]           = useState(purchase?.description ?? "");
   const [amount, setAmount]                     = useState(
-    purchase ? purchase.amount.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ""
+    purchase ? formatAmountInput(purchase.amount) : ""
   );
   const [totalInstallments, setTotalInstallments] = useState(String(purchase?.totalInstallments ?? "1"));
   const [purchaseDate, setPurchaseDate]           = useState(purchase?.purchaseDate ?? "");
@@ -23,9 +29,9 @@ export default function EditarCompra() {
   const [error, setError]                         = useState("");
 
   const installmentPreview = useMemo(() => {
-    const amt = parseFloat(amount.replace(",", "."));
-    const n = parseInt(totalInstallments);
-    if (!amt || !n || n < 1) return null;
+    const amt = parsePtBrAmount(amount);
+    const n = parseInt(totalInstallments, 10);
+    if (!amt || amt <= 0 || !n || n < 1) return null;
     const per = (amt / n).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     return n === 1 ? `À vista — R$ ${per}` : `${n}x de R$ ${per}`;
   }, [amount, totalInstallments]);
@@ -55,15 +61,20 @@ export default function EditarCompra() {
   function handleSave() {
     if (!purchase) return;
     if (!description.trim()) return setError("Informe a descrição.");
-    const amt = parseFloat(amount.replace(",", "."));
-    if (!amount || isNaN(amt) || amt <= 0) return setError("Informe um valor válido.");
-    const inst = parseInt(totalInstallments);
+    const amt = parsePtBrAmount(amount);
+    if (amt == null || amt <= 0) return setError("Informe um valor válido.");
+    const inst = parseInt(totalInstallments, 10);
     if (!inst || inst < 1 || inst > 60) return setError("Parcelas inválidas (1–60).");
     if (!selectedCardId) return setError("Selecione um cartão.");
     setError("");
 
     const targetCard = state.cards.find(c => c.id === selectedCardId);
     if (!targetCard) return setError("Cartão não encontrado.");
+
+    // Guarda quais parcelas já estavam pagas (DEL+ADD recria a série).
+    const paidBefore = state.installments
+      .filter(i => i.purchaseId === purchase.id && i.paid)
+      .map(i => ({ n: i.installmentNumber, paidAt: i.paidAt }));
 
     const updatedPurchase: CardPurchase = {
       id: purchase.id,
@@ -74,10 +85,22 @@ export default function EditarCompra() {
       purchaseDate,
       totalInstallments: inst,
       createdAt: purchase.createdAt,
+      isSubscription: purchase.isSubscription,
     };
 
     dispatch({ type: "DEL_PURCHASE", payload: purchase.id });
     dispatch({ type: "ADD_PURCHASE", payload: { purchase: updatedPurchase, card: targetCard } });
+
+    for (const p of paidBefore) {
+      if (p.n < 1 || p.n > inst) continue;
+      dispatch({
+        type: "PAY_INSTALLMENT",
+        payload: {
+          installmentId: `${purchase.id}_inst_${p.n}`,
+          paidAt: p.paidAt ?? new Date().toISOString().slice(0, 10),
+        },
+      });
+    }
 
     router.push(`/cartoes/${selectedCardId}`);
   }
@@ -115,7 +138,6 @@ export default function EditarCompra() {
       {/* ── Form ── */}
       <div style={{ padding: "20px 16px 140px" }}>
 
-        {/* Aviso: parcelas pagas serão recriadas */}
         {hasPaidInstallments && (
           <div style={{
             padding: "12px 14px", marginBottom: "20px",
@@ -123,8 +145,8 @@ export default function EditarCompra() {
             borderRadius: "12px",
           }}>
             <p style={{ fontSize: "12px", color: "var(--amber)", lineHeight: 1.5 }}>
-              Esta compra tem parcelas já pagas. Ao salvar, as parcelas serão
-              recriadas — os pagamentos já lançados no extrato permanecem.
+              Esta compra tem parcelas já pagas. Ao salvar, o status pago das
+              parcelas é mantido (mai/jun do PicPay, por exemplo).
             </p>
           </div>
         )}
