@@ -23,6 +23,7 @@ import {
 } from "@/types/financial";
 import { generateInstallments, generateSubscriptionInstallment, getCompetenceMonth } from "@/engine/invoiceEngine";
 import { addMonths } from "@/engine/financialEngine";
+import { repairCardState } from "@/lib/repairCardState";
 import { DEFAULT_NOTIFICATION_PREFS } from "@/lib/notifications/types";
 
 export type {
@@ -393,6 +394,17 @@ function remoteUpdatedAt(remote: AppState & { updatedAt?: unknown }): number {
   return ts instanceof Timestamp ? ts.toMillis() : typeof ts === "number" ? ts : 0;
 }
 
+/** Aplica reparos e marca sync se algo mudou. */
+function loadRepaired(
+  rawDispatch: (a: Action) => void,
+  needsFirestoreSyncRef: { current: boolean },
+  payload: AppState,
+) {
+  const { state: repaired, changed } = repairCardState(payload);
+  rawDispatch({ type: "LOAD", payload: repaired });
+  if (changed) needsFirestoreSyncRef.current = true;
+}
+
 export function AppProvider({ children }: { children: ReactNode }) {
   const [state, rawDispatch] = useReducer(reducer, seed);
   const [user, setUser]   = useState<User | null>(null);
@@ -451,7 +463,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         } else {
           loadedAtRef.current = local.updatedAt ?? 0;
         }
-        dispatch({ type: "LOAD", payload: local });
+        loadRepaired(rawDispatch, needsFirestoreSyncRef, local);
       } else {
         loadedAtRef.current = 0;
         shouldPullRemote = true;
@@ -478,7 +490,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           loadedAtRef.current = remoteMs;
           const persisted: PersistedState = { ...(remote as AppState), updatedAt: remoteMs };
           try { localStorage.setItem(LS_KEY(user.uid), JSON.stringify(persisted)); } catch {}
-          dispatch({ type: "LOAD", payload: persisted });
+          loadRepaired(rawDispatch, needsFirestoreSyncRef, persisted);
         } catch (err) {
           console.error("Firestore initial pull error:", err);
         }
@@ -503,7 +515,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         loadedAtRef.current = remoteMs;
         const persisted: PersistedState = { ...(remote as AppState), updatedAt: remoteMs };
         try { localStorage.setItem(LS_KEY(user.uid), JSON.stringify(persisted)); } catch {}
-        dispatch({ type: "LOAD", payload: persisted });
+        loadRepaired(rawDispatch, needsFirestoreSyncRef, persisted);
       },
       (err) => console.error("Firestore snapshot error:", err),
     );

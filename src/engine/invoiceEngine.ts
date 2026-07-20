@@ -4,9 +4,34 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import type {
-  CreditCard, CardPurchase, CardInstallment, Invoice, InvoiceStatus,
+  CreditCard, CardPurchase, CardInstallment, Invoice, InvoiceStatus, Transaction,
 } from "@/types/financial";
+import { SEED_INVOICE_PAYMENT_CATEGORY_ID } from "@/types/financial";
 import { currentMonth, addMonths } from "./financialEngine";
+
+const MONTHS_SHORT = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+
+export function invoiceDueMonthLabel(dueDate: string): string {
+  const [y, m] = dueDate.split("-").map(Number);
+  return `${MONTHS_SHORT[m - 1]}/${String(y).slice(2)}`;
+}
+
+/** True se já existe liquidação "Pagamento Fatura" no extrato para este vencimento. */
+export function hasInvoicePaymentForDue(
+  transactions: Transaction[],
+  card: CreditCard,
+  dueDate: string,
+): boolean {
+  const label = invoiceDueMonthLabel(dueDate).toLowerCase();
+  const name = card.name.trim().toLowerCase();
+  return transactions.some(t => {
+    if (t.categoryId !== SEED_INVOICE_PAYMENT_CATEGORY_ID) return false;
+    if (t.status !== "paid") return false;
+    if (card.paymentAccountId && t.accountId !== card.paymentAccountId) return false;
+    const desc = (t.description ?? "").toLowerCase();
+    return desc.includes(name) && desc.includes(label);
+  });
+}
 
 // ─── QUAL FATURA UMA COMPRA ENTRA ────────────────────────────────────────────
 // REGRA: purchaseDate < fechamento do mês da compra → fatura do mês atual

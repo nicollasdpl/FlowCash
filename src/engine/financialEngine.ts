@@ -8,6 +8,21 @@ import type {
   Account, Transaction, CreditCard, CardInstallment, CardPurchase, Goal,
   AccountBalance, NetWorthSnapshot, CashFlowEntry, MonthlyProjection, CardLimitSummary,
 } from "@/types/financial";
+import { SEED_INVOICE_PAYMENT_CATEGORY_ID } from "@/types/financial";
+
+const INVOICE_DUE_MONTHS_SHORT = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+
+function hasPaidInvoiceTx(transactions: Transaction[], card: CreditCard, dueDate: string): boolean {
+  const [y, m] = dueDate.split("-").map(Number);
+  const label = `${INVOICE_DUE_MONTHS_SHORT[m - 1]}/${String(y).slice(2)}`.toLowerCase();
+  const name = card.name.trim().toLowerCase();
+  return transactions.some(t => {
+    if (t.categoryId !== SEED_INVOICE_PAYMENT_CATEGORY_ID || t.status !== "paid") return false;
+    if (card.paymentAccountId && t.accountId !== card.paymentAccountId) return false;
+    const desc = (t.description ?? "").toLowerCase();
+    return desc.includes(name) && desc.includes(label);
+  });
+}
 
 // ─── UTILITÁRIOS ─────────────────────────────────────────────────────────────
 
@@ -163,6 +178,8 @@ export function getProjectedBalance(
 
   // Subtract unpaid invoices (closed or overdue) whose dueDate falls within the period.
   // Mirrors getInvoiceDates: both closingDate and dueDate are in the competenceMonth itself.
+  // Se já existe "Pagamento Fatura" no extrato para aquele vencimento, NÃO desconta de novo
+  // (evita projetado quebrado quando parcelas perderam o flag paid).
   for (const card of cards) {
     if (card.paymentAccountId !== account.id) continue;
     const cardInst = installments.filter(i => i.cardId === card.id);
@@ -184,6 +201,7 @@ export function getProjectedBalance(
         dueDate = `${nextMonth}-${String(Math.min(card.dueDay, new Date(ny, nm, 0).getDate())).padStart(2, "0")}`;
       }
       if (dueDate > upToDate) continue;
+      if (hasPaidInvoiceTx(transactions, card, dueDate)) continue;
       balance -= unpaidTotal;
     }
   }
