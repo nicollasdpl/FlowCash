@@ -403,7 +403,6 @@ EXEMPLOS ACTION:
       responseSchema,
       temperature: 0.0,
       maxOutputTokens: 2048,
-      thinkingConfig: { thinkingBudget: 0 },
     },
   });
 
@@ -452,6 +451,7 @@ EXEMPLOS ACTION:
   if (!geminiRes.ok) {
     const errBody = await geminiRes.text().catch(() => "");
     console.error(`[AI] HTTP ${geminiRes.status}:`, errBody.slice(0, 400));
+    const detail = errBody.replace(/\s+/g, " ").trim().slice(0, 220);
 
     if (geminiRes.status === 429) {
       const reason = errBody.replace(/\s+/g, " ").trim().slice(0, 200);
@@ -473,7 +473,10 @@ EXEMPLOS ACTION:
     return NextResponse.json({
       intent: "error",
       code: `HTTP_${geminiRes.status}`,
-      message: `Gemini retornou HTTP ${geminiRes.status}.`,
+      message:
+        geminiRes.status === 400 && detail
+          ? `O Gemini rejeitou a configuração da requisição: ${detail}`
+          : `Gemini retornou HTTP ${geminiRes.status}.`,
     });
   }
 

@@ -101,7 +101,6 @@ Retorne APENAS JSON: { "suggestions": [{ "categoryId": "<id>", "amount": <númer
           responseSchema: SCHEMA,
           temperature: 0.2,
           maxOutputTokens: 2048,
-          thinkingConfig: { thinkingBudget: 0 },
         },
       }),
       signal: AbortSignal.timeout(15000),

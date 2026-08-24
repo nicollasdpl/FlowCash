@@ -106,7 +106,6 @@ Retorne APENAS JSON: { "results": [{ "id": "<id do lançamento>", "categoryId": 
           responseSchema: SCHEMA,
           temperature: 0.1,
           maxOutputTokens: 4096,
-          thinkingConfig: { thinkingBudget: 0 },
         },
       }),
       signal: AbortSignal.timeout(15000),
@@ -119,8 +118,9 @@ Retorne APENAS JSON: { "results": [{ "id": "<id do lançamento>", "categoryId": 
   if (!res.ok) {
     const errBody = await res.text().catch(() => "");
     console.error(`[ai-categorize] HTTP ${res.status}:`, errBody.slice(0, 300));
+    const detail = errBody.replace(/\s+/g, " ").trim().slice(0, 220);
     return NextResponse.json(
-      { error: `HTTP_${res.status}` },
+      { error: `HTTP_${res.status}`, detail },
       { status: res.status === 429 ? 429 : 502 },
     );
   }
