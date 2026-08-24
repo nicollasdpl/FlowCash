@@ -405,6 +405,17 @@ EXEMPLOS ACTION:
       maxOutputTokens: 2048,
     },
   });
+  // Alguns aliases do Gemini aceitam JSON mode, mas rejeitam schemas mais
+  // complexos. O prompt continua exigindo JSON e o resultado é sanitizado
+  // abaixo, então esta versão é um fallback seguro para o lançamento.
+  const fallbackGeminiBody = JSON.stringify({
+    contents: [{ parts: [{ text: prompt }] }],
+    generationConfig: {
+      responseMimeType: "application/json",
+      temperature: 0.0,
+      maxOutputTokens: 2048,
+    },
+  });
 
   const MAX_ATTEMPTS = 2;
   const TRANSIENT_HTTP = new Set([500, 502, 503, 504]);
@@ -446,6 +457,26 @@ EXEMPLOS ACTION:
       message: "O modelo está sobrecarregado no momento. Tente novamente em instantes.",
       retryAfterSec: 15,
     });
+  }
+
+  if (geminiRes.status === 400) {
+    console.warn("[AI] Schema estruturado rejeitado; repetindo em JSON mode.");
+    try {
+      geminiRes = await fetch(`${GEMINI_URL}?key=${apiKey}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: fallbackGeminiBody,
+        signal: AbortSignal.timeout(15000),
+      });
+    } catch (e) {
+      const isTimeout = e instanceof Error && e.name === "TimeoutError";
+      return NextResponse.json({
+        intent: "error",
+        code: isTimeout ? "TIMEOUT" : "NETWORK",
+        message: isTimeout ? "Gemini não respondeu a tempo. Tente novamente." : "Erro de rede ao conectar com o Gemini.",
+        retryAfterSec: 15,
+      });
+    }
   }
 
   if (!geminiRes.ok) {
