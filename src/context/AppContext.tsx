@@ -418,6 +418,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const loadedAtRef  = useRef<number>(0);
   // True somente quando o usuário fez uma mudança real — evita salvar dados de localStorage no Firestore
   const needsFirestoreSyncRef = useRef<boolean>(false);
+  // True somente depois que confirmamos o estado REAL do servidor (doc existe e foi lido,
+  // ou doc confirmadamente não existe = usuário novo). Nenhuma escrita no Firestore pode
+  // acontecer antes disso — evita sobrescrever dados remotos com o `seed` vazio por causa
+  // de cache local perdido/race de carregamento.
+  const hasHydratedRef = useRef<boolean>(false);
 
   // dispatch público: marca needsFirestoreSync em ações do usuário (não em LOADs de storage)
   const dispatch = (action: Action): void => {
@@ -433,6 +438,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         dispatch({ type: "LOAD", payload: seed });
         loadedAtRef.current         = 0;
         needsFirestoreSyncRef.current = false;
+        hasHydratedRef.current       = false;
         setAuthLoading(false);
         setIsReady(false);
       } else {
@@ -445,6 +451,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // ── Load imediato do localStorage + listener em tempo real do Firestore ───
   useEffect(() => {
     if (!user) return;
+
+    // Nova sessão de auth para este efeito: ainda não confirmamos o estado real do servidor.
+    hasHydratedRef.current = false;
 
     // Segurança/migração: remove o cache legado COMPARTILHADO entre contas
     // (vazava os dados de uma conta para outra no mesmo navegador).
@@ -462,6 +471,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
           shouldPullRemote = true;
         } else {
           loadedAtRef.current = local.updatedAt ?? 0;
+          // Cache local não-vazio: já temos uma versão real do servidor como base.
+          hasHydratedRef.current = true;
         }
         loadRepaired(rawDispatch, needsFirestoreSyncRef, local);
       } else {
@@ -483,16 +494,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
       void (async () => {
         try {
           const snap = await getDoc(FIRESTORE_DOC(user.uid));
-          if (!snap.exists()) return;
+          if (!snap.exists()) {
+            // Doc realmente não existe no servidor → usuário novo de fato.
+            // Só agora é seguro liberar escritas (não é um cache local perdido).
+            hasHydratedRef.current = true;
+            return;
+          }
           const remote = snap.data() as AppState & { updatedAt?: unknown };
           const remoteMs = remoteUpdatedAt(remote);
-          if (remoteMs <= loadedAtRef.current) return;
-          loadedAtRef.current = remoteMs;
-          const persisted: PersistedState = { ...(remote as AppState), updatedAt: remoteMs };
-          try { localStorage.setItem(LS_KEY(user.uid), JSON.stringify(persisted)); } catch {}
-          loadRepaired(rawDispatch, needsFirestoreSyncRef, persisted);
+          if (remoteMs > loadedAtRef.current) {
+            loadedAtRef.current = remoteMs;
+            const persisted: PersistedState = { ...(remote as AppState), updatedAt: remoteMs };
+            try { localStorage.setItem(LS_KEY(user.uid), JSON.stringify(persisted)); } catch {}
+            loadRepaired(rawDispatch, needsFirestoreSyncRef, persisted);
+          }
+          // Já vimos o doc real do servidor pelo menos uma vez → agora pode escrever.
+          hasHydratedRef.current = true;
         } catch (err) {
           console.error("Firestore initial pull error:", err);
+          // Sem confirmação do servidor: mantém bloqueado (não libera escrita).
         }
       })();
     }
@@ -501,21 +521,32 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const unsubSnapshot = onSnapshot(
       FIRESTORE_DOC(user.uid),
       (snap) => {
-        if (!snap.exists()) return;
+        if (!snap.exists()) {
+          hasHydratedRef.current = true;
+          return;
+        }
         // Eco otimista do nosso próprio write (ainda não confirmado): ignora.
-        if (snap.metadata.hasPendingWrites) return;
+        if (snap.metadata.hasPendingWrites) {
+          hasHydratedRef.current = true;
+          return;
+        }
         // Mudança local ainda não enviada: não sobrescreve — o debounce vai empurrar.
-        if (needsFirestoreSyncRef.current) return;
+        if (needsFirestoreSyncRef.current) {
+          hasHydratedRef.current = true;
+          return;
+        }
 
         const remote = snap.data() as AppState & { updatedAt?: unknown };
         const remoteMs = remoteUpdatedAt(remote);
         // Aplica só se o servidor for mais novo — não sobrescreve dados locais
         // ainda não enviados com um doc do servidor mais antigo.
-        if (remoteMs <= loadedAtRef.current) return;
-        loadedAtRef.current = remoteMs;
-        const persisted: PersistedState = { ...(remote as AppState), updatedAt: remoteMs };
-        try { localStorage.setItem(LS_KEY(user.uid), JSON.stringify(persisted)); } catch {}
-        loadRepaired(rawDispatch, needsFirestoreSyncRef, persisted);
+        if (remoteMs > loadedAtRef.current) {
+          loadedAtRef.current = remoteMs;
+          const persisted: PersistedState = { ...(remote as AppState), updatedAt: remoteMs };
+          try { localStorage.setItem(LS_KEY(user.uid), JSON.stringify(persisted)); } catch {}
+          loadRepaired(rawDispatch, needsFirestoreSyncRef, persisted);
+        }
+        hasHydratedRef.current = true;
       },
       (err) => console.error("Firestore snapshot error:", err),
     );
@@ -536,6 +567,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!isReady || !user) return;
     if (!needsFirestoreSyncRef.current) return; // não salvar carregamentos de storage
+    if (!hasHydratedRef.current) return; // trava crítica: nunca escreve antes de confirmar o estado real do servidor
     const timer = setTimeout(async () => {
       // updatedAt = serverTimestamp(): ordenação por relógio do SERVIDOR, imune à
       // diferença de horário entre dispositivos. O eco local é ignorado no
@@ -586,7 +618,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setSyncState("syncing");
     setLastSyncError(null);
     try {
-      if (needsFirestoreSyncRef.current) {
+      if (needsFirestoreSyncRef.current && hasHydratedRef.current) {
         await setDoc(FIRESTORE_DOC(user.uid), { ...state, updatedAt: serverTimestamp() });
         needsFirestoreSyncRef.current = false;
       }
@@ -603,6 +635,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           dispatch({ type: "LOAD", payload: persisted });
         }
       }
+      hasHydratedRef.current = true;
       setLastSyncedAt(Date.now());
       setSyncState("synced");
     } catch (err) {
