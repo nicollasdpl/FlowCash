@@ -14,9 +14,17 @@ import type {
   Account, Transaction, CreditCard, CardPurchase, CardInstallment,
   Goal, Category, Budget,
 } from "@/types/financial";
-import { SEED_INVOICE_PAYMENT_CATEGORY_ID } from "@/types/financial";
+import {
+  SEED_INVOICE_PAYMENT_CATEGORY_ID,
+  SEED_LOAN_INCOME_CATEGORY_ID,
+  SEED_LOAN_EXPENSE_CATEGORY_ID,
+  SEED_REIMBURSEMENT_INCOME_CATEGORY_ID,
+  SEED_REIMBURSEMENT_EXPENSE_CATEGORY_ID,
+} from "@/types/financial";
 import { generateInstallments, generateSubscriptionInstallment, getCompetenceMonth } from "@/engine/invoiceEngine";
 import { addMonths } from "@/engine/financialEngine";
+import { repairCardState } from "@/lib/repairCardState";
+import { DEFAULT_NOTIFICATION_PREFS } from "@/lib/notifications/types";
 
 export type {
   Account, Transaction, CreditCard, CardPurchase, CardInstallment,
@@ -25,8 +33,9 @@ export type {
 
 // ─── STATE ────────────────────────────────────────────────────────────────────
 
-interface AppState {
+export interface AppState {
   userName: string;
+  notificationPrefs: import("@/lib/notifications/types").NotificationPrefs;
   accounts: Account[];
   transactions: Transaction[];
   cards: CreditCard[];
@@ -35,11 +44,14 @@ interface AppState {
   goals: Goal[];
   categories: Category[];
   budgets: Budget[];
+  /** Aprendizado do import: estabelecimento normalizado → categoryId. */
+  merchantCategoryCache: Record<string, string>;
 }
 
 type Action =
   | { type: "LOAD"; payload: AppState }
   | { type: "SET_USER_NAME"; payload: string }
+  | { type: "SET_NOTIFICATION_PREFS"; payload: import("@/lib/notifications/types").NotificationPrefs }
   | { type: "ADD_ACCOUNT"; payload: Account }
   | { type: "UPD_ACCOUNT"; payload: Account }
   | { type: "DEL_ACCOUNT"; payload: string }
@@ -50,6 +62,7 @@ type Action =
   | { type: "UPD_CARD"; payload: CreditCard }
   | { type: "DEL_CARD"; payload: string }
   | { type: "ADD_PURCHASE"; payload: { purchase: CardPurchase; card: CreditCard } }
+  | { type: "UPD_PURCHASE"; payload: { purchase: CardPurchase; card: CreditCard } }
   | { type: "DEL_PURCHASE"; payload: string }
   | { type: "PAY_INSTALLMENT"; payload: { installmentId: string; paidAt: string } }
   | { type: "UNPAY_INSTALLMENT"; payload: string }
@@ -63,7 +76,8 @@ type Action =
   | { type: "UPD_CATEGORY"; payload: Category }
   | { type: "DEL_CATEGORY"; payload: string }
   | { type: "BULK_ADD_TX"; payload: Transaction[] }
-  | { type: "ADD_INSTALLMENTS"; payload: CardInstallment[] };
+  | { type: "ADD_INSTALLMENTS"; payload: CardInstallment[] }
+  | { type: "MERGE_MERCHANT_CACHE"; payload: Record<string, string> };
 
 // ─── SEED ─────────────────────────────────────────────────────────────────────
 
@@ -81,12 +95,17 @@ const SEED_CATEGORIES: Category[] = [
   { id: "cat_freelance",   name: "Pets",          type: "expense", color: "#8BC34A", icon: "PawPrint" },
   { id: "cat_investimento",name: "Investimentos", type: "income",  color: "#00E5A0", icon: "TrendingUp" },
   { id: SEED_INVOICE_PAYMENT_CATEGORY_ID, name: "Pagamento de Fatura", type: "expense", color: "#6B7280", icon: "CreditCard", isSystem: true },
+  { id: SEED_LOAN_INCOME_CATEGORY_ID, name: "Empréstimo", type: "income", color: "#00E5A0", icon: "Landmark", excludeFromReports: true },
+  { id: SEED_LOAN_EXPENSE_CATEGORY_ID, name: "Empréstimos", type: "expense", color: "#F59E0B", icon: "Landmark" },
+  { id: SEED_REIMBURSEMENT_INCOME_CATEGORY_ID, name: "Reembolso", type: "income", color: "#38BDF8", icon: "RefreshCw", excludeFromReports: true },
+  { id: SEED_REIMBURSEMENT_EXPENSE_CATEGORY_ID, name: "Reembolso", type: "expense", color: "#38BDF8", icon: "RefreshCw" },
 ];
 
 export const SEED_CATEGORY_IDS = new Set(SEED_CATEGORIES.map(c => c.id));
 
 const seed: AppState = {
   userName: "",
+  notificationPrefs: DEFAULT_NOTIFICATION_PREFS,
   accounts: [],
   transactions: [],
   cards: [],
@@ -95,6 +114,7 @@ const seed: AppState = {
   goals: [],
   categories: SEED_CATEGORIES,
   budgets: [],
+  merchantCategoryCache: {},
 };
 
 // ─── SEED ICON MIGRATION ──────────────────────────────────────────────────────
@@ -138,16 +158,36 @@ function reducer(state: AppState, action: Action): AppState {
             return { ...cat, icon: "Tag" };
           })
         : seed.categories;
-      // Garante que a categoria de sistema "Pagamento de Fatura" sempre exista,
-      // inclusive em estados já persistidos antes desta versão.
-      const systemInvoiceCat = seed.categories.find(c => c.id === SEED_INVOICE_PAYMENT_CATEGORY_ID)!;
-      const categories = baseCategories.some(c => c.id === SEED_INVOICE_PAYMENT_CATEGORY_ID)
-        ? baseCategories
-        : [...baseCategories, systemInvoiceCat];
-      return { ...seed, ...action.payload, categories };
+      // Garante que categorias seed importantes sempre existam, inclusive em
+      // estados já persistidos antes desta versão: "Pagamento de Fatura" e as
+      // categorias de empréstimo (receita que não conta como renda + despesa).
+      const ensuredSeedIds = [
+        SEED_INVOICE_PAYMENT_CATEGORY_ID,
+        SEED_LOAN_INCOME_CATEGORY_ID,
+        SEED_LOAN_EXPENSE_CATEGORY_ID,
+        SEED_REIMBURSEMENT_INCOME_CATEGORY_ID,
+        SEED_REIMBURSEMENT_EXPENSE_CATEGORY_ID,
+      ];
+      const categories = ensuredSeedIds.reduce((cats, id) => {
+        if (cats.some(c => c.id === id)) return cats;
+        const seedCat = seed.categories.find(c => c.id === id);
+        return seedCat ? [...cats, seedCat] : cats;
+      }, baseCategories);
+      return {
+        ...seed,
+        ...action.payload,
+        categories,
+        merchantCategoryCache: action.payload.merchantCategoryCache ?? {},
+        notificationPrefs: {
+          ...DEFAULT_NOTIFICATION_PREFS,
+          ...(action.payload.notificationPrefs ?? {}),
+        },
+      };
     }
     case "SET_USER_NAME":
       return { ...state, userName: action.payload };
+    case "SET_NOTIFICATION_PREFS":
+      return { ...state, notificationPrefs: action.payload };
 
     case "ADD_ACCOUNT":
       return { ...state, accounts: [...state.accounts, action.payload] };
@@ -205,6 +245,53 @@ function reducer(state: AppState, action: Action): AppState {
         installments: [...state.installments, ...newInstallments],
       };
     }
+    case "UPD_PURCHASE": {
+      const { purchase, card } = action.payload;
+      const prev = state.purchases.find(p => p.id === purchase.id);
+      if (!prev) return state;
+
+      const structuralChange =
+        prev.amount !== purchase.amount ||
+        prev.totalInstallments !== purchase.totalInstallments ||
+        prev.purchaseDate !== purchase.purchaseDate ||
+        prev.cardId !== purchase.cardId ||
+        Boolean(prev.isSubscription) !== Boolean(purchase.isSubscription);
+
+      // Categoria/descrição: só atualiza a compra — parcelas (e paid) ficam intactas.
+      if (!structuralChange) {
+        return {
+          ...state,
+          purchases: state.purchases.map(p => (p.id === purchase.id ? purchase : p)),
+        };
+      }
+
+      const paidBefore = state.installments
+        .filter(i => i.purchaseId === purchase.id && i.paid)
+        .map(i => ({ n: i.installmentNumber, paidAt: i.paidAt }));
+
+      const withoutOld = state.installments.filter(i => i.purchaseId !== purchase.id);
+      let regenerated: CardInstallment[];
+      if (purchase.isSubscription) {
+        const firstCm = getCompetenceMonth(purchase.purchaseDate, card.closingDay);
+        regenerated = Array.from({ length: 12 }, (_, i) =>
+          generateSubscriptionInstallment(purchase, card, addMonths(firstCm, i))
+        );
+      } else {
+        regenerated = generateInstallments(purchase, card, withoutOld);
+      }
+
+      const withPaid = regenerated.map(inst => {
+        const prevPaid = paidBefore.find(p => p.n === inst.installmentNumber);
+        if (!prevPaid) return inst;
+        return { ...inst, paid: true, paidAt: prevPaid.paidAt };
+      });
+
+      return {
+        ...state,
+        purchases: state.purchases.map(p => (p.id === purchase.id ? purchase : p)),
+        installments: [...withoutOld, ...withPaid],
+      };
+    }
     case "DEL_PURCHASE": {
       const purchaseId = action.payload;
       const purchase = state.purchases.find(p => p.id === purchaseId);
@@ -250,6 +337,12 @@ function reducer(state: AppState, action: Action): AppState {
     case "DEL_BUDGET":
       return { ...state, budgets: state.budgets.filter(b => b.id !== action.payload) };
 
+    case "MERGE_MERCHANT_CACHE":
+      return {
+        ...state,
+        merchantCategoryCache: { ...state.merchantCategoryCache, ...action.payload },
+      };
+
     case "ADD_CATEGORY":
       return { ...state, categories: [...state.categories, action.payload] };
     case "UPD_CATEGORY":
@@ -286,6 +379,31 @@ const LS_KEY = (uid: string) => `flowcash_v2_${uid}`;
 
 // Formato persistido — AppState + campo de versionamento (nunca entra no reducer)
 type PersistedState = AppState & { updatedAt?: number };
+
+function isEmptyAppState(s: AppState): boolean {
+  return (
+    s.accounts.length === 0 &&
+    s.transactions.length === 0 &&
+    s.purchases.length === 0 &&
+    s.cards.length === 0
+  );
+}
+
+function remoteUpdatedAt(remote: AppState & { updatedAt?: unknown }): number {
+  const ts = remote.updatedAt;
+  return ts instanceof Timestamp ? ts.toMillis() : typeof ts === "number" ? ts : 0;
+}
+
+/** Aplica reparos e marca sync se algo mudou. */
+function loadRepaired(
+  rawDispatch: (a: Action) => void,
+  needsFirestoreSyncRef: { current: boolean },
+  payload: AppState,
+) {
+  const { state: repaired, changed } = repairCardState(payload);
+  rawDispatch({ type: "LOAD", payload: repaired });
+  if (changed) needsFirestoreSyncRef.current = true;
+}
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [state, rawDispatch] = useReducer(reducer, seed);
@@ -343,22 +461,50 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     // 1. Exibe o cache DESTA conta imediatamente; sem cache, começa limpo (seed).
     //    O Firestore (por uid) restaura os dados na sequência.
+    let shouldPullRemote = false;
     try {
       const raw = localStorage.getItem(LS_KEY(user.uid));
       if (raw) {
         const local = JSON.parse(raw) as PersistedState;
-        loadedAtRef.current = local.updatedAt ?? 0;
-        dispatch({ type: "LOAD", payload: local });
+        if (isEmptyAppState(local)) {
+          loadedAtRef.current = 0;
+          shouldPullRemote = true;
+        } else {
+          loadedAtRef.current = local.updatedAt ?? 0;
+        }
+        loadRepaired(rawDispatch, needsFirestoreSyncRef, local);
       } else {
         loadedAtRef.current = 0;
+        shouldPullRemote = true;
         dispatch({ type: "LOAD", payload: seed });
       }
     } catch {
       loadedAtRef.current = 0;
+      shouldPullRemote = true;
       dispatch({ type: "LOAD", payload: seed });
     }
 
     setIsReady(true);
+
+    // Cache vazio no localhost (ou só seed): puxa Firestore na hora — produção e dev
+    // usam origens diferentes, então o cache local não vem da Vercel automaticamente.
+    if (shouldPullRemote) {
+      void (async () => {
+        try {
+          const snap = await getDoc(FIRESTORE_DOC(user.uid));
+          if (!snap.exists()) return;
+          const remote = snap.data() as AppState & { updatedAt?: unknown };
+          const remoteMs = remoteUpdatedAt(remote);
+          if (remoteMs <= loadedAtRef.current) return;
+          loadedAtRef.current = remoteMs;
+          const persisted: PersistedState = { ...(remote as AppState), updatedAt: remoteMs };
+          try { localStorage.setItem(LS_KEY(user.uid), JSON.stringify(persisted)); } catch {}
+          loadRepaired(rawDispatch, needsFirestoreSyncRef, persisted);
+        } catch (err) {
+          console.error("Firestore initial pull error:", err);
+        }
+      })();
+    }
 
     // 2. Listener em tempo real — sincroniza outros dispositivos
     const unsubSnapshot = onSnapshot(
@@ -382,16 +528,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
 
         const remote = snap.data() as AppState & { updatedAt?: unknown };
-        const ts = remote.updatedAt;
-        const remoteMs = ts instanceof Timestamp ? ts.toMillis()
-          : typeof ts === "number" ? ts : 0;
+        const remoteMs = remoteUpdatedAt(remote);
         // Aplica só se o servidor for mais novo — não sobrescreve dados locais
         // ainda não enviados com um doc do servidor mais antigo.
         if (remoteMs > loadedAtRef.current) {
           loadedAtRef.current = remoteMs;
           const persisted: PersistedState = { ...(remote as AppState), updatedAt: remoteMs };
           try { localStorage.setItem(LS_KEY(user.uid), JSON.stringify(persisted)); } catch {}
-          dispatch({ type: "LOAD", payload: persisted });
+          loadRepaired(rawDispatch, needsFirestoreSyncRef, persisted);
         }
         // Já vimos o doc real do servidor pelo menos uma vez → agora pode escrever.
         hasHydratedRef.current = true;
@@ -480,9 +624,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const snap = await getDoc(FIRESTORE_DOC(user.uid));
       if (snap.exists()) {
         const remote = snap.data() as AppState & { updatedAt?: unknown };
-        const ts = remote.updatedAt;
-        const remoteMs = ts instanceof Timestamp ? ts.toMillis()
-          : typeof ts === "number" ? ts : 0;
+        const remoteMs = remoteUpdatedAt(remote);
         if (remoteMs > loadedAtRef.current) {
           loadedAtRef.current = remoteMs;
           const persisted: PersistedState = { ...(remote as AppState), updatedAt: remoteMs };
@@ -545,6 +687,11 @@ export function newId(): string {
     : Math.random().toString(36).slice(2) + Date.now().toString(36);
 }
 
-export const CARD_COLORS    = ["#9B6DFF", "#4B8BF5", "#00E5C3", "#22D47A", "#F5A623", "#FF4D6A", "#FF8C42"];
+export const CARD_COLORS = [
+  "#9B6DFF", "#8A05BE", "#6366F1", "#4B8BF5", "#0EA5E9", "#06B6D4",
+  "#00E5C3", "#14B8A6", "#22D47A", "#84CC16", "#EAB308", "#F5A623",
+  "#FF8C42", "#F97316", "#FF4D6A", "#EF4444", "#EC4899", "#A855F7",
+  "#64748B", "#334155",
+];
 export const ACCOUNT_COLORS = ["#22D47A", "#4B8BF5", "#00E5C3", "#9B6DFF", "#F5A623", "#FF8C42"];
 export const ACCOUNT_ICONS  = ["🏦", "💰", "👛", "📈", "💳", "🏧"];

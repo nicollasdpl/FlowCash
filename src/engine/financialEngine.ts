@@ -8,6 +8,21 @@ import type {
   Account, Transaction, CreditCard, CardInstallment, CardPurchase, Goal,
   AccountBalance, NetWorthSnapshot, CashFlowEntry, MonthlyProjection, CardLimitSummary,
 } from "@/types/financial";
+import { SEED_INVOICE_PAYMENT_CATEGORY_ID } from "@/types/financial";
+
+const INVOICE_DUE_MONTHS_SHORT = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+
+function hasPaidInvoiceTx(transactions: Transaction[], card: CreditCard, dueDate: string): boolean {
+  const [y, m] = dueDate.split("-").map(Number);
+  const label = `${INVOICE_DUE_MONTHS_SHORT[m - 1]}/${String(y).slice(2)}`.toLowerCase();
+  const name = card.name.trim().toLowerCase();
+  return transactions.some(t => {
+    if (t.categoryId !== SEED_INVOICE_PAYMENT_CATEGORY_ID || t.status !== "paid") return false;
+    if (card.paymentAccountId && t.accountId !== card.paymentAccountId) return false;
+    const desc = (t.description ?? "").toLowerCase();
+    return desc.includes(name) && desc.includes(label);
+  });
+}
 
 // ─── UTILITÁRIOS ─────────────────────────────────────────────────────────────
 
@@ -37,8 +52,36 @@ export function currentMonth(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
+export function endOfMonth(yyyymm: string): string {
+  const [y, m] = yyyymm.split("-").map(Number);
+  const last = new Date(y, m, 0).getDate();
+  return `${yyyymm}-${String(last).padStart(2, "0")}`;
+}
+
+/** Horizon for projected balance. Past months keep the current month so the number does not jump when browsing history. */
+export function projectionHorizon(selectedMonth: string): string {
+  const cm = currentMonth();
+  return endOfMonth(selectedMonth < cm ? cm : selectedMonth);
+}
+
+/** Half-cent tolerance — values within this range display as zero (R$ 0,00). */
+export const BALANCE_EPSILON = 0.005;
+
+export function normalizeBalance(v: number): number {
+  return Math.abs(v) < BALANCE_EPSILON ? 0 : v;
+}
+
+export function isBalanceNegative(v: number): boolean {
+  return v < -BALANCE_EPSILON;
+}
+
+export function isBalancePositive(v: number): boolean {
+  return v > BALANCE_EPSILON;
+}
+
 export function fmt(v: number): string {
-  return v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const n = normalizeBalance(v);
+  return n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 export function fmtShort(v: number): string {
@@ -80,7 +123,7 @@ export function getCurrentBalance(account: Account, transactions: Transaction[])
   );
   for (const t of transfersIn) balance += t.amount;
 
-  return balance;
+  return normalizeBalance(balance);
 }
 
 // ─── SALDO PROJETADO ─────────────────────────────────────────────────────────
@@ -147,6 +190,8 @@ export function getProjectedBalance(
 
   // Subtract unpaid invoices (closed or overdue) whose dueDate falls within the period.
   // Mirrors getInvoiceDates: both closingDate and dueDate are in the competenceMonth itself.
+  // Se já existe "Pagamento Fatura" no extrato para aquele vencimento, NÃO desconta de novo
+  // (evita projetado quebrado quando parcelas perderam o flag paid).
   for (const card of cards) {
     if (card.paymentAccountId !== account.id) continue;
     const cardInst = installments.filter(i => i.cardId === card.id);
@@ -168,11 +213,12 @@ export function getProjectedBalance(
         dueDate = `${nextMonth}-${String(Math.min(card.dueDay, new Date(ny, nm, 0).getDate())).padStart(2, "0")}`;
       }
       if (dueDate > upToDate) continue;
+      if (hasPaidInvoiceTx(transactions, card, dueDate)) continue;
       balance -= unpaidTotal;
     }
   }
 
-  return balance;
+  return normalizeBalance(balance);
 }
 
 // ─── SALDO DISPONÍVEL ────────────────────────────────────────────────────────
@@ -189,7 +235,7 @@ export function getAvailableBalance(
   const reserved = goals
     .filter(g => g.accountId === account.id && !g.completed)
     .reduce((s, g) => s + g.currentAmount, 0);
-  return projected - reserved;
+  return normalizeBalance(projected - reserved);
 }
 
 // ─── SALDO COMPLETO DE UMA CONTA ─────────────────────────────────────────────
@@ -208,9 +254,7 @@ export function getAccountBalance(
 }
 
 function endOfCurrentMonth(): string {
-  const d = new Date();
-  const last = new Date(d.getFullYear(), d.getMonth() + 1, 0);
-  return last.toISOString().split("T")[0];
+  return endOfMonth(currentMonth());
 }
 
 // ─── PATRIMÔNIO LÍQUIDO ──────────────────────────────────────────────────────
@@ -371,7 +415,7 @@ export function getMonthlyProjections(
       projectedExpense: expense,
       projectedBalance: runningBalance,
       riskLevel:
-        runningBalance < 0 ? "danger"
+        isBalanceNegative(runningBalance) ? "danger"
         : runningBalance < expense * 0.3 ? "warning"
         : "safe",
     });

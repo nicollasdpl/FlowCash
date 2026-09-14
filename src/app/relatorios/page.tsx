@@ -1,10 +1,14 @@
 "use client";
-import { useState, useMemo, type ReactNode } from "react";
+import { useState, useMemo, useEffect, type ReactNode } from "react";
 import { useApp } from "@/context/AppContext";
-import { addMonths, currentMonth, fmt } from "@/engine/financialEngine";
+import { addMonths, currentMonth, fmt, isBalanceNegative, isBalancePositive } from "@/engine/financialEngine";
 import { getSpentByCategory } from "@/engine/budgetEngine";
+import { SEED_INVOICE_PAYMENT_CATEGORY_ID } from "@/types/financial";
+import { getConsumptionByCategory, buildConsumptionCatSlices } from "@/app/relatorios/consumptionByCategory";
 import { auth } from "@/lib/firebase";
 import DonutChart, { type Segment } from "@/components/DonutChart";
+import { buildCatSlices, CategoryExpenseDetailPanel } from "@/components/CategoryDonutSection";
+import SpendingHeatmapCalendar from "@/components/SpendingHeatmapCalendar";
 import CategoryIcon from "@/components/CategoryIcon";
 import {
   ChevronLeft, ChevronRight, BarChart2, AlertTriangle, TrendingUp,
@@ -89,9 +93,17 @@ function Markdown({ text }: { text: string }) {
 
 // ─── Página ──────────────────────────────────────────────────────────────────
 
+type CategoryViewMode = "invoice" | "consumption";
+
 export default function Relatorios() {
   const { state } = useApp();
   const [selectedMonth, setSelectedMonth] = useState(() => currentMonth());
+  const [categoryView, setCategoryView] = useState<CategoryViewMode>("invoice");
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
+
+  useEffect(() => {
+    setSelectedCategoryId(null);
+  }, [selectedMonth, categoryView]);
 
   const [insights, setInsights]               = useState<string>("");
   const [insightsLoading, setInsightsLoading] = useState(false);
@@ -111,16 +123,28 @@ export default function Relatorios() {
     [selectedMonth],
   );
 
+  // Categorias excluídas dos relatórios (ex.: Empréstimo não conta como receita).
+  const excludedReportCatIds = useMemo(
+    () => new Set(state.categories.filter(c => c.excludeFromReports).map(c => c.id)),
+    [state.categories]
+  );
+
   // ── Dados por mês (paymentDate p/ resumo, competenceDate p/ categoria) ───
   const monthData = useMemo(() => months.map(month => {
     const paidIncome = state.transactions
-      .filter(t => t.type === "income" && t.status === "paid" && t.paymentDate.startsWith(month))
+      .filter(t => t.type === "income" && t.status === "paid" && t.paymentDate.startsWith(month) && !excludedReportCatIds.has(t.categoryId))
       .reduce((s, t) => s + t.amount, 0);
     const paidExpense = state.transactions
-      .filter(t => t.type === "expense" && t.status === "paid" && t.paymentDate.startsWith(month))
+      .filter(
+        t =>
+          t.type === "expense" &&
+          t.status === "paid" &&
+          t.paymentDate.startsWith(month) &&
+          t.categoryId !== SEED_INVOICE_PAYMENT_CATEGORY_ID,
+      )
       .reduce((s, t) => s + t.amount, 0);
     return { month, income: paidIncome, expense: paidExpense };
-  }), [months, state.transactions]);
+  }), [months, state.transactions, excludedReportCatIds]);
 
   const selectedData = monthData[2];
   const balance      = selectedData.income - selectedData.expense;
@@ -137,47 +161,73 @@ export default function Relatorios() {
     [months, state.transactions, state.installments, state.purchases],
   );
 
+  const consumptionByCatSelected = useMemo(
+    () => getConsumptionByCategory(selectedMonth, state.transactions, state.installments, state.purchases, state.cards),
+    [selectedMonth, state.transactions, state.installments, state.purchases, state.cards],
+  );
+  const consumptionByCatPrev = useMemo(
+    () => getConsumptionByCategory(months[1], state.transactions, state.installments, state.purchases, state.cards),
+    [months, state.transactions, state.installments, state.purchases, state.cards],
+  );
+
+  const activeSpentByCat = categoryView === "invoice" ? spentByCatSelected : consumptionByCatSelected;
+  const activeSpentByCatPrev = categoryView === "invoice" ? spentByCatPrev : consumptionByCatPrev;
+
   const biggestCategory = useMemo(() => {
+    const source = categoryView === "invoice" ? spentByCatSelected : consumptionByCatSelected;
     let topId = ""; let topVal = 0;
-    for (const [catId, amount] of Object.entries(spentByCatSelected)) {
+    for (const [catId, amount] of Object.entries(source)) {
       if (amount > topVal) { topId = catId; topVal = amount; }
     }
     const cat = state.categories.find(c => c.id === topId);
     return cat ? { name: cat.name, amount: topVal, color: cat.color } : null;
-  }, [spentByCatSelected, state.categories]);
+  }, [categoryView, spentByCatSelected, consumptionByCatSelected, state.categories]);
 
   // ── Projeção (só mês corrente) ───────────────────────────────────────────
+  // Mesma base do dashboard: gasto por competência (conta + cartão),
+  // sem "Pagamento de Fatura" — senão fatura paga + fatura aberta incham o total.
   const projection = useMemo(() => {
     if (!atCurrentMonth) return null;
 
-    // Realizado: despesas já pagas com pagamento no mês.
-    const realized = state.transactions
-      .filter(t => t.type === "expense" && t.status === "paid" && t.paymentDate.startsWith(selectedMonth))
-      .reduce((s, t) => s + t.amount, 0);
-
-    // Futuro conhecido: despesas a pagar (pending/overdue) no mês
-    // + parcelas de cartão não pagas com competência no mês.
-    const pendingTx = state.transactions
-      .filter(t => t.type === "expense" && t.status !== "paid" && t.paymentDate.startsWith(selectedMonth))
-      .reduce((s, t) => s + t.amount, 0);
-    const unpaidInstallments = state.installments
+    const projected = Object.values(spentByCatSelected).reduce((s, v) => s + v, 0);
+    const income = selectedData.income;
+    const openInvoices = state.installments
       .filter(i => i.competenceMonth === selectedMonth && !i.paid)
       .reduce((s, i) => s + i.amount, 0);
-    const futureKnown = pendingTx + unpaidInstallments;
+    const pendingTx = state.transactions
+      .filter(
+        t =>
+          t.type === "expense" &&
+          t.status !== "paid" &&
+          t.paymentDate.startsWith(selectedMonth) &&
+          t.categoryId !== SEED_INVOICE_PAYMENT_CATEGORY_ID,
+      )
+      .reduce((s, t) => s + t.amount, 0);
 
-    const projected = realized + futureKnown;
-    const income    = selectedData.income;
-    return { projected, realized, futureKnown, income, danger: projected > income && income > 0 };
-  }, [atCurrentMonth, selectedMonth, state.transactions, state.installments, selectedData.income]);
+    return {
+      projected,
+      openInvoices,
+      pendingTx,
+      income,
+      danger: projected > income && income > 0,
+    };
+  }, [
+    atCurrentMonth,
+    selectedMonth,
+    spentByCatSelected,
+    selectedData.income,
+    state.installments,
+    state.transactions,
+  ]);
 
   // ── Donut + lista de categorias (mês selecionado vs anterior) ────────────
   type CatRow = { id: string; name: string; color: string; icon: string; spent: number; prevSpent: number; pct: number; variation: number | null };
   const catRows: CatRow[] = useMemo(() => {
-    const totalSpent = Object.values(spentByCatSelected).reduce((s, v) => s + v, 0);
-    return Object.entries(spentByCatSelected)
+    const totalSpent = Object.values(activeSpentByCat).reduce((s, v) => s + v, 0);
+    return Object.entries(activeSpentByCat)
       .map(([catId, spent]) => {
         const cat       = state.categories.find(c => c.id === catId);
-        const prevSpent = spentByCatPrev[catId] ?? 0;
+        const prevSpent = activeSpentByCatPrev[catId] ?? 0;
         const variation = prevSpent > 0 ? ((spent - prevSpent) / prevSpent) * 100 : null;
         const pct       = totalSpent > 0 ? (spent / totalSpent) * 100 : 0;
         return {
@@ -189,7 +239,7 @@ export default function Relatorios() {
         };
       })
       .sort((a, b) => b.spent - a.spent);
-  }, [spentByCatSelected, spentByCatPrev, state.categories]);
+  }, [activeSpentByCat, activeSpentByCatPrev, state.categories]);
 
   const donutTotal = catRows.reduce((s, r) => s + r.spent, 0);
 
@@ -208,6 +258,41 @@ export default function Relatorios() {
     if (drift !== 0 && rounded.length > 0) rounded[0].percentage += drift;
     return rounded;
   }, [catRows, donutTotal]);
+
+  const catSlices = useMemo(() => {
+    if (categoryView === "invoice") {
+      return buildCatSlices(
+        state.transactions,
+        state.installments,
+        state.purchases,
+        state.categories,
+        state.cards,
+        selectedMonth,
+      );
+    }
+    return buildConsumptionCatSlices(
+      selectedMonth,
+      state.transactions,
+      state.installments,
+      state.purchases,
+      state.categories,
+      state.cards,
+    );
+  }, [
+    categoryView,
+    selectedMonth,
+    state.transactions,
+    state.installments,
+    state.purchases,
+    state.categories,
+    state.cards,
+  ]);
+
+  const selectedSlice = catSlices.find(s => s.catId === selectedCategoryId) ?? null;
+
+  function toggleCategory(catId: string) {
+    setSelectedCategoryId(prev => (prev === catId ? null : catId));
+  }
 
   // ── Orçamentos do mês ────────────────────────────────────────────────────
   const budgetsThisMonth = useMemo(
@@ -352,8 +437,8 @@ export default function Relatorios() {
         />
         <SummaryCard
           label="Saldo líquido"
-          value={`${balance < 0 ? "−" : ""}R$ ${fmt(Math.abs(balance))}`}
-          valueColor={balance < 0 ? "var(--red)" : "var(--accent)"}
+          value={`${isBalanceNegative(balance) ? "−" : ""}R$ ${fmt(Math.abs(balance))}`}
+          valueColor={isBalanceNegative(balance) ? "var(--red)" : isBalancePositive(balance) ? "var(--accent)" : "var(--text-2)"}
         />
         <SummaryCard
           label="Maior gasto"
@@ -367,7 +452,7 @@ export default function Relatorios() {
       {projection && (
         <div className="card fade-up-3" style={{ padding: "16px 18px", marginBottom: "16px" }}>
           <p style={{ fontSize: "10px", fontWeight: 700, color: "var(--text-3)", letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: "8px" }}>
-            Projeção de fechamento
+            Gasto projetado do mês
           </p>
           <div style={{ display: "flex", alignItems: "baseline", gap: "12px", marginBottom: "10px", flexWrap: "wrap" }}>
             <p className="mono" style={{
@@ -377,12 +462,25 @@ export default function Relatorios() {
               R$ {fmt(projection.projected)}
             </p>
             <p style={{ fontSize: "11.5px", color: "var(--text-3)" }}>
-              estimado até o fim do mês
+              compromissos até o fim do mês
             </p>
           </div>
           <p style={{ fontSize: "12px", color: "var(--text-3)", lineHeight: 1.5 }}>
-            Baseado em gastos realizados + compromissos futuros do mês.
-            Receita do mês: <span style={{ color: "var(--green)", fontWeight: 600 }}>R$ {fmt(projection.income)}</span>.
+            Contas + cartão do mês (mesma base do dashboard). Não soma pagamento de fatura.
+            {projection.openInvoices > 0 && (
+              <>
+                {" "}Faturas ainda abertas:{" "}
+                <span style={{ fontWeight: 600, color: "var(--text-2)" }}>R$ {fmt(projection.openInvoices)}</span>.
+              </>
+            )}
+            {projection.pendingTx > 0 && (
+              <>
+                {" "}A pagar na conta:{" "}
+                <span style={{ fontWeight: 600, color: "var(--text-2)" }}>R$ {fmt(projection.pendingTx)}</span>.
+              </>
+            )}
+            {" "}Receita do mês:{" "}
+            <span style={{ color: "var(--green)", fontWeight: 600 }}>R$ {fmt(projection.income)}</span>.
           </p>
           {projection.danger && (
             <div style={{
@@ -394,7 +492,7 @@ export default function Relatorios() {
             }}>
               <AlertTriangle size={16} strokeWidth={1.5} color="var(--red)" />
               <p style={{ fontSize: "12.5px", color: "var(--red)", fontWeight: 600, lineHeight: 1.4 }}>
-                Você pode fechar o mês no negativo.
+                O gasto do mês está acima da receita.
               </p>
             </div>
           )}
@@ -418,12 +516,57 @@ export default function Relatorios() {
         </div>
       </div>
 
-      {/* ── SEÇÃO 4: Categorias (donut + lista com variação) ────────────── */}
+      {/* ── SEÇÃO 4: Mapa de calor — gastos por dia ─────────────────────── */}
+      <div className="card fade-up-5" style={{ padding: "16px 18px", marginBottom: "16px" }}>
+        <p style={{ fontSize: "10px", fontWeight: 700, color: "var(--text-3)", letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: "14px" }}>
+          Gastos por dia
+        </p>
+        <SpendingHeatmapCalendar
+          month={selectedMonth}
+          transactions={state.transactions}
+          installments={state.installments}
+          purchases={state.purchases}
+        />
+      </div>
+
+      {/* ── SEÇÃO 5: Categorias (donut + lista com variação) ────────────── */}
       <div className="card fade-up-5" style={{ overflow: "hidden", marginBottom: "16px" }}>
         <div style={{ padding: "14px 18px", borderBottom: "1px solid var(--border)" }}>
-          <p style={{ fontSize: "10px", fontWeight: 700, color: "var(--text-3)", letterSpacing: "0.07em", textTransform: "uppercase" }}>
+          <p style={{ fontSize: "10px", fontWeight: 700, color: "var(--text-3)", letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: "12px" }}>
             Gastos por categoria
           </p>
+          <div style={{
+            display: "flex", gap: "6px",
+            padding: "3px", background: "rgba(255,255,255,0.04)",
+            borderRadius: "10px", border: "1px solid var(--border)",
+          }}>
+            {([
+              { id: "invoice" as const, label: "Por fatura" },
+              { id: "consumption" as const, label: "Gasto real" },
+            ]).map(opt => (
+              <button
+                key={opt.id}
+                type="button"
+                onClick={() => setCategoryView(opt.id)}
+                style={{
+                  flex: 1, padding: "8px 6px", borderRadius: "8px",
+                  border: categoryView === opt.id ? "1px solid var(--border-accent)" : "1px solid transparent",
+                  fontSize: "11.5px", fontWeight: 700, fontFamily: "inherit",
+                  cursor: "pointer", touchAction: "manipulation",
+                  background: categoryView === opt.id ? "var(--accent-10)" : "transparent",
+                  color: categoryView === opt.id ? "var(--accent)" : "var(--text-3)",
+                }}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+          {categoryView === "consumption" && (
+            <p style={{ fontSize: "11px", color: "var(--text-3)", marginTop: "10px", lineHeight: 1.4 }}>
+              Data da compra no cartão, mesmo que a fatura seja outro mês. Parcelado conta só a parcela do mês.
+              PIX/dinheiro usam a data de competência.
+            </p>
+          )}
         </div>
 
         {donutSegments.length === 0 ? (
@@ -439,17 +582,49 @@ export default function Relatorios() {
                 segments={donutSegments}
                 totalLabel="Total"
                 total={`R$ ${fmtShort(donutTotal)}`}
+                activeSegment={selectedSlice?.name ?? null}
+                onSegmentClick={seg => {
+                  if (!seg) {
+                    setSelectedCategoryId(null);
+                    return;
+                  }
+                  const slice = catSlices.find(s => s.name === seg.name);
+                  if (slice) toggleCategory(slice.catId);
+                }}
               />
             </div>
 
             <div style={{ padding: "4px 18px 18px", display: "flex", flexDirection: "column", gap: "10px" }}>
-              {catRows.map(row => (
-                <div key={row.id}>
+              {catRows.map(row => {
+                const active = selectedCategoryId === row.id;
+                return (
+                <div
+                  key={row.id}
+                  onClick={() => toggleCategory(row.id)}
+                  style={{
+                    cursor: "pointer",
+                    padding: "6px 8px",
+                    margin: "0 -8px",
+                    borderRadius: "10px",
+                    background: active ? `${row.color}14` : "transparent",
+                    border: `1px solid ${active ? `${row.color}35` : "transparent"}`,
+                    transition: "all 0.15s",
+                  }}
+                >
                   <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "6px" }}>
                     {row.icon
                       ? <CategoryIcon icon={row.icon} color={row.color} size={16} />
                       : <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: row.color }} />}
-                    <span style={{ fontSize: "13px", color: "var(--text-1)", fontWeight: 600, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    <span style={{
+                      fontSize: "13px",
+                      color: active ? "var(--text-1)" : "var(--text-1)",
+                      fontWeight: active ? 700 : 600,
+                      flex: 1,
+                      minWidth: 0,
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}>
                       {row.name}
                     </span>
                     <VariationBadge variation={row.variation} />
@@ -461,13 +636,21 @@ export default function Relatorios() {
                     <div className="progress-bar-fill" style={{ width: `${Math.min(row.pct, 100)}%`, background: row.color }} />
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
+
+            {selectedSlice && (
+              <CategoryExpenseDetailPanel
+                slice={selectedSlice}
+                onClose={() => setSelectedCategoryId(null)}
+              />
+            )}
           </>
         )}
       </div>
 
-      {/* ── SEÇÃO 5: Orçamentos (só se houver) ──────────────────────────── */}
+      {/* ── SEÇÃO 6: Orçamentos (só se houver) ──────────────────────────── */}
       {budgetsThisMonth.length > 0 && (
         <div className="card fade-up-5" style={{ overflow: "hidden", marginBottom: "16px" }}>
           <div style={{ padding: "14px 18px", borderBottom: "1px solid var(--border)" }}>
@@ -517,7 +700,7 @@ export default function Relatorios() {
         </div>
       )}
 
-      {/* ── SEÇÃO 6: Insights IA ────────────────────────────────────────── */}
+      {/* ── SEÇÃO 7: Insights IA ────────────────────────────────────────── */}
       <div className="card fade-up-5" style={{ padding: "16px 18px", marginBottom: "20px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "10px" }}>
           <Sparkles size={14} strokeWidth={1.5} color="var(--accent)" />

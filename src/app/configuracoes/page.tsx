@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { useApp } from "@/context/AppContext";
 import CategoryIcon from "@/components/CategoryIcon";
 import { Landmark, BarChart2, TrendingUp, ArrowUpDown, CreditCard, Target, RefreshCw } from "lucide-react";
+import NotificationSettingsCard from "@/components/NotificationSettingsCard";
+import { exportAnalysisExcel } from "@/lib/export/buildAnalysisWorkbook";
 
 export default function Configuracoes() {
   const { state, dispatch, user, signOut, syncNow, syncState, lastSyncedAt, lastSyncError } = useApp();
@@ -190,6 +192,8 @@ export default function Configuracoes() {
         </div>
       </div>
 
+      <NotificationSettingsCard />
+
       {/* Dados */}
       <div className="card fade-up-3" style={{ overflow: "hidden", marginBottom: "14px" }}>
         <div style={{ padding: "13px 16px", borderBottom: "1px solid var(--border)" }}>
@@ -231,6 +235,27 @@ export default function Configuracoes() {
           >
             Exportar dados (JSON)
           </button>
+          <button
+            className="btn-secondary"
+            onClick={() =>
+              exportAnalysisExcel({
+                accounts: state.accounts,
+                transactions: state.transactions,
+                categories: state.categories,
+                budgets: state.budgets,
+                cards: state.cards,
+                purchases: state.purchases,
+                installments: state.installments,
+                goals: state.goals,
+              })
+            }
+            style={{ width: "100%", textAlign: "center", justifyContent: "center", marginTop: "8px" }}
+          >
+            Exportar análise (Excel)
+          </button>
+          <p style={{ fontSize: "11px", color: "var(--text-3)", marginTop: "8px", lineHeight: 1.4 }}>
+            Excel: um arquivo com resumo, categorias, lançamentos, cartões e previstos.
+          </p>
 
           {/* Sincronização manual + status */}
           <div style={{ marginTop: "12px" }}>

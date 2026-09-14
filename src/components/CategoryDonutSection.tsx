@@ -12,6 +12,8 @@ export interface CatItem {
   date: string;           // YYYY-MM-DD
   amount: number;
   isCard: boolean;
+  cardName?: string;
+  cardColor?: string;
   installmentLabel?: string; // "2/12" para parceladas
 }
 
@@ -31,6 +33,7 @@ export function buildCatSlices(
   installments: CardInstallment[],
   purchases: CardPurchase[],
   categories: { id: string; name: string; color: string }[],
+  cards: { id: string; name: string; color: string }[],
   month: string,
 ): CatSlice[] {
   const map: Record<string, CatSlice> = {};
@@ -77,6 +80,7 @@ export function buildCatSlices(
     .forEach(i => {
       const purchase = purchases.find(p => p.id === i.purchaseId);
       if (!purchase) return;
+      const card = cards.find(c => c.id === i.cardId);
       const slice = ensure(purchase.categoryId || "__none__");
       slice.totalAmount += i.amount;
       slice.items.push({
@@ -85,6 +89,8 @@ export function buildCatSlices(
         date: purchase.purchaseDate,
         amount: i.amount,
         isCard: true,
+        cardName: card?.name,
+        cardColor: card?.color,
         installmentLabel: i.totalInstallments > 1
           ? `${i.installmentNumber}/${i.totalInstallments}`
           : undefined,
@@ -107,6 +113,114 @@ function fmtDate(d: string) {
   const parts = d.split("-");
   if (parts.length < 3) return d;
   return `${parts[2]}/${parts[1]}`;
+}
+
+// ─── Painel de detalhe (reutilizado em Relatórios) ───────────────────────────
+
+export function CategoryExpenseDetailPanel({
+  slice,
+  onClose,
+}: {
+  slice: CatSlice;
+  onClose: () => void;
+}) {
+  const sorted = [...slice.items].sort((a, b) => b.date.localeCompare(a.date));
+
+  return (
+    <div style={{ borderTop: "1px solid var(--border)", background: "rgba(255,255,255,0.012)" }}>
+      <div style={{
+        padding: "10px 18px",
+        borderBottom: "1px solid var(--border)",
+        display: "flex", alignItems: "center", gap: "10px",
+      }}>
+        <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: slice.color, flexShrink: 0 }} />
+        <span style={{ fontSize: "13px", fontWeight: 700, color: "var(--text-1)", flex: 1 }}>
+          {slice.name}
+        </span>
+        <span className="mono" style={{ fontSize: "12px", fontWeight: 700, color: "var(--text-2)", marginRight: "4px" }}>
+          R$ {fmt(slice.totalAmount)}
+        </span>
+        <button
+          onClick={onClose}
+          style={{
+            background: "none", border: "1px solid var(--border)",
+            borderRadius: "6px", color: "var(--text-3)",
+            cursor: "pointer", padding: "4px",
+            display: "flex", alignItems: "center", touchAction: "manipulation",
+          }}
+        >
+          <X size={13} strokeWidth={1.5} />
+        </button>
+      </div>
+
+      {sorted.length === 0 ? (
+        <div style={{ padding: "16px 18px" }}>
+          <p style={{ fontSize: "12px", color: "var(--text-3)" }}>Nenhum item.</p>
+        </div>
+      ) : sorted.map((item, j) => {
+        const accent = item.cardColor ?? "#FFB830";
+        return (
+          <div
+            key={item.id}
+            style={{
+              display: "flex", alignItems: "center", gap: "12px",
+              padding: "11px 18px",
+              borderBottom: j < sorted.length - 1 ? "1px solid var(--border)" : "none",
+            }}
+          >
+            {item.isCard && (
+              <div style={{
+                width: "30px", height: "30px", borderRadius: "8px", flexShrink: 0,
+                background: `${accent}22`,
+                border: `1px solid ${accent}44`,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                color: accent,
+              }}>
+                <CreditCardIcon size={13} strokeWidth={1.5} />
+              </div>
+            )}
+
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <p style={{
+                fontSize: "13px", fontWeight: 500, color: "var(--text-1)",
+                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+              }}>
+                {item.description}
+              </p>
+              <div style={{ display: "flex", alignItems: "center", gap: "6px", marginTop: "2px" }}>
+                <span style={{ fontSize: "11px", color: "var(--text-3)", flexShrink: 0 }}>
+                  {fmtDate(item.date)}
+                </span>
+                {item.isCard && (
+                  <span style={{
+                    fontSize: "9px", fontWeight: 700,
+                    padding: "1px 5px", borderRadius: "4px",
+                    background: `${accent}18`,
+                    color: accent, border: `1px solid ${accent}40`,
+                    letterSpacing: "0.04em",
+                    maxWidth: "140px",
+                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                  }}>
+                    {item.cardName
+                      ? item.installmentLabel
+                        ? `${item.cardName} · ${item.installmentLabel}`
+                        : item.cardName
+                      : item.installmentLabel
+                        ? `PARCELA ${item.installmentLabel}`
+                        : "CARTÃO"}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <p className="mono" style={{ fontSize: "13px", fontWeight: 700, color: "var(--text-1)", flexShrink: 0 }}>
+              R$ {fmt(item.amount)}
+            </p>
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 // ─── Componente ──────────────────────────────────────────────────────────────
@@ -247,92 +361,7 @@ export function CategoryDonutSection({
         </div>
       </div>
 
-      {/* ── Painel de detalhe ── */}
-      {sel && (
-        <div style={{ borderTop: "1px solid var(--border)", background: "rgba(255,255,255,0.012)" }}>
-
-          {/* Cabeçalho do detalhe */}
-          <div style={{
-            padding: "10px 18px",
-            borderBottom: "1px solid var(--border)",
-            display: "flex", alignItems: "center", gap: "10px",
-          }}>
-            <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: sel.color, flexShrink: 0 }} />
-            <span style={{ fontSize: "13px", fontWeight: 700, color: "var(--text-1)", flex: 1 }}>
-              {sel.name}
-            </span>
-            <span className="mono" style={{ fontSize: "12px", fontWeight: 700, color: "var(--text-2)", marginRight: "4px" }}>
-              R$ {fmt(sel.totalAmount)}
-            </span>
-            <button
-              onClick={() => setSelectedCat(null)}
-              style={{
-                background: "none", border: "1px solid var(--border)",
-                borderRadius: "6px", color: "var(--text-3)",
-                cursor: "pointer", padding: "4px",
-                display: "flex", alignItems: "center", touchAction: "manipulation",
-              }}
-            >
-              <X size={13} strokeWidth={1.5} />
-            </button>
-          </div>
-
-          {/* Linhas */}
-          {sel.items.length === 0 ? (
-            <div style={{ padding: "16px 18px" }}>
-              <p style={{ fontSize: "12px", color: "var(--text-3)" }}>Nenhum item.</p>
-            </div>
-          ) : [...sel.items]
-              .sort((a, b) => b.date.localeCompare(a.date))
-              .map((item, j) => (
-            <div
-              key={item.id}
-              style={{
-                display: "flex", alignItems: "center", gap: "12px",
-                padding: "11px 18px",
-                borderBottom: j < sel.items.length - 1 ? "1px solid var(--border)" : "none",
-              }}
-            >
-              {item.isCard && (
-                <div style={{
-                  width: "30px", height: "30px", borderRadius: "8px", flexShrink: 0,
-                  background: "rgba(255,184,48,0.1)", border: "1px solid var(--amber-20)",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                }}>
-                  <CreditCardIcon size={13} strokeWidth={1.5} color="var(--amber)" />
-                </div>
-              )}
-
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <p style={{
-                  fontSize: "13px", fontWeight: 500, color: "var(--text-1)",
-                  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                }}>
-                  {item.description}
-                </p>
-                <div style={{ display: "flex", alignItems: "center", gap: "6px", marginTop: "2px" }}>
-                  <span style={{ fontSize: "11px", color: "var(--text-3)" }}>{fmtDate(item.date)}</span>
-                  {item.isCard && (
-                    <span style={{
-                      fontSize: "9px", fontWeight: 700,
-                      padding: "1px 5px", borderRadius: "4px",
-                      background: "rgba(255,184,48,0.1)",
-                      color: "var(--amber)", border: "1px solid var(--amber-20)",
-                      letterSpacing: "0.04em",
-                    }}>
-                      {item.installmentLabel ? `PARCELA ${item.installmentLabel}` : "CARTÃO"}
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              <p className="mono" style={{ fontSize: "13px", fontWeight: 700, color: "var(--text-1)", flexShrink: 0 }}>
-                R$ {fmt(item.amount)}
-              </p>
-            </div>
-          ))}
-        </div>
-      )}
+      {sel && <CategoryExpenseDetailPanel slice={sel} onClose={() => setSelectedCat(null)} />}
     </>
   );
 }

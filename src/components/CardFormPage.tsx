@@ -192,13 +192,19 @@ export default function CardFormPage({ card }: Props) {
 
         <div className="form-group" style={{ marginBottom: 0 }}>
           <label className="form-label">Cor do cartão</label>
-          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+          <div style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fill, minmax(34px, 1fr))",
+            gap: "8px",
+            maxWidth: "320px",
+          }}>
             {CARD_COLORS.map(c => (
               <button
                 key={c}
                 onClick={() => setColor(c)}
                 style={{
-                  width: "36px", height: "36px", borderRadius: "10px",
+                  width: "100%", aspectRatio: "1", maxWidth: "40px",
+                  borderRadius: "10px",
                   background: c, border: "none", cursor: "pointer",
                   outline: color === c ? "3px solid white" : "none",
                   outlineOffset: "2px", transition: "outline 0.15s",

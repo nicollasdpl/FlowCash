@@ -1,9 +1,11 @@
 "use client";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
+import { usePathname } from "next/navigation";
 import { useApp } from "@/context/AppContext";
 import Sidebar from "./Sidebar";
 import BottomNav from "./BottomNav";
 import AIAssistant from "./AIAssistant";
+import NotificationRunner from "./NotificationRunner";
 import LoginScreen from "./LoginScreen";
 import { Wallet } from "lucide-react";
 
@@ -30,6 +32,13 @@ function LoadingScreen() {
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const { user, authLoading } = useApp();
+  const pathname = usePathname();
+  const mainRef = useRef<HTMLElement>(null);
+
+  // Reseta scroll ao trocar de rota — evita header/voltar fora da tela.
+  useEffect(() => {
+    mainRef.current?.scrollTo(0, 0);
+  }, [pathname]);
 
   useEffect(() => {
     const vv = window.visualViewport;
@@ -43,11 +52,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       root.style.setProperty("--vv-top", `${t}px`);
     }
     update();
+    // Só resize (teclado); scroll do visualViewport no iOS quebra cliques após overscroll.
     vv.addEventListener("resize", update);
-    vv.addEventListener("scroll", update);
     return () => {
       vv.removeEventListener("resize", update);
-      vv.removeEventListener("scroll", update);
     };
   }, []);
 
@@ -63,11 +71,15 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       flex: 1,
     }}>
       <Sidebar />
-      <main style={{ flex: 1, overflowY: "auto", background: "var(--bg)", minWidth: 0 }}>
+      <main
+        ref={mainRef}
+        style={{ flex: 1, overflowY: "auto", background: "var(--bg)", minWidth: 0, minHeight: 0 }}
+      >
         {children}
       </main>
       <BottomNav />
       <AIAssistant />
+      <NotificationRunner />
     </div>
   );
 }

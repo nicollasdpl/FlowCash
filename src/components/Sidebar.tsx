@@ -112,31 +112,18 @@ export default function Sidebar() {
           borderBottom: "1px solid var(--border)",
         }}
       >
-        <div
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/icon-192.png"
+          alt="FlowCash"
+          width={36}
+          height={36}
           style={{
-            background: "var(--accent)",
             borderRadius: "10px",
-            width: "36px",
-            height: "36px",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
             flexShrink: 0,
             boxShadow: "0 0 20px rgba(0, 229, 195, 0.3)",
           }}
-        >
-          <span
-            className="mono"
-            style={{
-              color: "#060C16",
-              fontWeight: 700,
-              fontSize: "13px",
-              letterSpacing: "-0.02em",
-            }}
-          >
-            FC
-          </span>
-        </div>
+        />
         <div>
           <div
             style={{

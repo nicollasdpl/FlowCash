@@ -2,21 +2,29 @@
 import { useState, useMemo, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import TransactionDrawer from "@/components/TransactionDrawer";
 import { useApp } from "@/context/AppContext";
 import type { Transaction } from "@/context/AppContext";
 import {
   getCurrentBalance, getProjectedBalance,
   currentMonth, addMonths, fmt, today,
+  isBalanceNegative, isBalancePositive, projectionHorizon,
 } from "@/engine/financialEngine";
 import { computeInvoice } from "@/engine/invoiceEngine";
 import { getSpentByCategory } from "@/engine/budgetEngine";
 import {
   AlertTriangle, CreditCard, Wallet, TrendingUp, Package, RefreshCw,
-  ArrowDown, ArrowUp, ChevronDown, ChevronUp,
+  ArrowDown, ArrowUp, ChevronDown, ChevronUp, Plus,
 } from "lucide-react";
 import CategoryIcon from "@/components/CategoryIcon";
+import { CopilotFab } from "@/components/CopilotFab";
+import { FabStack } from "@/components/FabStack";
 import { CategoryDonutSection, buildCatSlices } from "@/components/CategoryDonutSection";
+import { buildConsumptionCatSlices } from "@/app/relatorios/consumptionByCategory";
+import {
+  AccountScopePicker,
+  ALL_ACCOUNTS_SCOPE,
+  useAccountScope,
+} from "@/components/AccountScopePicker";
 
 const MONTH_NAMES = [
   "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
@@ -52,12 +60,6 @@ function greeting() {
   return "Boa noite";
 }
 
-function endOfMonth(yyyymm: string) {
-  const [y, m] = yyyymm.split("-").map(Number);
-  const last = new Date(y, m, 0);
-  return `${yyyymm}-${String(last.getDate()).padStart(2, "0")}`;
-}
-
 function getStatusLabel(type: string, status: string): string {
   if (status === "paid") return type === "income" ? "Recebido" : "Pago";
   if (status === "pending") return type === "income" ? "A receber" : "A pagar";
@@ -84,19 +86,33 @@ function StatusBadge({ status, type }: { status: Transaction["status"]; type: Tr
 export default function Dashboard() {
   const router = useRouter();
   const { state, dispatch } = useApp();
-  const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
   const [selectedMonth, setSelectedMonth] = useState(currentMonth());
   const [pendingExpanded, setPendingExpanded] = useState(false);
+  const [categoryView, setCategoryView] = useState<"invoice" | "consumption">("invoice");
+  const [accountScope, setAccountScope, accountScopeReady] = useAccountScope(state.accounts);
+
+  function openTransaction(tx: Transaction) {
+    router.push(`/transacoes/${tx.id}/editar`);
+  }
 
   const touchStartX = useRef<number>(0);
   const touchStartY = useRef<number>(0);
+  const touchScrolled = useRef(false);
 
   function handleTouchStart(e: React.TouchEvent) {
     touchStartX.current = e.touches[0].clientX;
     touchStartY.current = e.touches[0].clientY;
+    touchScrolled.current = false;
+  }
+
+  function handleTouchMove(e: React.TouchEvent) {
+    if (Math.abs(e.touches[0].clientY - touchStartY.current) > 8) {
+      touchScrolled.current = true;
+    }
   }
 
   function handleTouchEnd(e: React.TouchEvent) {
+    if (touchScrolled.current) return;
     const dx = touchStartX.current - e.changedTouches[0].clientX;
     const dy = Math.abs(touchStartY.current - e.changedTouches[0].clientY);
     if (Math.abs(dx) > 60 && Math.abs(dx) > dy * 1.5) {
@@ -106,39 +122,110 @@ export default function Dashboard() {
   }
 
   const todayStr = today();
-  const eom = endOfMonth(selectedMonth);
+  const projectionDate = projectionHorizon(selectedMonth);
   const isCurrentMonth = selectedMonth === currentMonth();
 
+  const activeAccounts = useMemo(
+    () => state.accounts.filter(a => a.active),
+    [state.accounts]
+  );
+
+  const scopedAccounts = useMemo(
+    () => accountScope === ALL_ACCOUNTS_SCOPE
+      ? activeAccounts
+      : activeAccounts.filter(a => a.id === accountScope),
+    [activeAccounts, accountScope]
+  );
+
+  const scopedAccountIds = useMemo(
+    () => new Set(scopedAccounts.map(a => a.id)),
+    [scopedAccounts]
+  );
+
+  const accountBalances = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const a of activeAccounts) {
+      map[a.id] = getCurrentBalance(a, state.transactions);
+    }
+    return map;
+  }, [activeAccounts, state.transactions]);
+
+  const inScopeTx = (t: Transaction) =>
+    accountScope === ALL_ACCOUNTS_SCOPE
+    || scopedAccountIds.has(t.accountId)
+    || (t.transferToAccountId ? scopedAccountIds.has(t.transferToAccountId) : false);
+
   const totalBalance = useMemo(() =>
-    state.accounts.filter(a => a.active).reduce((s, a) => s + getCurrentBalance(a, state.transactions), 0),
-    [state.accounts, state.transactions]
+    scopedAccounts.reduce((s, a) => s + (accountBalances[a.id] ?? 0), 0),
+    [scopedAccounts, accountBalances]
   );
 
   const totalProjected = useMemo(() =>
-    state.accounts.filter(a => a.active).reduce((s, a) => s + getProjectedBalance(a, state.transactions, eom, state.cards, state.installments), 0),
-    [state.accounts, state.transactions, state.cards, state.installments, eom]
+    scopedAccounts.reduce((s, a) => s + getProjectedBalance(a, state.transactions, projectionDate, state.cards, state.installments), 0),
+    [scopedAccounts, state.transactions, state.cards, state.installments, projectionDate]
+  );
+
+  const scopedCards = useMemo(
+    () => accountScope === ALL_ACCOUNTS_SCOPE
+      ? state.cards.filter(c => c.active)
+      : state.cards.filter(c => c.active && scopedAccountIds.has(c.paymentAccountId)),
+    [state.cards, accountScope, scopedAccountIds]
+  );
+
+  const scopedCardIds = useMemo(() => new Set(scopedCards.map(c => c.id)), [scopedCards]);
+
+  const scopedInstallments = useMemo(
+    () => accountScope === ALL_ACCOUNTS_SCOPE
+      ? state.installments
+      : state.installments.filter(i => scopedCardIds.has(i.cardId)),
+    [state.installments, accountScope, scopedCardIds]
+  );
+
+  const scopedPurchases = useMemo(
+    () => accountScope === ALL_ACCOUNTS_SCOPE
+      ? state.purchases
+      : state.purchases.filter(p => scopedCardIds.has(p.cardId)),
+    [state.purchases, accountScope, scopedCardIds]
   );
 
   const monthTxs = useMemo(() =>
-    state.transactions.filter(t => t.paymentDate.startsWith(selectedMonth)),
-    [state.transactions, selectedMonth]
+    state.transactions.filter(t => t.paymentDate.startsWith(selectedMonth) && inScopeTx(t)),
+    [state.transactions, selectedMonth, accountScope, scopedAccountIds]
+  );
+
+  // Categorias que não contam nos relatórios (ex.: Empréstimo). O dinheiro
+  // ainda entra no saldo, mas não infla "Receitas".
+  const excludedReportCatIds = useMemo(
+    () => new Set(state.categories.filter(c => c.excludeFromReports).map(c => c.id)),
+    [state.categories]
   );
 
   // Receita por CAIXA (estilo Mobills): só conta quando entrou de fato
-  // (status "paid" + paymentDate no mês).
+  // (status "paid" + paymentDate no mês). Empréstimo não conta como receita.
   const monthIncome = useMemo(() =>
     state.transactions
-      .filter(t => t.type === "income" && t.status === "paid" && t.paymentDate.startsWith(selectedMonth))
+      .filter(t =>
+        t.type === "income" &&
+        t.status === "paid" &&
+        t.paymentDate.startsWith(selectedMonth) &&
+        !excludedReportCatIds.has(t.categoryId) &&
+        inScopeTx(t)
+      )
       .reduce((s, t) => s + t.amount, 0),
-    [state.transactions, selectedMonth]
+    [state.transactions, selectedMonth, excludedReportCatIds, accountScope, scopedAccountIds]
   );
   // Despesa = MESMA base do donut: getSpentByCategory (competência + parcelas de
   // cartão, exclui "Pagamento de Fatura"). Assim "Despesas" bate com o Total do relatório.
   const monthExpense = useMemo(() =>
     Object.values(
-      getSpentByCategory(selectedMonth, state.transactions, state.installments, state.purchases)
+      getSpentByCategory(
+        selectedMonth,
+        state.transactions.filter(t => accountScope === ALL_ACCOUNTS_SCOPE || scopedAccountIds.has(t.accountId)),
+        scopedInstallments,
+        scopedPurchases,
+      )
     ).reduce((s, v) => s + v, 0),
-    [selectedMonth, state.transactions, state.installments, state.purchases]
+    [selectedMonth, state.transactions, scopedInstallments, scopedPurchases, accountScope, scopedAccountIds]
   );
   const monthBalance = monthIncome - monthExpense;
 
@@ -148,10 +235,11 @@ export default function Dashboard() {
       .filter(t =>
         t.status !== "paid" &&
         t.paymentDate < todayStr &&
-        t.paymentDate.startsWith(selectedMonth)
+        t.paymentDate.startsWith(selectedMonth) &&
+        inScopeTx(t)
       )
       .sort((a, b) => a.paymentDate.localeCompare(b.paymentDate)),
-    [state.transactions, todayStr, selectedMonth]
+    [state.transactions, todayStr, selectedMonth, accountScope, scopedAccountIds]
   );
 
   // Pendentes: status=pending, data futura/hoje, mês selecionado (inside collapsible)
@@ -160,10 +248,11 @@ export default function Dashboard() {
       .filter(t =>
         t.status === "pending" &&
         t.paymentDate >= todayStr &&
-        t.paymentDate.startsWith(selectedMonth)
+        t.paymentDate.startsWith(selectedMonth) &&
+        inScopeTx(t)
       )
       .sort((a, b) => a.paymentDate.localeCompare(b.paymentDate)),
-    [state.transactions, todayStr, selectedMonth]
+    [state.transactions, todayStr, selectedMonth, accountScope, scopedAccountIds]
   );
 
   const expensePending = useMemo(() => pendingTxs.filter(t => t.type === "expense"), [pendingTxs]);
@@ -175,7 +264,7 @@ export default function Dashboard() {
   //   1) Fatura cujo VENCIMENTO cai no selectedMonth (se houver) — open→"open", closed/overdue→"due"; paga não entra.
   //   2) Senão: fatura "open" (ciclo corrente) — PRIORIDADE — OU "overdue" de mês anterior.
   const cardInvoices = useMemo(() => {
-    return state.cards.filter(c => c.active).flatMap(card => {
+    return scopedCards.flatMap(card => {
       const months = [...new Set(
         state.installments
           .filter(i => i.cardId === card.id)
@@ -200,18 +289,28 @@ export default function Dashboard() {
         ? [{ card, invoice: chosen, kind: (chosen.status === "open" ? "open" : "due") as "due" | "open" }]
         : [];
     });
-  }, [state.cards, state.installments, selectedMonth]);
+  }, [scopedCards, state.installments, selectedMonth]);
 
   // Donut: despesas pagas + parcelas do mês selecionado
   const catSlices = useMemo(() =>
-    buildCatSlices(
-      state.transactions,
-      state.installments,
-      state.purchases,
-      state.categories,
-      selectedMonth,
-    ),
-    [state.transactions, state.installments, state.purchases, state.categories, selectedMonth]
+    categoryView === "invoice"
+      ? buildCatSlices(
+          state.transactions.filter(t => accountScope === ALL_ACCOUNTS_SCOPE || scopedAccountIds.has(t.accountId)),
+          scopedInstallments,
+          scopedPurchases,
+          state.categories,
+          scopedCards,
+          selectedMonth,
+        )
+      : buildConsumptionCatSlices(
+          selectedMonth,
+          state.transactions.filter(t => accountScope === ALL_ACCOUNTS_SCOPE || scopedAccountIds.has(t.accountId)),
+          scopedInstallments,
+          scopedPurchases,
+          state.categories,
+          scopedCards,
+        ),
+    [categoryView, state.transactions, scopedInstallments, scopedPurchases, state.categories, scopedCards, selectedMonth, accountScope, scopedAccountIds]
   );
 
   // Máximo 3 lançamentos recentes
@@ -224,18 +323,6 @@ export default function Dashboard() {
 
   function payNow(tx: Transaction) {
     dispatch({ type: "UPD_TX", payload: { ...tx, status: "paid", paymentDate: todayStr } });
-  }
-
-  function handleStatusChange(id: string, status: Transaction["status"]) {
-    const tx = state.transactions.find(t => t.id === id);
-    if (!tx) return;
-    dispatch({ type: "UPD_TX", payload: { ...tx, status } });
-    setSelectedTx(prev => prev?.id === id ? { ...prev, status } : prev);
-  }
-
-  function handleDelete(id: string) {
-    dispatch({ type: "DEL_TX", payload: id });
-    setSelectedTx(null);
   }
 
   const name = (state.userName?.trim() || "").split(" ")[0];
@@ -253,7 +340,7 @@ export default function Dashboard() {
         }}
       >
         <div
-          onClick={() => setSelectedTx(tx)}
+          onClick={() => openTransaction(tx)}
           style={{
             width: "36px", height: "36px", borderRadius: "10px", flexShrink: 0,
             background: cat ? `${cat.color}18` : "rgba(255,255,255,0.06)",
@@ -267,7 +354,7 @@ export default function Dashboard() {
         </div>
 
         <div
-          onClick={() => setSelectedTx(tx)}
+          onClick={() => openTransaction(tx)}
           style={{ flex: 1, minWidth: 0, overflow: "hidden", cursor: "pointer" }}
         >
           <p style={{
@@ -309,48 +396,30 @@ export default function Dashboard() {
 
   return (
     <>
-      <TransactionDrawer
-        tx={selectedTx}
-        categories={state.categories}
-        onClose={() => setSelectedTx(null)}
-        onStatusChange={handleStatusChange}
-        onDelete={handleDelete}
-        onEdit={tx => { setSelectedTx(null); router.push(`/transacoes/${tx.id}/editar`); }}
-      />
-
       <div
-        style={{ padding: "16px", maxWidth: "680px", margin: "0 auto" }}
+        style={{
+          padding: "16px",
+          paddingBottom: "calc(var(--fab-bottom) + var(--fab-stack-h-dual) + 16px)",
+          maxWidth: "680px",
+          margin: "0 auto",
+        }}
         onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
       >
 
         {/* ── 1. Saudação + data ── */}
-        <div className="fade-up-1" style={{
-          display: "flex", justifyContent: "space-between",
-          alignItems: "center", marginBottom: "16px",
-        }}>
-          <div style={{ minWidth: 0, flex: 1, paddingRight: "12px" }}>
-            <p style={{
-              fontSize: "18px", fontWeight: 700, color: "var(--text-1)",
-              letterSpacing: "-0.02em", lineHeight: 1.2,
-              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-            }}>
-              {name ? `${greeting()}, ${name}` : greeting()}
-            </p>
-            <p style={{ fontSize: "11.5px", color: "var(--text-3)", marginTop: "3px" }}>
-              {new Date().toLocaleDateString("pt-BR", { weekday: "short", day: "numeric", month: "short" })}
-            </p>
-          </div>
-          <button
-            className="btn-primary"
-            onClick={() => router.push("/transacoes/nova")}
-            style={{
-              fontSize: "24px", padding: "0",
-              width: "44px", height: "44px",
-              borderRadius: "13px", flexShrink: 0,
-              display: "flex", alignItems: "center", justifyContent: "center",
-            }}
-          >+</button>
+        <div className="fade-up-1" style={{ marginBottom: "16px" }}>
+          <p style={{
+            fontSize: "18px", fontWeight: 700, color: "var(--text-1)",
+            letterSpacing: "-0.02em", lineHeight: 1.2,
+            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+          }}>
+            {name ? `${greeting()}, ${name}` : greeting()}
+          </p>
+          <p style={{ fontSize: "11.5px", color: "var(--text-3)", marginTop: "3px" }}>
+            {new Date().toLocaleDateString("pt-BR", { weekday: "short", day: "numeric", month: "short" })}
+          </p>
         </div>
 
         {/* ── 2. Navegação de mês ── */}
@@ -410,29 +479,69 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* ── 3. Saldo Real ── */}
+        {/* ── 3. Saldo por conta ── */}
         <div
           className="card fade-up-2"
-          onClick={() => router.push("/contas")}
           style={{
             padding: "20px", marginBottom: "12px",
             background: "linear-gradient(135deg, #0F1923 0%, #0D1E34 100%)",
             borderColor: "rgba(0,229,160,0.1)",
-            cursor: "pointer",
           }}
         >
-          <p style={{
-            fontSize: "10px", fontWeight: 700, color: "var(--text-3)",
-            letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "6px",
+          <div style={{
+            display: "flex", justifyContent: "space-between", alignItems: "center",
+            marginBottom: activeAccounts.length > 0 ? "10px" : "6px",
+            gap: "8px",
           }}>
-            Saldo Real
-          </p>
+            <p style={{
+              fontSize: "10px", fontWeight: 700, color: "var(--text-3)",
+              letterSpacing: "0.1em", textTransform: "uppercase",
+            }}>
+              {accountScope === ALL_ACCOUNTS_SCOPE
+                ? "Saldo total"
+                : `Saldo · ${scopedAccounts[0]?.name ?? "Conta"}`}
+            </p>
+            <button
+              type="button"
+              onClick={() => router.push("/contas")}
+              style={{
+                background: "none", border: "none", padding: 0,
+                fontSize: "11px", fontWeight: 600, color: "var(--accent)",
+                cursor: "pointer", fontFamily: "inherit",
+              }}
+            >
+              Contas →
+            </button>
+          </div>
+
+          {activeAccounts.length > 1 && (
+            <div style={{ marginBottom: "14px" }}>
+              <AccountScopePicker
+                accounts={activeAccounts}
+                balances={accountBalances}
+                scope={accountScope}
+                onChange={setAccountScope}
+              />
+            </div>
+          )}
+
           <p className="mono" style={{
             fontSize: "34px", fontWeight: 700, letterSpacing: "-0.03em",
-            color: totalBalance >= 0 ? "var(--text-1)" : "var(--red)",
+            color: isBalanceNegative(totalBalance) ? "var(--red)"
+              : isBalancePositive(totalBalance) ? "var(--green)" : "var(--text-1)",
             lineHeight: 1,
+            opacity: accountScopeReady ? 1 : 0.35,
           }}>
             R$ {fmt(totalBalance)}
+          </p>
+          <p style={{ fontSize: "11px", color: "var(--text-3)", marginTop: "6px" }}>
+            {!accountScopeReady
+              ? "Carregando contas…"
+              : accountScope === ALL_ACCOUNTS_SCOPE && activeAccounts.length > 1
+              ? "Soma de todas as contas — escolha uma acima para ver só ela"
+              : activeAccounts.length === 0
+              ? "Cadastre uma conta para ver o saldo"
+              : "Apenas transações pagas desta conta"}
           </p>
 
           {totalProjected !== totalBalance && (
@@ -444,7 +553,8 @@ export default function Dashboard() {
               <p style={{ fontSize: "11px", color: "var(--text-3)" }}>Projetado:</p>
               <p className="mono" style={{
                 fontSize: "15px", fontWeight: 700,
-                color: totalProjected >= 0 ? "var(--accent)" : "var(--red)",
+                color: isBalanceNegative(totalProjected) ? "var(--red)"
+                  : isBalancePositive(totalProjected) ? "var(--accent)" : "var(--text-2)",
               }}>
                 R$ {fmt(totalProjected)}
               </p>
@@ -458,9 +568,18 @@ export default function Dashboard() {
           gap: "8px", marginBottom: "14px",
         }}>
           {[
-            { label: "Receitas", value: monthIncome, color: "var(--green)", icon: "↑", href: "/transacoes?tipo=income" },
+            {
+              label: "Receitas",
+              value: monthIncome,
+              color: "var(--green)",
+              icon: "↑",
+              href: "/transacoes?tipo=income",
+              hint: totalIncomePending > 0
+                ? `+${totalIncomePending >= 1000 ? `${(totalIncomePending / 1000).toFixed(1)}k` : fmt(totalIncomePending)} a receber`
+                : undefined,
+            },
             { label: "Despesas", value: monthExpense, color: monthExpense > monthIncome ? "var(--red)" : "var(--text-1)", icon: "↓", href: "/transacoes?tipo=expense" },
-            { label: "Balanço", value: monthBalance, color: monthBalance >= 0 ? "var(--accent)" : "var(--red)", icon: monthBalance >= 0 ? "+" : "", prefix: true, href: null },
+            { label: "Balanço", value: monthBalance, color: isBalanceNegative(monthBalance) ? "var(--red)" : isBalancePositive(monthBalance) ? "var(--accent)" : "var(--text-2)", icon: isBalancePositive(monthBalance) ? "+" : "", prefix: true, href: null },
           ].map((m, i) => (
             <div
               key={i}
@@ -480,11 +599,20 @@ export default function Dashboard() {
                 fontSize: "13px", fontWeight: 700, color: m.color,
                 overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
               }}>
-                {m.prefix && m.value > 0 ? "+" : ""}
+                {m.prefix && isBalancePositive(m.value) ? "+" : ""}
                 {Math.abs(m.value) >= 1000
                   ? `${(m.value / 1000).toFixed(1)}k`
                   : fmt(m.value)}
               </p>
+              {"hint" in m && m.hint && (
+                <p style={{
+                  fontSize: "9px", fontWeight: 600, color: "var(--accent)",
+                  marginTop: "3px", lineHeight: 1.2,
+                  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                }}>
+                  {m.hint}
+                </p>
+              )}
             </div>
           ))}
         </div>
@@ -516,6 +644,8 @@ export default function Dashboard() {
             </div>
             {overduePending.map((tx, i) => {
               const cat = state.categories.find(c => c.id === tx.categoryId);
+              const isExpense = tx.type === "expense";
+              const accent = isExpense ? "var(--red)" : "var(--accent)";
               return (
                 <div
                   key={tx.id}
@@ -526,21 +656,21 @@ export default function Dashboard() {
                   }}
                 >
                   <div
-                    onClick={() => setSelectedTx(tx)}
+                    onClick={() => openTransaction(tx)}
                     style={{
                       width: "36px", height: "36px", borderRadius: "10px", flexShrink: 0,
-                      background: cat ? `${cat.color}18` : "rgba(255,77,106,0.1)",
+                      background: cat ? `${cat.color}18` : isExpense ? "rgba(255,77,106,0.1)" : "var(--accent-10)",
                       display: "flex", alignItems: "center", justifyContent: "center",
                       cursor: "pointer",
                     }}
                   >
                     {cat?.icon
                       ? <CategoryIcon icon={cat.icon} color={cat.color} size={15} />
-                      : <Package size={15} strokeWidth={1.5} color="var(--red)" />}
+                      : <Package size={15} strokeWidth={1.5} color={accent} />}
                   </div>
 
                   <div
-                    onClick={() => setSelectedTx(tx)}
+                    onClick={() => openTransaction(tx)}
                     style={{ flex: 1, minWidth: 0, overflow: "hidden", cursor: "pointer" }}
                   >
                     <p style={{
@@ -549,28 +679,28 @@ export default function Dashboard() {
                     }}>
                       {tx.description}
                     </p>
-                    <p style={{ fontSize: "11px", color: "var(--red)", marginTop: "2px" }}>
-                      Venceu {fmtDate(tx.paymentDate)}
+                    <p style={{ fontSize: "11px", color: accent, marginTop: "2px" }}>
+                      {isExpense ? "Venceu" : "Atrasado"} {fmtDate(tx.paymentDate)}
                     </p>
                   </div>
 
                   <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "6px", flexShrink: 0 }}>
-                    <p className="mono" style={{ fontSize: "13px", fontWeight: 700, color: "var(--red)" }}>
+                    <p className="mono" style={{ fontSize: "13px", fontWeight: 700, color: accent }}>
                       R$ {fmt(tx.amount)}
                     </p>
                     <button
                       onClick={() => payNow(tx)}
                       style={{
                         padding: "5px 10px", minHeight: "28px", minWidth: "60px",
-                        background: "rgba(255,77,106,0.12)",
-                        color: "var(--red)",
-                        border: "1px solid var(--red-20)",
+                        background: isExpense ? "rgba(255,77,106,0.12)" : "var(--accent-10)",
+                        color: accent,
+                        border: `1px solid ${isExpense ? "var(--red-20)" : "var(--border-accent)"}`,
                         borderRadius: "8px", fontSize: "11px", fontWeight: 700,
                         cursor: "pointer", fontFamily: "inherit",
                         touchAction: "manipulation",
                       }}
                     >
-                      Pagar
+                      {isExpense ? "Pagar" : "Receber"}
                     </button>
                   </div>
                 </div>
@@ -722,16 +852,17 @@ export default function Dashboard() {
             </div>
             {cardInvoices.map(({ card, invoice, kind }, i) => {
               const isDue = kind === "due";
-              const labelText   = isDue ? "A pagar" : "Em andamento";
-              const labelColor  = isDue ? (invoice.status === "overdue" ? "var(--red)" : "var(--amber)") : "var(--text-3)";
-              const labelBg     = isDue ? (invoice.status === "overdue" ? "var(--red-10)" : "var(--amber-10)") : "rgba(255,255,255,0.04)";
-              const labelBorder = isDue ? (invoice.status === "overdue" ? "var(--red-20)" : "var(--amber-20)") : "var(--border)";
+              const isOverdue = isDue && invoice.status === "overdue";
+              const labelText = isOverdue ? "Vencida" : isDue ? "A pagar" : "Aberta";
+              const labelColor  = isOverdue ? "var(--red)" : isDue ? "var(--amber)" : "var(--text-3)";
+              const labelBg     = isOverdue ? "var(--red-10)" : isDue ? "var(--amber-10)" : "rgba(255,255,255,0.04)";
+              const labelBorder = isOverdue ? "var(--red-20)" : isDue ? "var(--amber-20)" : "var(--border)";
               return (
                 <div
                   key={`${card.id}-${invoice.competenceMonth}`}
                   onClick={() => router.push(`/cartoes/${card.id}`)}
                   style={{
-                    display: "flex", alignItems: "center", gap: "12px",
+                    display: "flex", alignItems: "flex-start", gap: "12px",
                     padding: "13px 14px",
                     borderBottom: i < cardInvoices.length - 1 ? "1px solid var(--border)" : "none",
                     cursor: "pointer",
@@ -740,39 +871,50 @@ export default function Dashboard() {
                 >
                   <div style={{
                     width: "36px", height: "36px", borderRadius: "10px", flexShrink: 0,
-                    background: `${card.color}20`,
-                    border: `1px solid ${card.color}35`,
+                    background: `${card.color}22`,
+                    border: `1px solid ${card.color}44`,
                     display: "flex", alignItems: "center", justifyContent: "center",
+                    color: card.color,
                   }}>
-                    <CreditCard size={16} strokeWidth={1.5} color={card.color} />
+                    <CreditCard size={16} strokeWidth={1.5} />
                   </div>
-                  <div style={{ flex: 1, minWidth: 0, overflow: "hidden" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: "7px", minWidth: 0 }}>
-                      <p style={{
-                        fontSize: "13px", fontWeight: 600, color: "var(--text-1)",
-                        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                      }}>
-                        {card.name}
-                      </p>
-                      <span style={{
-                        flexShrink: 0,
-                        fontSize: "9.5px", fontWeight: 700, letterSpacing: "0.04em",
-                        textTransform: "uppercase", padding: "2px 6px", borderRadius: "5px",
-                        color: labelColor, background: labelBg, border: `1px solid ${labelBorder}`,
-                      }}>
-                        {labelText}
-                      </span>
-                    </div>
-                    <p style={{ fontSize: "11px", color: "var(--text-3)", marginTop: "2px" }}>
-                      {`Fatura ${fullMonthLabel(invoice.dueDate.substring(0, 7))} · Vence ${fmtDate(invoice.dueDate)}`}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{
+                      fontSize: "13px", fontWeight: 600, color: "var(--text-1)",
+                      lineHeight: 1.3,
+                      overflow: "hidden",
+                      display: "-webkit-box",
+                      WebkitLineClamp: 2,
+                      WebkitBoxOrient: "vertical",
+                    }}>
+                      {card.name}
+                    </p>
+                    <p style={{
+                      fontSize: "10.5px", color: "var(--text-3)",
+                      marginTop: "3px", lineHeight: 1.35,
+                    }}>
+                      Fecha {fmtDate(invoice.closingDate)} · Vence {fmtDate(invoice.dueDate)}
                     </p>
                   </div>
-                  <p className="mono" style={{
-                    fontSize: "14px", fontWeight: 700, flexShrink: 0,
-                    color: isDue && invoice.status === "overdue" ? "var(--red)" : "var(--text-1)",
+                  <div style={{
+                    display: "flex", flexDirection: "column",
+                    alignItems: "flex-end", gap: "4px", flexShrink: 0,
                   }}>
-                    R$ {fmt(invoice.totalAmount)}
-                  </p>
+                    <p className="mono" style={{
+                      fontSize: "14px", fontWeight: 700,
+                      color: isOverdue ? "var(--red)" : "var(--text-1)",
+                    }}>
+                      R$ {fmt(invoice.totalAmount)}
+                    </p>
+                    <span style={{
+                      fontSize: "8px", fontWeight: 700, letterSpacing: "0.03em",
+                      textTransform: "uppercase", padding: "1px 4px", borderRadius: "4px",
+                      color: labelColor, background: labelBg, border: `1px solid ${labelBorder}`,
+                      whiteSpace: "nowrap",
+                    }}>
+                      {labelText}
+                    </span>
+                  </div>
                 </div>
               );
             })}
@@ -780,13 +922,18 @@ export default function Dashboard() {
         )}
 
         {/* ── 8. Gastos por Categoria (donut) ── */}
-        {catSlices.length > 0 && (
-          <div className="card fade-up-5" style={{ overflow: "hidden", marginBottom: "12px" }}>
-            <div style={{
-              padding: "12px 14px 10px",
-              borderBottom: "1px solid var(--border)",
-              display: "flex", justifyContent: "space-between", alignItems: "center",
-            }}>
+        <div
+          className="card fade-up-5"
+          style={{ overflow: "hidden", marginBottom: "12px" }}
+          onTouchStart={e => e.stopPropagation()}
+          onTouchMove={e => e.stopPropagation()}
+          onTouchEnd={e => e.stopPropagation()}
+        >
+          <div style={{
+            padding: "12px 14px 10px",
+            borderBottom: "1px solid var(--border)",
+          }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
               <p style={{
                 fontSize: "11px", fontWeight: 700, color: "var(--text-3)",
                 letterSpacing: "0.07em", textTransform: "uppercase",
@@ -797,9 +944,48 @@ export default function Dashboard() {
                 Relatórios →
               </Link>
             </div>
-            <CategoryDonutSection key={selectedMonth} slices={catSlices} />
+            <div style={{
+              display: "flex", gap: "4px",
+              padding: "3px", background: "rgba(255,255,255,0.04)",
+              borderRadius: "10px", border: "1px solid var(--border)",
+            }}>
+              {([
+                { id: "invoice" as const, label: "Por fatura" },
+                { id: "consumption" as const, label: "Gasto real" },
+              ] as const).map(opt => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() => setCategoryView(opt.id)}
+                  style={{
+                    flex: 1, padding: "6px 6px", borderRadius: "8px",
+                    border: categoryView === opt.id ? "1px solid var(--border-accent)" : "1px solid transparent",
+                    fontSize: "11px", fontWeight: 700, fontFamily: "inherit",
+                    cursor: "pointer", touchAction: "manipulation",
+                    background: categoryView === opt.id ? "var(--accent-10)" : "transparent",
+                    color: categoryView === opt.id ? "var(--accent)" : "var(--text-3)",
+                  }}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+            {categoryView === "consumption" && (
+              <p style={{ fontSize: "11px", color: "var(--text-3)", marginTop: "10px", lineHeight: 1.4 }}>
+                Data da compra, mesmo que a fatura seja outro mês.
+              </p>
+            )}
           </div>
-        )}
+          <CategoryDonutSection
+            key={`${selectedMonth}-${categoryView}`}
+            slices={catSlices}
+            emptyMessage={
+              categoryView === "consumption"
+                ? `Sem gasto real em ${fullMonthLabel(selectedMonth)}`
+                : `Sem despesas na fatura de ${fullMonthLabel(selectedMonth)}`
+            }
+          />
+        </div>
 
         {/* ── 9. Lançamentos recentes (máx 3) ── */}
         <div className="card fade-up-6" style={{ overflow: "hidden", marginBottom: "16px" }}>
@@ -838,7 +1024,7 @@ export default function Dashboard() {
                 return (
                   <div
                     key={tx.id}
-                    onClick={() => setSelectedTx(tx)}
+                    onClick={() => openTransaction(tx)}
                     style={{
                       display: "flex", alignItems: "center", gap: "12px",
                       padding: "13px 14px",
@@ -915,6 +1101,19 @@ export default function Dashboard() {
         </div>
 
       </div>
+
+      {/* ── FABs: Copiloto + Nova transação ── */}
+      <FabStack>
+        <CopilotFab />
+        <button
+          type="button"
+          className="page-fab-icon"
+          onClick={() => router.push("/transacoes/nova")}
+          aria-label="Nova transação"
+        >
+          <Plus size={22} strokeWidth={2.5} />
+        </button>
+      </FabStack>
     </>
   );
 }

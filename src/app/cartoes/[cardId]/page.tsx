@@ -1,5 +1,6 @@
 "use client";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { useRouter, useParams } from "next/navigation";
 import { useApp, newId } from "@/context/AppContext";
 import type { CardInstallment } from "@/context/AppContext";
@@ -8,20 +9,18 @@ import {
   getCardLimitSummary, getCurrentBalance, currentMonth, addMonths, today,
 } from "@/engine/financialEngine";
 import {
-  getCardInvoices, getInstallmentsByMonth, getInvoiceDates,
+  getCardInvoices, getInstallmentsByMonth, getInvoiceDates, getDefaultInvoiceMonth,
 } from "@/engine/invoiceEngine";
-import { Pencil, Package, Plus, Trash2 } from "lucide-react";
+import { Pencil, Package, Plus, Trash2, Download, Upload } from "lucide-react";
 import CategoryIcon from "@/components/CategoryIcon";
-
-function fmt(v: number) {
-  return v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-
-function formatDate(d: string) {
-  if (!d) return "—";
-  const [y, m, day] = d.split("-");
-  return `${day}/${m}/${y}`;
-}
+import { CopilotFab } from "@/components/CopilotFab";
+import { FabStack } from "@/components/FabStack";
+import {
+  csvEscape,
+  downloadTextFile,
+  formatDateBr as formatDate,
+  formatPtBrAmount as fmt,
+} from "@/lib/invoiceImport/csvShared";
 
 const MONTHS_LONG  = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
 const MONTHS_SHORT = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
@@ -47,11 +46,22 @@ export default function CartaoDetail() {
   const [selectedMonth, setSelectedMonth] = useState(currentMonth());
   const [payError, setPayError] = useState("");
   const [payWarning, setPayWarning] = useState("");
+  const [showPayConfirm, setShowPayConfirm] = useState(false);
+  const [portalReady, setPortalReady] = useState(false);
+
+  useEffect(() => {
+    setPortalReady(true);
+  }, []);
+
+  // Ao abrir o cartão, foca na fatura em aberto (não no mês do calendário).
+  useEffect(() => {
+    if (!card) return;
+    setSelectedMonth(getDefaultInvoiceMonth(card, state.installments));
+  }, [cardId]); // eslint-disable-line react-hooks/exhaustive-deps -- só ao trocar de cartão
 
   const months = useMemo(() => {
-    const cm = currentMonth();
-    return Array.from({ length: 5 }, (_, i) => addMonths(cm, i - 1));
-  }, []);
+    return Array.from({ length: 5 }, (_, i) => addMonths(selectedMonth, i - 2));
+  }, [selectedMonth]);
 
   const invoices = useMemo(() => {
     if (!card) return [];
@@ -88,7 +98,67 @@ export default function CartaoDetail() {
     dispatch({ type: "DEL_PURCHASE", payload: purchaseId });
   }
 
-  function payInvoice() {
+  function exportInvoice() {
+    if (!card || installmentsThisMonth.length === 0) return;
+
+    const { dueDate, closingDate } = getInvoiceDates(selectedMonth, card.closingDay, card.dueDay);
+    const label = invoiceLabel(dueDate);
+    const statusLabel = currentInvoice
+      ? ({ paid: "Paga", closed: "Fechada", overdue: "Vencida", open: "Em aberto" } as const)[currentInvoice.status]
+      : "—";
+
+    const header = [
+      "Data",
+      "Descrição",
+      "Categoria",
+      "Parcela",
+      "Valor parcela (R$)",
+      "Valor total compra (R$)",
+      "Status",
+      "Pago em",
+      "Tipo",
+    ];
+
+    const rows = installmentsThisMonth.map(inst => {
+      const purchase = state.purchases.find(p => p.id === inst.purchaseId);
+      const cat = state.categories.find(c => c.id === purchase?.categoryId);
+      const parcela = purchase?.isSubscription
+        ? "Assinatura"
+        : `${inst.installmentNumber}/${inst.totalInstallments}`;
+      return [
+        purchase?.purchaseDate ? formatDate(purchase.purchaseDate) : "—",
+        purchase?.description ?? "—",
+        cat?.name ?? "—",
+        parcela,
+        fmt(inst.amount),
+        purchase ? fmt(purchase.amount) : "—",
+        inst.paid ? "Pago" : "Pendente",
+        inst.paidAt ? formatDate(inst.paidAt) : "",
+        purchase?.isSubscription ? "Assinatura" : inst.totalInstallments > 1 ? "Parcelado" : "À vista",
+      ].map(v => csvEscape(String(v)));
+    });
+
+    const total = installmentsThisMonth.reduce((s, i) => s + i.amount, 0);
+    const meta = [
+      `# ${label}`,
+      `# Cartão: ${card.name} (${card.brand} •••• ${card.lastDigits})`,
+      `# Fecha: ${formatDate(closingDate)} | Vence: ${formatDate(dueDate)} | Status: ${statusLabel}`,
+      `# Total: R$ ${fmt(total)} | Itens: ${installmentsThisMonth.length}`,
+      `# Exportado em: ${formatDate(today())}`,
+      "",
+    ].join("\n");
+
+    const csvBody = [header.map(csvEscape).join(";"), ...rows.map(r => r.join(";"))].join("\n");
+    const safeName = card.name.replace(/[^\w\u00C0-\u024F\- ]+/g, "").trim().replace(/\s+/g, "_");
+    const fileMonth = dueDate.substring(0, 7).replace("-", "");
+    downloadTextFile(
+      `fatura_${safeName || "cartao"}_${fileMonth}.csv`,
+      `\uFEFF${meta}${csvBody}\n`,
+      "text/csv;charset=utf-8",
+    );
+  }
+
+  function requestPayInvoice() {
     if (!card) return;
     setPayError("");
     setPayWarning("");
@@ -98,10 +168,24 @@ export default function CartaoDetail() {
       return;
     }
 
+    const pending = installmentsThisMonth.filter(i => !i.paid);
+    if (pending.length === 0) return;
+
+    setShowPayConfirm(true);
+  }
+
+  function confirmPayInvoice() {
+    if (!card || !card.paymentAccountId) return;
+    setShowPayConfirm(false);
+    setPayError("");
+    setPayWarning("");
+
     const pendingInsts = installmentsThisMonth.filter(i => !i.paid);
     if (pendingInsts.length === 0) return;
 
     const total = pendingInsts.reduce((s, i) => s + i.amount, 0);
+    const { dueDate: noteDueDate } = getInvoiceDates(selectedMonth, card.closingDay, card.dueDay);
+    const invoiceLabelText = monthTabLabel(noteDueDate);
 
     const paymentAccount = state.accounts.find(a => a.id === card.paymentAccountId);
     if (paymentAccount) {
@@ -112,8 +196,7 @@ export default function CartaoDetail() {
     }
 
     const todayDate = today();
-    const { dueDate: noteDueDate } = getInvoiceDates(selectedMonth, card.closingDay, card.dueDay);
-    const invoiceNote = `Fatura ${card.name} ${monthTabLabel(noteDueDate)}`;
+    const invoiceNote = `Fatura ${card.name} ${invoiceLabelText}`;
 
     // Marca todas as parcelas da fatura como pagas. O vínculo de cada parcela
     // com sua compra permanece — o histórico por categoria é preservado.
@@ -135,7 +218,7 @@ export default function CartaoDetail() {
         accountId: card.paymentAccountId,
         type: "expense",
         amount: total,
-        description: `Pagamento Fatura ${card.name} ${monthTabLabel(noteDueDate)}`,
+        description: `Pagamento Fatura ${card.name} ${invoiceLabelText}`,
         categoryId: SEED_INVOICE_PAYMENT_CATEGORY_ID,
         competenceDate: todayDate,
         paymentDate: todayDate,
@@ -146,6 +229,12 @@ export default function CartaoDetail() {
         createdAt: new Date().toISOString(),
       },
     });
+
+    const paidIds = new Set(pendingInsts.map(i => i.id));
+    const nextInstallments = state.installments.map(i =>
+      paidIds.has(i.id) ? { ...i, paid: true, paidAt: todayDate } : i,
+    );
+    setSelectedMonth(getDefaultInvoiceMonth(card, nextInstallments));
   }
 
   if (!card) {
@@ -170,6 +259,14 @@ export default function CartaoDetail() {
   const pendingInsts = installmentsThisMonth.filter(i => !i.paid);
   const allPaid = pendingInsts.length === 0 && installmentsThisMonth.length > 0;
   const pendingTotal = pendingInsts.reduce((s, i) => s + i.amount, 0);
+  const paymentAccount = state.accounts.find(a => a.id === card.paymentAccountId);
+  const payConfirmDueDate = getInvoiceDates(selectedMonth, card.closingDay, card.dueDay).dueDate;
+  const payConfirmLabel = monthTabLabel(payConfirmDueDate);
+  const payConfirmBalance = paymentAccount
+    ? getCurrentBalance(paymentAccount, state.transactions)
+    : null;
+  const payConfirmInsufficient =
+    payConfirmBalance !== null && payConfirmBalance < pendingTotal;
 
   return (
     <>
@@ -219,7 +316,9 @@ export default function CartaoDetail() {
       </div>
 
       {/* ── Content ── */}
-      <div style={{ padding: "16px 16px 80px" }}>
+      <div style={{
+        padding: "16px 16px calc(var(--fab-bottom) + var(--fab-stack-h) + 16px)",
+      }}>
 
         {/* ── Resumo do limite ── */}
         {limitSummary && (
@@ -326,37 +425,77 @@ export default function CartaoDetail() {
             </div>
           </div>
 
-          {/* Botão Pagar Fatura */}
-          {installmentsThisMonth.length > 0 && (
-            <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--border)" }}>
-              {payError && (
-                <p style={{ fontSize: "11.5px", color: "var(--red)", marginBottom: "8px", lineHeight: 1.4 }}>
-                  {payError}
-                </p>
-              )}
-              {payWarning && (
-                <p style={{ fontSize: "11.5px", color: "var(--amber)", marginBottom: "8px", lineHeight: 1.4 }}>
-                  {payWarning}
-                </p>
+          {/* Ações da fatura */}
+          <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--border)" }}>
+            {payError && (
+              <p style={{ fontSize: "11.5px", color: "var(--red)", marginBottom: "8px", lineHeight: 1.4 }}>
+                {payError}
+              </p>
+            )}
+            {payWarning && (
+              <p style={{ fontSize: "11.5px", color: "var(--amber)", marginBottom: "8px", lineHeight: 1.4 }}>
+                {payWarning}
+              </p>
+            )}
+            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+              {installmentsThisMonth.length > 0 && (
+                <button
+                  onClick={requestPayInvoice}
+                  disabled={allPaid}
+                  style={{
+                    width: "100%", padding: "11px 16px", borderRadius: "10px",
+                    fontSize: "13px", fontWeight: 700, fontFamily: "inherit",
+                    cursor: allPaid ? "not-allowed" : "pointer",
+                    background: allPaid ? "rgba(255,255,255,0.04)" : "var(--green)",
+                    color: allPaid ? "var(--text-3)" : "#000",
+                    border: allPaid ? "1px solid var(--border)" : "none",
+                    opacity: allPaid ? 0.7 : 1,
+                    minHeight: "44px", transition: "opacity 0.15s",
+                  }}
+                >
+                  {allPaid ? "✓ Fatura já paga" : `Pagar Fatura · R$ ${fmt(pendingTotal)}`}
+                </button>
               )}
               <button
-                onClick={payInvoice}
-                disabled={allPaid}
+                onClick={() => router.push(`/cartoes/${card.id}/importar?month=${selectedMonth}`)}
                 style={{
                   width: "100%", padding: "11px 16px", borderRadius: "10px",
-                  fontSize: "13px", fontWeight: 700, fontFamily: "inherit",
-                  cursor: allPaid ? "not-allowed" : "pointer",
-                  background: allPaid ? "rgba(255,255,255,0.04)" : "var(--green)",
-                  color: allPaid ? "var(--text-3)" : "#000",
-                  border: allPaid ? "1px solid var(--border)" : "none",
-                  opacity: allPaid ? 0.7 : 1,
-                  minHeight: "44px", transition: "opacity 0.15s",
+                  fontSize: "13px", fontWeight: 600, fontFamily: "inherit",
+                  cursor: "pointer",
+                  background: "var(--accent-10)",
+                  color: "var(--accent)",
+                  border: "1px solid var(--border-accent)",
+                  minHeight: "44px",
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: "8px",
+                  touchAction: "manipulation",
+                  WebkitTapHighlightColor: "transparent",
                 }}
               >
-                {allPaid ? "✓ Fatura já paga" : `Pagar Fatura · R$ ${fmt(pendingTotal)}`}
+                <Upload size={15} strokeWidth={1.75} />
+                Importar / comparar extrato
               </button>
+              {installmentsThisMonth.length > 0 && (
+                <button
+                  onClick={exportInvoice}
+                  style={{
+                    width: "100%", padding: "11px 16px", borderRadius: "10px",
+                    fontSize: "13px", fontWeight: 600, fontFamily: "inherit",
+                    cursor: "pointer",
+                    background: "rgba(255,255,255,0.04)",
+                    color: "var(--text-2)",
+                    border: "1px solid var(--border)",
+                    minHeight: "44px",
+                    display: "flex", alignItems: "center", justifyContent: "center", gap: "8px",
+                    touchAction: "manipulation",
+                    WebkitTapHighlightColor: "transparent",
+                  }}
+                >
+                  <Download size={15} strokeWidth={1.75} />
+                  Exportar fatura (CSV)
+                </button>
+              )}
             </div>
-          )}
+          </div>
 
           {/* Lista de parcelas */}
           {installmentsThisMonth.length === 0 ? (
@@ -464,35 +603,117 @@ export default function CartaoDetail() {
         </div>
       </div>
 
-      {/* ── FAB Nova Compra ── */}
-      <button
-        onClick={() => router.push(`/cartoes/${card.id}/nova-compra`)}
-        style={{
-          position: "fixed",
-          bottom: "var(--fab-bottom)",
-          right: "20px",
-          zIndex: 50,
-          height: "48px",
-          padding: "0 20px",
-          borderRadius: "24px",
-          background: card.color,
-          color: "#fff",
-          border: "none",
-          cursor: "pointer",
-          fontFamily: "inherit",
-          fontSize: "14px",
-          fontWeight: 700,
-          display: "flex",
-          alignItems: "center",
-          gap: "7px",
-          boxShadow: `0 4px 16px ${card.color}66`,
-          touchAction: "manipulation",
-          WebkitTapHighlightColor: "transparent",
-        }}
-      >
-        <Plus size={17} strokeWidth={2.5} />
-        Nova Compra
-      </button>
+      {/* ── FABs: Copiloto + Nova Compra ── */}
+      <FabStack>
+        <CopilotFab />
+        <button
+          type="button"
+          className="page-fab-pill"
+          onClick={() => router.push(`/cartoes/${card.id}/nova-compra`)}
+          style={{ background: card.color, boxShadow: `0 4px 16px ${card.color}66` }}
+        >
+          <Plus size={17} strokeWidth={2.5} />
+          Nova Compra
+        </button>
+      </FabStack>
+
+      {/* ── Modal confirmação pagamento (portal no body: acima da nav/FAB) ── */}
+      {portalReady && showPayConfirm && createPortal(
+        <div
+          className="modal-overlay"
+          onClick={() => setShowPayConfirm(false)}
+          role="presentation"
+        >
+          <div
+            className="modal"
+            onClick={e => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="pay-confirm-title"
+          >
+            <div className="modal-header">
+              <p id="pay-confirm-title" style={{ fontSize: "16px", fontWeight: 700, color: "var(--text-1)" }}>
+                Confirmar pagamento
+              </p>
+              <button
+                onClick={() => setShowPayConfirm(false)}
+                style={{
+                  background: "none", border: "none", color: "var(--text-3)",
+                  cursor: "pointer", fontSize: "22px", lineHeight: 1,
+                  padding: "4px 8px", touchAction: "manipulation",
+                }}
+                aria-label="Fechar"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="modal-body" style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+              <p style={{ fontSize: "13px", color: "var(--text-2)", lineHeight: 1.5 }}>
+                Marcar a fatura como paga e debitar a conta vinculada?
+              </p>
+
+              <div style={{
+                padding: "14px 16px", borderRadius: "12px",
+                background: "rgba(255,255,255,0.03)", border: "1px solid var(--border)",
+                display: "flex", flexDirection: "column", gap: "10px",
+              }}>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: "12px" }}>
+                  <span style={{ fontSize: "12px", color: "var(--text-3)" }}>Cartão</span>
+                  <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-1)", textAlign: "right" }}>
+                    {card.name}
+                  </span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: "12px" }}>
+                  <span style={{ fontSize: "12px", color: "var(--text-3)" }}>Fatura</span>
+                  <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-1)" }}>
+                    {payConfirmLabel}
+                  </span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: "12px" }}>
+                  <span style={{ fontSize: "12px", color: "var(--text-3)" }}>Conta</span>
+                  <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-1)", textAlign: "right" }}>
+                    {paymentAccount?.name ?? "—"}
+                  </span>
+                </div>
+                <div style={{
+                  display: "flex", justifyContent: "space-between", gap: "12px",
+                  paddingTop: "10px", borderTop: "1px solid var(--border)",
+                }}>
+                  <span style={{ fontSize: "12px", color: "var(--text-3)" }}>Valor</span>
+                  <span className="mono" style={{ fontSize: "16px", fontWeight: 700, color: "var(--green)" }}>
+                    R$ {fmt(pendingTotal)}
+                  </span>
+                </div>
+              </div>
+
+              {payConfirmInsufficient && (
+                <p style={{ fontSize: "12px", color: "var(--amber)", lineHeight: 1.4 }}>
+                  Saldo insuficiente na conta (R$ {fmt(payConfirmBalance!)}). Ela ficará negativa após o pagamento.
+                </p>
+              )}
+            </div>
+
+            <div className="modal-footer" style={{ justifyContent: "stretch" }}>
+              <button
+                className="btn-secondary"
+                onClick={() => setShowPayConfirm(false)}
+                style={{ flex: 1, justifyContent: "center" }}
+              >
+                Cancelar
+              </button>
+              <button
+                className="btn-primary"
+                onClick={confirmPayInvoice}
+                style={{ flex: 1, justifyContent: "center" }}
+              >
+                Confirmar pagamento
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body,
+      )}
     </>
   );
 }
