@@ -36,6 +36,8 @@ export type {
 export interface AppState {
   userName: string;
   notificationPrefs: import("@/lib/notifications/types").NotificationPrefs;
+  /** Quando true, o início permite marcar contas para somar no saldo. */
+  dashboardAccountFilter: boolean;
   accounts: Account[];
   transactions: Transaction[];
   cards: CreditCard[];
@@ -52,6 +54,7 @@ type Action =
   | { type: "LOAD"; payload: AppState }
   | { type: "SET_USER_NAME"; payload: string }
   | { type: "SET_NOTIFICATION_PREFS"; payload: import("@/lib/notifications/types").NotificationPrefs }
+  | { type: "SET_DASHBOARD_ACCOUNT_FILTER"; payload: boolean }
   | { type: "ADD_ACCOUNT"; payload: Account }
   | { type: "UPD_ACCOUNT"; payload: Account }
   | { type: "DEL_ACCOUNT"; payload: string }
@@ -106,6 +109,7 @@ export const SEED_CATEGORY_IDS = new Set(SEED_CATEGORIES.map(c => c.id));
 const seed: AppState = {
   userName: "",
   notificationPrefs: DEFAULT_NOTIFICATION_PREFS,
+  dashboardAccountFilter: false,
   accounts: [],
   transactions: [],
   cards: [],
@@ -182,12 +186,15 @@ function reducer(state: AppState, action: Action): AppState {
           ...DEFAULT_NOTIFICATION_PREFS,
           ...(action.payload.notificationPrefs ?? {}),
         },
+        dashboardAccountFilter: action.payload.dashboardAccountFilter === true,
       };
     }
     case "SET_USER_NAME":
       return { ...state, userName: action.payload };
     case "SET_NOTIFICATION_PREFS":
       return { ...state, notificationPrefs: action.payload };
+    case "SET_DASHBOARD_ACCOUNT_FILTER":
+      return { ...state, dashboardAccountFilter: action.payload };
 
     case "ADD_ACCOUNT":
       return { ...state, accounts: [...state.accounts, action.payload] };

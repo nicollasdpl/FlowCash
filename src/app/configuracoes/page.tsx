@@ -194,6 +194,49 @@ export default function Configuracoes() {
 
       <NotificationSettingsCard />
 
+      {/* Início */}
+      <div className="card fade-up-3" style={{ overflow: "hidden", marginBottom: "14px" }}>
+        <div style={{ padding: "13px 16px", borderBottom: "1px solid var(--border)" }}>
+          <p style={{ fontSize: "11px", fontWeight: 700, color: "var(--text-3)", letterSpacing: "0.08em", textTransform: "uppercase" }}>
+            Início
+          </p>
+        </div>
+        <div style={{ padding: "16px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px" }}>
+          <div style={{ flex: 1 }}>
+            <p style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-1)" }}>Filtrar saldo por conta</p>
+            <p style={{ fontSize: "11.5px", color: "var(--text-3)", marginTop: "3px", lineHeight: 1.4 }}>
+              No início, marca as contas que entram no saldo. Se marcar as duas, o número é a soma — sem caixa de total.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => dispatch({ type: "SET_DASHBOARD_ACCOUNT_FILTER", payload: !state.dashboardAccountFilter })}
+            aria-pressed={state.dashboardAccountFilter}
+            style={{
+              width: "48px",
+              height: "28px",
+              borderRadius: "999px",
+              border: "none",
+              flexShrink: 0,
+              background: state.dashboardAccountFilter ? "var(--accent)" : "var(--bg-input)",
+              position: "relative",
+              cursor: "pointer",
+            }}
+          >
+            <span style={{
+              position: "absolute",
+              top: "3px",
+              left: state.dashboardAccountFilter ? "23px" : "3px",
+              width: "22px",
+              height: "22px",
+              borderRadius: "50%",
+              background: "#fff",
+              transition: "left 0.15s ease",
+            }} />
+          </button>
+        </div>
+      </div>
+
       {/* Dados */}
       <div className="card fade-up-3" style={{ overflow: "hidden", marginBottom: "14px" }}>
         <div style={{ padding: "13px 16px", borderBottom: "1px solid var(--border)" }}>

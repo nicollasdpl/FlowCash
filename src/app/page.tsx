@@ -22,8 +22,7 @@ import { CategoryDonutSection, buildCatSlices } from "@/components/CategoryDonut
 import { buildConsumptionCatSlices } from "@/app/relatorios/consumptionByCategory";
 import {
   AccountScopePicker,
-  ALL_ACCOUNTS_SCOPE,
-  useAccountScope,
+  useSelectedAccountIds,
 } from "@/components/AccountScopePicker";
 
 const MONTH_NAMES = [
@@ -89,7 +88,8 @@ export default function Dashboard() {
   const [selectedMonth, setSelectedMonth] = useState(currentMonth());
   const [pendingExpanded, setPendingExpanded] = useState(false);
   const [categoryView, setCategoryView] = useState<"invoice" | "consumption">("invoice");
-  const [accountScope, setAccountScope, accountScopeReady] = useAccountScope(state.accounts);
+  const [selectedAccountIds, toggleAccountId] = useSelectedAccountIds(state.accounts);
+  const accountFilterOn = state.dashboardAccountFilter === true;
 
   function openTransaction(tx: Transaction) {
     router.push(`/transacoes/${tx.id}/editar`);
@@ -130,17 +130,11 @@ export default function Dashboard() {
     [state.accounts]
   );
 
-  const scopedAccounts = useMemo(
-    () => accountScope === ALL_ACCOUNTS_SCOPE
-      ? activeAccounts
-      : activeAccounts.filter(a => a.id === accountScope),
-    [activeAccounts, accountScope]
-  );
-
-  const scopedAccountIds = useMemo(
-    () => new Set(scopedAccounts.map(a => a.id)),
-    [scopedAccounts]
-  );
+  const scopedAccounts = useMemo(() => {
+    if (!accountFilterOn || activeAccounts.length < 2) return activeAccounts;
+    const picked = activeAccounts.filter(a => selectedAccountIds.includes(a.id));
+    return picked.length > 0 ? picked : activeAccounts;
+  }, [accountFilterOn, activeAccounts, selectedAccountIds]);
 
   const accountBalances = useMemo(() => {
     const map: Record<string, number> = {};
@@ -149,11 +143,6 @@ export default function Dashboard() {
     }
     return map;
   }, [activeAccounts, state.transactions]);
-
-  const inScopeTx = (t: Transaction) =>
-    accountScope === ALL_ACCOUNTS_SCOPE
-    || scopedAccountIds.has(t.accountId)
-    || (t.transferToAccountId ? scopedAccountIds.has(t.transferToAccountId) : false);
 
   const totalBalance = useMemo(() =>
     scopedAccounts.reduce((s, a) => s + (accountBalances[a.id] ?? 0), 0),
@@ -165,32 +154,9 @@ export default function Dashboard() {
     [scopedAccounts, state.transactions, state.cards, state.installments, projectionDate]
   );
 
-  const scopedCards = useMemo(
-    () => accountScope === ALL_ACCOUNTS_SCOPE
-      ? state.cards.filter(c => c.active)
-      : state.cards.filter(c => c.active && scopedAccountIds.has(c.paymentAccountId)),
-    [state.cards, accountScope, scopedAccountIds]
-  );
-
-  const scopedCardIds = useMemo(() => new Set(scopedCards.map(c => c.id)), [scopedCards]);
-
-  const scopedInstallments = useMemo(
-    () => accountScope === ALL_ACCOUNTS_SCOPE
-      ? state.installments
-      : state.installments.filter(i => scopedCardIds.has(i.cardId)),
-    [state.installments, accountScope, scopedCardIds]
-  );
-
-  const scopedPurchases = useMemo(
-    () => accountScope === ALL_ACCOUNTS_SCOPE
-      ? state.purchases
-      : state.purchases.filter(p => scopedCardIds.has(p.cardId)),
-    [state.purchases, accountScope, scopedCardIds]
-  );
-
   const monthTxs = useMemo(() =>
-    state.transactions.filter(t => t.paymentDate.startsWith(selectedMonth) && inScopeTx(t)),
-    [state.transactions, selectedMonth, accountScope, scopedAccountIds]
+    state.transactions.filter(t => t.paymentDate.startsWith(selectedMonth)),
+    [state.transactions, selectedMonth]
   );
 
   // Categorias que não contam nos relatórios (ex.: Empréstimo). O dinheiro
@@ -204,28 +170,17 @@ export default function Dashboard() {
   // (status "paid" + paymentDate no mês). Empréstimo não conta como receita.
   const monthIncome = useMemo(() =>
     state.transactions
-      .filter(t =>
-        t.type === "income" &&
-        t.status === "paid" &&
-        t.paymentDate.startsWith(selectedMonth) &&
-        !excludedReportCatIds.has(t.categoryId) &&
-        inScopeTx(t)
-      )
+      .filter(t => t.type === "income" && t.status === "paid" && t.paymentDate.startsWith(selectedMonth) && !excludedReportCatIds.has(t.categoryId))
       .reduce((s, t) => s + t.amount, 0),
-    [state.transactions, selectedMonth, excludedReportCatIds, accountScope, scopedAccountIds]
+    [state.transactions, selectedMonth, excludedReportCatIds]
   );
   // Despesa = MESMA base do donut: getSpentByCategory (competência + parcelas de
   // cartão, exclui "Pagamento de Fatura"). Assim "Despesas" bate com o Total do relatório.
   const monthExpense = useMemo(() =>
     Object.values(
-      getSpentByCategory(
-        selectedMonth,
-        state.transactions.filter(t => accountScope === ALL_ACCOUNTS_SCOPE || scopedAccountIds.has(t.accountId)),
-        scopedInstallments,
-        scopedPurchases,
-      )
+      getSpentByCategory(selectedMonth, state.transactions, state.installments, state.purchases)
     ).reduce((s, v) => s + v, 0),
-    [selectedMonth, state.transactions, scopedInstallments, scopedPurchases, accountScope, scopedAccountIds]
+    [selectedMonth, state.transactions, state.installments, state.purchases]
   );
   const monthBalance = monthIncome - monthExpense;
 
@@ -235,11 +190,10 @@ export default function Dashboard() {
       .filter(t =>
         t.status !== "paid" &&
         t.paymentDate < todayStr &&
-        t.paymentDate.startsWith(selectedMonth) &&
-        inScopeTx(t)
+        t.paymentDate.startsWith(selectedMonth)
       )
       .sort((a, b) => a.paymentDate.localeCompare(b.paymentDate)),
-    [state.transactions, todayStr, selectedMonth, accountScope, scopedAccountIds]
+    [state.transactions, todayStr, selectedMonth]
   );
 
   // Pendentes: status=pending, data futura/hoje, mês selecionado (inside collapsible)
@@ -248,11 +202,10 @@ export default function Dashboard() {
       .filter(t =>
         t.status === "pending" &&
         t.paymentDate >= todayStr &&
-        t.paymentDate.startsWith(selectedMonth) &&
-        inScopeTx(t)
+        t.paymentDate.startsWith(selectedMonth)
       )
       .sort((a, b) => a.paymentDate.localeCompare(b.paymentDate)),
-    [state.transactions, todayStr, selectedMonth, accountScope, scopedAccountIds]
+    [state.transactions, todayStr, selectedMonth]
   );
 
   const expensePending = useMemo(() => pendingTxs.filter(t => t.type === "expense"), [pendingTxs]);
@@ -264,7 +217,7 @@ export default function Dashboard() {
   //   1) Fatura cujo VENCIMENTO cai no selectedMonth (se houver) — open→"open", closed/overdue→"due"; paga não entra.
   //   2) Senão: fatura "open" (ciclo corrente) — PRIORIDADE — OU "overdue" de mês anterior.
   const cardInvoices = useMemo(() => {
-    return scopedCards.flatMap(card => {
+    return state.cards.filter(c => c.active).flatMap(card => {
       const months = [...new Set(
         state.installments
           .filter(i => i.cardId === card.id)
@@ -289,28 +242,28 @@ export default function Dashboard() {
         ? [{ card, invoice: chosen, kind: (chosen.status === "open" ? "open" : "due") as "due" | "open" }]
         : [];
     });
-  }, [scopedCards, state.installments, selectedMonth]);
+  }, [state.cards, state.installments, selectedMonth]);
 
   // Donut: despesas pagas + parcelas do mês selecionado
   const catSlices = useMemo(() =>
     categoryView === "invoice"
       ? buildCatSlices(
-          state.transactions.filter(t => accountScope === ALL_ACCOUNTS_SCOPE || scopedAccountIds.has(t.accountId)),
-          scopedInstallments,
-          scopedPurchases,
+          state.transactions,
+          state.installments,
+          state.purchases,
           state.categories,
-          scopedCards,
+          state.cards,
           selectedMonth,
         )
       : buildConsumptionCatSlices(
           selectedMonth,
-          state.transactions.filter(t => accountScope === ALL_ACCOUNTS_SCOPE || scopedAccountIds.has(t.accountId)),
-          scopedInstallments,
-          scopedPurchases,
+          state.transactions,
+          state.installments,
+          state.purchases,
           state.categories,
-          scopedCards,
+          state.cards,
         ),
-    [categoryView, state.transactions, scopedInstallments, scopedPurchases, state.categories, scopedCards, selectedMonth, accountScope, scopedAccountIds]
+    [categoryView, state.transactions, state.installments, state.purchases, state.categories, state.cards, selectedMonth]
   );
 
   // Máximo 3 lançamentos recentes
@@ -479,7 +432,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* ── 3. Saldo por conta ── */}
+        {/* ── 3. Saldo ── */}
         <div
           className="card fade-up-2"
           style={{
@@ -490,16 +443,16 @@ export default function Dashboard() {
         >
           <div style={{
             display: "flex", justifyContent: "space-between", alignItems: "center",
-            marginBottom: activeAccounts.length > 0 ? "10px" : "6px",
+            marginBottom: accountFilterOn && activeAccounts.length > 1 ? "10px" : "6px",
             gap: "8px",
           }}>
             <p style={{
               fontSize: "10px", fontWeight: 700, color: "var(--text-3)",
               letterSpacing: "0.1em", textTransform: "uppercase",
             }}>
-              {accountScope === ALL_ACCOUNTS_SCOPE
-                ? "Saldo total"
-                : `Saldo · ${scopedAccounts[0]?.name ?? "Conta"}`}
+              {accountFilterOn && scopedAccounts.length === 1
+                ? `Saldo · ${scopedAccounts[0].name}`
+                : "Saldo real"}
             </p>
             <button
               type="button"
@@ -514,13 +467,12 @@ export default function Dashboard() {
             </button>
           </div>
 
-          {activeAccounts.length > 1 && (
+          {accountFilterOn && activeAccounts.length > 1 && (
             <div style={{ marginBottom: "10px" }}>
               <AccountScopePicker
                 accounts={activeAccounts}
-                balances={accountBalances}
-                scope={accountScope}
-                onChange={setAccountScope}
+                selectedIds={selectedAccountIds}
+                onToggle={toggleAccountId}
               />
             </div>
           )}
@@ -530,18 +482,8 @@ export default function Dashboard() {
             color: isBalanceNegative(totalBalance) ? "var(--red)"
               : isBalancePositive(totalBalance) ? "var(--green)" : "var(--text-1)",
             lineHeight: 1,
-            opacity: accountScopeReady ? 1 : 0.35,
           }}>
             R$ {fmt(totalBalance)}
-          </p>
-          <p style={{ fontSize: "11px", color: "var(--text-3)", marginTop: "6px" }}>
-            {!accountScopeReady
-              ? "Carregando contas…"
-              : accountScope === ALL_ACCOUNTS_SCOPE && activeAccounts.length > 1
-              ? "Soma de todas as contas — escolha uma acima para ver só ela"
-              : activeAccounts.length === 0
-              ? "Cadastre uma conta para ver o saldo"
-              : "Apenas transações pagas desta conta"}
           </p>
 
           {totalProjected !== totalBalance && (

@@ -1,159 +1,118 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import type { Account } from "@/types/financial";
-import { fmt, isBalanceNegative, isBalancePositive } from "@/engine/financialEngine";
 
-export const DASHBOARD_ACCOUNT_SCOPE_KEY = "flowcash.dashboardAccountId";
-export const ALL_ACCOUNTS_SCOPE = "all";
+export const DASHBOARD_ACCOUNT_IDS_KEY = "flowcash.dashboardAccountIds";
 
-export type AccountScope = typeof ALL_ACCOUNTS_SCOPE | string;
-
-function readStoredScope(): AccountScope | null {
+function readStoredIds(): string[] | null {
   try {
-    const saved = localStorage.getItem(DASHBOARD_ACCOUNT_SCOPE_KEY);
-    if (saved) return saved;
+    const raw = localStorage.getItem(DASHBOARD_ACCOUNT_IDS_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed) && parsed.every(id => typeof id === "string")) return parsed;
   } catch {
     /* ignore */
   }
   return null;
 }
 
-function writeStoredScope(scope: AccountScope) {
+function writeStoredIds(ids: string[]) {
   try {
-    localStorage.setItem(DASHBOARD_ACCOUNT_SCOPE_KEY, scope);
+    localStorage.setItem(DASHBOARD_ACCOUNT_IDS_KEY, JSON.stringify(ids));
   } catch {
     /* ignore */
   }
 }
 
-export function useAccountScope(accounts: Account[]): [AccountScope, (scope: AccountScope) => void, boolean] {
-  const [scope, setScopeState] = useState<AccountScope>(ALL_ACCOUNTS_SCOPE);
-  const [ready, setReady] = useState(false);
+export function useSelectedAccountIds(accounts: Account[]): [string[], (id: string) => void] {
+  const activeIds = accounts.filter(a => a.active).map(a => a.id);
+  const activeKey = activeIds.join(",");
+  const [selected, setSelected] = useState<string[]>([]);
   const initialized = useRef(false);
-  const activeIds = accounts.filter(a => a.active).map(a => a.id).join(",");
 
   useEffect(() => {
-    const ids = activeIds ? activeIds.split(",") : [];
-    if (!initialized.current) {
-      if (ids.length === 0) {
-        setReady(true);
-        return;
-      }
-      const saved = readStoredScope();
-      if (saved === ALL_ACCOUNTS_SCOPE || ids.includes(saved ?? "")) {
-        setScopeState(saved!);
-      } else {
-        setScopeState(ids[0]);
-        writeStoredScope(ids[0]);
-      }
-      initialized.current = true;
-      setReady(true);
+    const ids = activeKey ? activeKey.split(",") : [];
+    if (ids.length === 0) {
+      setSelected([]);
       return;
     }
-    if (scope !== ALL_ACCOUNTS_SCOPE && !ids.includes(scope)) {
-      const next = ids[0] ?? ALL_ACCOUNTS_SCOPE;
-      setScopeState(next);
-      writeStoredScope(next);
+    if (!initialized.current) {
+      const saved = readStoredIds();
+      const next = saved?.filter(id => ids.includes(id)) ?? [];
+      setSelected(next.length > 0 ? next : ids);
+      initialized.current = true;
+      return;
     }
-  }, [activeIds, scope]);
+    setSelected(prev => {
+      const kept = prev.filter(id => ids.includes(id));
+      return kept.length > 0 ? kept : ids;
+    });
+  }, [activeKey]);
 
-  function setScope(next: AccountScope) {
-    setScopeState(next);
-    writeStoredScope(next);
+  function toggle(id: string) {
+    setSelected(prev => {
+      const on = prev.includes(id);
+      const next = on ? prev.filter(x => x !== id) : [...prev, id];
+      const valid = next.length > 0 ? next : prev;
+      writeStoredIds(valid);
+      return valid;
+    });
   }
 
-  return [scope, setScope, ready];
-}
-
-function amountColor(v: number, positive: string) {
-  if (isBalanceNegative(v)) return "var(--red)";
-  if (isBalancePositive(v)) return positive;
-  return "var(--text-2)";
+  return [selected, toggle];
 }
 
 export function AccountScopePicker({
   accounts,
-  balances,
-  scope,
-  onChange,
+  selectedIds,
+  onToggle,
 }: {
   accounts: Account[];
-  balances: Record<string, number>;
-  scope: AccountScope;
-  onChange: (scope: AccountScope) => void;
+  selectedIds: string[];
+  onToggle: (id: string) => void;
 }) {
   const active = accounts.filter(a => a.active);
-  if (active.length === 0) return null;
-
-  const total = active.reduce((s, a) => s + (balances[a.id] ?? 0), 0);
-  const chips: { id: AccountScope; label: string; value: number }[] = [
-    ...active.map(acc => ({ id: acc.id, label: acc.name, value: balances[acc.id] ?? 0 })),
-    ...(active.length > 1 ? [{ id: ALL_ACCOUNTS_SCOPE, label: "Total", value: total }] : []),
-  ];
+  if (active.length < 2) return null;
 
   return (
     <div
-      role="tablist"
-      aria-label="Conta para o saldo"
+      role="group"
+      aria-label="Contas no saldo"
       style={{
         display: "flex",
         gap: "4px",
         width: "100%",
       }}
     >
-      {chips.map(chip => {
-        const selected = scope === chip.id;
+      {active.map(acc => {
+        const selected = selectedIds.includes(acc.id);
         return (
           <button
-            key={chip.id}
+            key={acc.id}
             type="button"
-            role="tab"
-            aria-selected={selected}
-            onClick={() => onChange(chip.id)}
+            aria-pressed={selected}
+            onClick={() => onToggle(acc.id)}
             style={{
               flex: 1,
               minWidth: 0,
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              gap: "1px",
-              padding: "5px 6px",
-              minHeight: "36px",
+              padding: "6px 8px",
+              minHeight: "32px",
               borderRadius: "8px",
               cursor: "pointer",
               fontFamily: "inherit",
+              fontSize: "11px",
+              fontWeight: 700,
               textAlign: "center",
               touchAction: "manipulation",
-              background: selected ? "var(--accent-10)" : "rgba(255,255,255,0.04)",
-              border: selected ? "1px solid var(--border-accent)" : "1px solid var(--border)",
-              color: selected ? "var(--accent)" : "var(--text-2)",
-            }}
-          >
-            <span style={{
-              fontSize: "10px",
-              fontWeight: 700,
-              letterSpacing: "0.01em",
               overflow: "hidden",
               textOverflow: "ellipsis",
               whiteSpace: "nowrap",
-              maxWidth: "100%",
-            }}>
-              {chip.label}
-            </span>
-            <span
-              className="mono"
-              style={{
-                fontSize: "10px",
-                fontWeight: 700,
-                color: selected ? amountColor(chip.value, "var(--accent)") : amountColor(chip.value, "var(--text-2)"),
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
-                maxWidth: "100%",
-              }}
-            >
-              R$ {fmt(chip.value)}
-            </span>
+              background: selected ? "var(--accent-10)" : "rgba(255,255,255,0.04)",
+              border: selected ? "1px solid var(--border-accent)" : "1px solid var(--border)",
+              color: selected ? "var(--accent)" : "var(--text-3)",
+            }}
+          >
+            {acc.name}
           </button>
         );
       })}
