@@ -1,0 +1,17 @@
+---
+description: Domínio FlowCash — saldo, fatura, relatórios e persistência
+alwaysApply: true
+---
+
+Leia `LLM.md` antes de mudar saldo, fatura, relatório ou copiloto.
+
+- Saldo é calculado, nunca persistido. Motores puros em `src/engine/`.
+- Cartão não é conta. Compra no cartão não reduz saldo; só o pagamento da fatura.
+- Saldo real = pagos até hoje. Não muda ao navegar meses.
+- Projetado na UI usa `projectionHorizon(selectedMonth)`: mês passado mantém o fim do mês atual.
+- Pagamento de fatura (`system_invoice_payment`) não é gasto por categoria.
+- Empréstimo/reembolso com `excludeFromReports` não infla Receitas.
+- Parse pt-BR: `"1.240,62"` = 1240.62. Não recriar parcelas pagas como abertas.
+- Datas locais `YYYY-MM-DD`; não usar `toISOString()` para dia civil.
+- Persistência: `users/{uid}/app/state`. Sem secrets no git.
+- Produção = `master` na Vercel. Preview nas branches `cursor/*`.

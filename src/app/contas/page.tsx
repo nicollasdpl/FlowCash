@@ -67,12 +67,12 @@ export default function Contas() {
       <div className="fade-up-1" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "24px" }}>
         <div className="card" style={{ padding: "20px" }}>
           <p style={{ fontSize: "11px", color: "var(--text-3)", fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", marginBottom: "8px" }}>
-            Saldo total atual
+            Soma de todas as contas
           </p>
           <p className="mono" style={{ fontSize: "28px", fontWeight: 700, color: balanceColor(totalCurrent, "var(--green)"), letterSpacing: "-0.03em" }}>
             R$ {fmt(totalCurrent)}
           </p>
-          <p style={{ fontSize: "11.5px", color: "var(--text-3)", marginTop: "6px" }}>Apenas transações pagas</p>
+          <p style={{ fontSize: "11.5px", color: "var(--text-3)", marginTop: "6px" }}>Não é o saldo de uma conta só — veja cada uma abaixo</p>
         </div>
         <div className="card" style={{ padding: "20px" }}>
           <p style={{ fontSize: "11px", color: "var(--text-3)", fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", marginBottom: "8px" }}>

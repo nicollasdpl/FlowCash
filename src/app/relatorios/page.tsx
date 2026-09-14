@@ -542,10 +542,11 @@ export default function Relatorios() {
           }}>
             {([
               { id: "invoice" as const, label: "Por fatura" },
-              { id: "consumption" as const, label: "Consumo real" },
+              { id: "consumption" as const, label: "Gasto real" },
             ]).map(opt => (
               <button
                 key={opt.id}
+                type="button"
                 onClick={() => setCategoryView(opt.id)}
                 style={{
                   flex: 1, padding: "8px 6px", borderRadius: "8px",
@@ -562,8 +563,8 @@ export default function Relatorios() {
           </div>
           {categoryView === "consumption" && (
             <p style={{ fontSize: "11px", color: "var(--text-3)", marginTop: "10px", lineHeight: 1.4 }}>
-              Quando você gastou de fato: compras no cartão pela data da compra (mesmo que a fatura seja outro mês).
-              Parcelado conta só o valor da parcela. PIX/dinheiro usam a data de competência.
+              Data da compra no cartão, mesmo que a fatura seja outro mês. Parcelado conta só a parcela do mês.
+              PIX/dinheiro usam a data de competência.
             </p>
           )}
         </div>

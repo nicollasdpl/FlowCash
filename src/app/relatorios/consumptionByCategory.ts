@@ -1,8 +1,8 @@
-// Gastos por categoria — visão "Consumo real" em Relatórios.
+// Gastos por categoria — visão "Consumo real" / "Gasto real".
 //
-// À vista: fatura do mês (competenceMonth) + compras com purchaseDate no mês que
-// caem na fatura seguinte — sem repetir essas na fatura de julho.
+// À vista: mês da purchaseDate (mesmo que a fatura seja o mês seguinte).
 // Parcelado: valor da parcela no mês civil a partir da purchaseDate.
+// Assinatura: cada cobrança no mês civil do dia da compra (não em todo mês futuro).
 // Manual: competenceDate no mês, sem duplicar compra do cartão na mesma data/valor.
 
 import type { Transaction, CardInstallment, CardPurchase, CreditCard } from "@/types/financial";
@@ -11,64 +11,66 @@ import { addMonths } from "@/engine/financialEngine";
 import { getCompetenceMonth } from "@/engine/invoiceEngine";
 import type { CatItem, CatSlice } from "@/components/CategoryDonutSection";
 
+function money(value: number): number {
+  const n = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(n) ? n : 0;
+}
+
 function addToMap(map: Record<string, number>, categoryId: string, amount: number) {
   if (amount <= 0 || !categoryId) return;
   map[categoryId] = (map[categoryId] ?? 0) + amount;
 }
 
-function oneTimeConsumptionAmount(
+function amountsMatch(a: number, b: number): boolean {
+  return Math.abs(money(a) - money(b)) < 0.01;
+}
+
+function closingDayFor(purchase: CardPurchase, cards: CreditCard[]): number {
+  return cards.find(c => c.id === purchase.cardId)?.closingDay ?? 10;
+}
+
+/** Mês civil em que o gasto ocorreu (data real da compra / parcela / cobrança). */
+export function getConsumptionMonth(
+  purchase: CardPurchase,
+  installment: CardInstallment,
+  closingDay = 10,
+): string {
+  const purchaseMonth = purchase.purchaseDate.substring(0, 7);
+  if (purchase.isSubscription) {
+    const firstInvoice = getCompetenceMonth(purchase.purchaseDate, closingDay);
+    const offset = firstInvoice > purchaseMonth ? -1 : 0;
+    return addMonths(installment.competenceMonth, offset);
+  }
+  const total = purchase.totalInstallments ?? 1;
+  if (total <= 1) return purchaseMonth;
+  return addMonths(purchaseMonth, installment.installmentNumber - 1);
+}
+
+function amountInMonth(
   month: string,
   purchase: CardPurchase,
   inst: CardInstallment,
   closingDay: number,
 ): number {
-  const purchaseMonth = purchase.purchaseDate.substring(0, 7);
-  const competenceMonth = inst.competenceMonth;
-  const spillToNext =
-    competenceMonth > purchaseMonth &&
-    addMonths(purchaseMonth, 1) === competenceMonth;
-  const expectedInvoice = getCompetenceMonth(purchase.purchaseDate, closingDay);
-
-  // Mesmo mês civil, fatura do mês seguinte (ex.: 19/jun → fatura jul, conta em jun)
-  if (
-    purchaseMonth === month &&
-    competenceMonth > month &&
-    addMonths(purchaseMonth, 1) === competenceMonth
-  ) {
-    return inst.amount;
-  }
-
-  if (competenceMonth === month) {
-    // Virada do mês anterior já contada no mês da compra (ex.: 19/jun não repete em jul)
-    if (
-      spillToNext &&
-      purchaseMonth === addMonths(month, -1) &&
-      expectedInvoice === month &&
-      purchaseMonth === addMonths(competenceMonth, -1)
-    ) {
-      return 0;
-    }
-    return inst.amount;
-  }
-
-  return 0;
+  const amount = money(inst.amount);
+  if (amount <= 0) return 0;
+  return getConsumptionMonth(purchase, inst, closingDay) === month ? amount : 0;
 }
 
-function amountsMatch(a: number, b: number): boolean {
-  return Math.abs(a - b) < 0.01;
-}
-
-/** Mês civil em que o gasto ocorreu (data real da compra / parcela). */
-export function getConsumptionMonth(
-  purchase: CardPurchase,
-  installment: CardInstallment,
-): string {
-  const purchaseMonth = purchase.purchaseDate.substring(0, 7);
-  const total = purchase.totalInstallments ?? 1;
-  if (total <= 1) {
-    return purchaseMonth;
-  }
-  return addMonths(purchaseMonth, installment.installmentNumber - 1);
+function isDuplicateManualTx(
+  t: Transaction,
+  purchases: CardPurchase[],
+  cardPurchaseKeys: Set<string>,
+): boolean {
+  const amount = money(t.amount);
+  const txKey = `${t.categoryId}|${t.competenceDate}|${amount.toFixed(2)}`;
+  if (cardPurchaseKeys.has(txKey)) return true;
+  return purchases.some(
+    p =>
+      p.categoryId === t.categoryId &&
+      p.purchaseDate === t.competenceDate &&
+      amountsMatch(p.amount, t.amount),
+  );
 }
 
 export function getConsumptionByCategory(
@@ -79,7 +81,6 @@ export function getConsumptionByCategory(
   cards: CreditCard[] = [],
 ): Record<string, number> {
   const map: Record<string, number> = {};
-  const closingByCard = new Map(cards.map(c => [c.id, c.closingDay]));
   const installmentsByPurchase = new Map<string, CardInstallment[]>();
   for (const inst of installments) {
     const list = installmentsByPurchase.get(inst.purchaseId) ?? [];
@@ -90,36 +91,21 @@ export function getConsumptionByCategory(
   const cardPurchaseKeys = new Set<string>();
 
   for (const purchase of purchases) {
-    if (purchase.isSubscription) {
-      const purchaseMonth = purchase.purchaseDate.substring(0, 7);
-      if (month >= purchaseMonth) {
-        addToMap(map, purchase.categoryId, purchase.amount);
-        cardPurchaseKeys.add(`${purchase.categoryId}|${purchase.purchaseDate}|${purchase.amount.toFixed(2)}`);
-      }
-      continue;
-    }
-
     const purchaseInsts = installmentsByPurchase.get(purchase.id) ?? [];
-    const total = purchase.totalInstallments ?? 1;
+    const closingDay = closingDayFor(purchase, cards);
+    const purchaseAmount = money(purchase.amount);
 
     if (purchaseInsts.length === 0) {
-      if (purchase.purchaseDate.startsWith(month)) {
-        addToMap(map, purchase.categoryId, purchase.amount);
-        cardPurchaseKeys.add(`${purchase.categoryId}|${purchase.purchaseDate}|${purchase.amount.toFixed(2)}`);
+      if (purchase.purchaseDate.startsWith(month) && purchaseAmount > 0) {
+        addToMap(map, purchase.categoryId, purchaseAmount);
+        cardPurchaseKeys.add(`${purchase.categoryId}|${purchase.purchaseDate}|${purchaseAmount.toFixed(2)}`);
       }
       continue;
     }
 
     for (const inst of purchaseInsts) {
-      const closingDay = closingByCard.get(purchase.cardId) ?? 10;
-      const amount =
-        total <= 1
-          ? oneTimeConsumptionAmount(month, purchase, inst, closingDay)
-          : getConsumptionMonth(purchase, inst) === month
-            ? inst.amount
-            : 0;
+      const amount = amountInMonth(month, purchase, inst, closingDay);
       if (amount <= 0) continue;
-
       addToMap(map, purchase.categoryId, amount);
       cardPurchaseKeys.add(`${purchase.categoryId}|${purchase.purchaseDate}|${amount.toFixed(2)}`);
     }
@@ -128,19 +114,8 @@ export function getConsumptionByCategory(
   for (const t of transactions) {
     if (t.categoryId === SEED_INVOICE_PAYMENT_CATEGORY_ID) continue;
     if (t.type !== "expense" || !t.competenceDate.startsWith(month)) continue;
-
-    const txKey = `${t.categoryId}|${t.competenceDate}|${t.amount.toFixed(2)}`;
-    if (cardPurchaseKeys.has(txKey)) continue;
-
-    const dupPurchase = purchases.some(
-      p =>
-        p.categoryId === t.categoryId &&
-        p.purchaseDate === t.competenceDate &&
-        amountsMatch(p.amount, t.amount),
-    );
-    if (dupPurchase) continue;
-
-    addToMap(map, t.categoryId, t.amount);
+    if (isDuplicateManualTx(t, purchases, cardPurchaseKeys)) continue;
+    addToMap(map, t.categoryId, money(t.amount));
   }
 
   return map;
@@ -156,7 +131,6 @@ export function buildConsumptionCatSlices(
   cards: CreditCard[] = [],
 ): CatSlice[] {
   const map: Record<string, CatSlice> = {};
-  const closingByCard = new Map(cards.map(c => [c.id, c.closingDay]));
   const cardById = new Map(cards.map(c => [c.id, c]));
   const installmentsByPurchase = new Map<string, CardInstallment[]>();
   for (const inst of installments) {
@@ -188,51 +162,29 @@ export function buildConsumptionCatSlices(
   }
 
   for (const purchase of purchases) {
-    if (purchase.isSubscription) {
-      const purchaseMonth = purchase.purchaseDate.substring(0, 7);
-      if (month >= purchaseMonth) {
-        pushItem(purchase.categoryId, {
-          id: `sub-${purchase.id}-${month}`,
-          description: purchase.description,
-          date: purchase.purchaseDate,
-          amount: purchase.amount,
-          isCard: true,
-          cardName: cardById.get(purchase.cardId)?.name,
-          cardColor: cardById.get(purchase.cardId)?.color,
-        });
-        cardPurchaseKeys.add(`${purchase.categoryId}|${purchase.purchaseDate}|${purchase.amount.toFixed(2)}`);
-      }
-      continue;
-    }
-
     const purchaseInsts = installmentsByPurchase.get(purchase.id) ?? [];
-    const total = purchase.totalInstallments ?? 1;
+    const closingDay = closingDayFor(purchase, cards);
     const card = cardById.get(purchase.cardId);
+    const purchaseAmount = money(purchase.amount);
 
     if (purchaseInsts.length === 0) {
-      if (purchase.purchaseDate.startsWith(month)) {
+      if (purchase.purchaseDate.startsWith(month) && purchaseAmount > 0) {
         pushItem(purchase.categoryId, {
           id: `purchase-${purchase.id}`,
           description: purchase.description,
           date: purchase.purchaseDate,
-          amount: purchase.amount,
+          amount: purchaseAmount,
           isCard: true,
           cardName: card?.name,
           cardColor: card?.color,
         });
-        cardPurchaseKeys.add(`${purchase.categoryId}|${purchase.purchaseDate}|${purchase.amount.toFixed(2)}`);
+        cardPurchaseKeys.add(`${purchase.categoryId}|${purchase.purchaseDate}|${purchaseAmount.toFixed(2)}`);
       }
       continue;
     }
 
     for (const inst of purchaseInsts) {
-      const closingDay = closingByCard.get(purchase.cardId) ?? 10;
-      const amount =
-        total <= 1
-          ? oneTimeConsumptionAmount(month, purchase, inst, closingDay)
-          : getConsumptionMonth(purchase, inst) === month
-            ? inst.amount
-            : 0;
+      const amount = amountInMonth(month, purchase, inst, closingDay);
       if (amount <= 0) continue;
 
       pushItem(purchase.categoryId, {
@@ -254,23 +206,13 @@ export function buildConsumptionCatSlices(
   for (const t of transactions) {
     if (t.categoryId === SEED_INVOICE_PAYMENT_CATEGORY_ID) continue;
     if (t.type !== "expense" || !t.competenceDate.startsWith(month)) continue;
-
-    const txKey = `${t.categoryId}|${t.competenceDate}|${t.amount.toFixed(2)}`;
-    if (cardPurchaseKeys.has(txKey)) continue;
-
-    const dupPurchase = purchases.some(
-      p =>
-        p.categoryId === t.categoryId &&
-        p.purchaseDate === t.competenceDate &&
-        amountsMatch(p.amount, t.amount),
-    );
-    if (dupPurchase) continue;
+    if (isDuplicateManualTx(t, purchases, cardPurchaseKeys)) continue;
 
     pushItem(t.categoryId || "__none__", {
       id: t.id,
       description: t.description,
       date: t.competenceDate,
-      amount: t.amount,
+      amount: money(t.amount),
       isCard: false,
     });
   }

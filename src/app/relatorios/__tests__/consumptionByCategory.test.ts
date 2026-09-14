@@ -4,7 +4,7 @@ import {
   getConsumptionMonth,
 } from "../consumptionByCategory";
 import { getSpentByCategory } from "@/engine/budgetEngine";
-import type { Transaction, CardPurchase, CardInstallment } from "@/types/financial";
+import type { Transaction, CardPurchase, CardInstallment, CreditCard } from "@/types/financial";
 import { SEED_INVOICE_PAYMENT_CATEGORY_ID } from "@/types/financial";
 
 const tx = (partial: Partial<Transaction> & Pick<Transaction, "id" | "amount">): Transaction => ({
@@ -82,11 +82,30 @@ describe("getConsumptionByCategory", () => {
     expect(getConsumptionByCategory("2026-07", [], installments, purchases)).toEqual({ "cat-corre": 10 });
   });
 
-  it("compra anterior na fatura de junho entra em junho no consumo real (à vista)", () => {
+  it("compra à vista conta no mês da purchaseDate, não no mês da fatura", () => {
     const purchases = [purchase({ id: "p1", amount: 50, purchaseDate: "2026-04-28" })];
     const installments = [inst({ id: "i1", purchaseId: "p1", amount: 50, competenceMonth: "2026-06" })];
-    expect(getConsumptionByCategory("2026-06", [], installments, purchases)).toEqual({ "cat-corre": 50 });
-    expect(getConsumptionByCategory("2026-04", [], installments, purchases)).toEqual({});
+    expect(getConsumptionByCategory("2026-04", [], installments, purchases)).toEqual({ "cat-corre": 50 });
+    expect(getConsumptionByCategory("2026-06", [], installments, purchases)).toEqual({});
+  });
+
+  it("assinatura conta no mês civil da cobrança, não em todos os meses seguintes", () => {
+    const purchases = [purchase({
+      id: "p1",
+      amount: 39.9,
+      purchaseDate: "2026-01-15",
+      isSubscription: true,
+    })];
+    const installments = [
+      inst({ id: "i1", purchaseId: "p1", amount: 39.9, competenceMonth: "2026-06" }),
+      inst({ id: "i2", purchaseId: "p1", amount: 39.9, competenceMonth: "2026-07" }),
+    ];
+    const cards = [{ id: "c1", closingDay: 10 } as CreditCard];
+    // Fecha dia 10: cobrança 15/mai → fatura jun; 15/jun → fatura jul
+    expect(getConsumptionByCategory("2026-04", [], installments, purchases, cards)).toEqual({});
+    expect(getConsumptionByCategory("2026-05", [], installments, purchases, cards)).toEqual({ "cat-corre": 39.9 });
+    expect(getConsumptionByCategory("2026-06", [], installments, purchases, cards)).toEqual({ "cat-corre": 39.9 });
+    expect(getConsumptionByCategory("2026-07", [], installments, purchases, cards)).toEqual({});
   });
 
   it("fatura junho + nubank junho na fatura julho somam no consumo real de junho", () => {

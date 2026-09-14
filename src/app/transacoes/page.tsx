@@ -2,7 +2,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useApp } from "@/context/AppContext";
-import { currentMonth, addMonths, fmt, today, getProjectedBalance, isBalanceNegative, isBalancePositive } from "@/engine/financialEngine";
+import { currentMonth, addMonths, fmt, today, getProjectedBalance, isBalanceNegative, isBalancePositive, projectionHorizon } from "@/engine/financialEngine";
 import { getSpentByCategory } from "@/engine/budgetEngine";
 import { Search, TrendingUp, Package, RefreshCw, Pencil, Trash2, SlidersHorizontal, X, ArrowLeftRight } from "lucide-react";
 import CategoryIcon from "@/components/CategoryIcon";
@@ -20,12 +20,6 @@ const WEEKDAYS = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "
 function fullMonthLabel(yyyymm: string) {
   const [y, m] = yyyymm.split("-").map(Number);
   return `${MONTH_NAMES[m - 1]} ${y}`;
-}
-
-function endOfMonth(yyyymm: string) {
-  const [y, m] = yyyymm.split("-").map(Number);
-  const last = new Date(y, m, 0);
-  return `${yyyymm}-${String(last.getDate()).padStart(2, "0")}`;
 }
 
 function addDays(dateStr: string, delta: number): string {
@@ -163,11 +157,11 @@ export default function Transacoes() {
   const monthBalance = income - expense;
 
   const totalProjected = useMemo(() => {
-    const eom = endOfMonth(selectedMonth);
+    const horizon = projectionHorizon(selectedMonth);
     return state.accounts
       .filter(a => a.active)
       .reduce(
-        (s, a) => s + getProjectedBalance(a, state.transactions, eom, state.cards, state.installments),
+        (s, a) => s + getProjectedBalance(a, state.transactions, horizon, state.cards, state.installments),
         0,
       );
   }, [state.accounts, state.transactions, state.cards, state.installments, selectedMonth]);

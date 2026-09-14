@@ -7,7 +7,7 @@ import type { Transaction } from "@/context/AppContext";
 import {
   getCurrentBalance, getProjectedBalance,
   currentMonth, addMonths, fmt, today,
-  isBalanceNegative, isBalancePositive,
+  isBalanceNegative, isBalancePositive, projectionHorizon,
 } from "@/engine/financialEngine";
 import { computeInvoice } from "@/engine/invoiceEngine";
 import { getSpentByCategory } from "@/engine/budgetEngine";
@@ -20,6 +20,11 @@ import { CopilotFab } from "@/components/CopilotFab";
 import { FabStack } from "@/components/FabStack";
 import { CategoryDonutSection, buildCatSlices } from "@/components/CategoryDonutSection";
 import { buildConsumptionCatSlices } from "@/app/relatorios/consumptionByCategory";
+import {
+  AccountScopePicker,
+  ALL_ACCOUNTS_SCOPE,
+  useAccountScope,
+} from "@/components/AccountScopePicker";
 
 const MONTH_NAMES = [
   "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
@@ -55,12 +60,6 @@ function greeting() {
   return "Boa noite";
 }
 
-function endOfMonth(yyyymm: string) {
-  const [y, m] = yyyymm.split("-").map(Number);
-  const last = new Date(y, m, 0);
-  return `${yyyymm}-${String(last.getDate()).padStart(2, "0")}`;
-}
-
 function getStatusLabel(type: string, status: string): string {
   if (status === "paid") return type === "income" ? "Recebido" : "Pago";
   if (status === "pending") return type === "income" ? "A receber" : "A pagar";
@@ -90,6 +89,7 @@ export default function Dashboard() {
   const [selectedMonth, setSelectedMonth] = useState(currentMonth());
   const [pendingExpanded, setPendingExpanded] = useState(false);
   const [categoryView, setCategoryView] = useState<"invoice" | "consumption">("invoice");
+  const [accountScope, setAccountScope, accountScopeReady] = useAccountScope(state.accounts);
 
   function openTransaction(tx: Transaction) {
     router.push(`/transacoes/${tx.id}/editar`);
@@ -122,22 +122,75 @@ export default function Dashboard() {
   }
 
   const todayStr = today();
-  const eom = endOfMonth(selectedMonth);
+  const projectionDate = projectionHorizon(selectedMonth);
   const isCurrentMonth = selectedMonth === currentMonth();
 
+  const activeAccounts = useMemo(
+    () => state.accounts.filter(a => a.active),
+    [state.accounts]
+  );
+
+  const scopedAccounts = useMemo(
+    () => accountScope === ALL_ACCOUNTS_SCOPE
+      ? activeAccounts
+      : activeAccounts.filter(a => a.id === accountScope),
+    [activeAccounts, accountScope]
+  );
+
+  const scopedAccountIds = useMemo(
+    () => new Set(scopedAccounts.map(a => a.id)),
+    [scopedAccounts]
+  );
+
+  const accountBalances = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const a of activeAccounts) {
+      map[a.id] = getCurrentBalance(a, state.transactions);
+    }
+    return map;
+  }, [activeAccounts, state.transactions]);
+
+  const inScopeTx = (t: Transaction) =>
+    accountScope === ALL_ACCOUNTS_SCOPE
+    || scopedAccountIds.has(t.accountId)
+    || (t.transferToAccountId ? scopedAccountIds.has(t.transferToAccountId) : false);
+
   const totalBalance = useMemo(() =>
-    state.accounts.filter(a => a.active).reduce((s, a) => s + getCurrentBalance(a, state.transactions), 0),
-    [state.accounts, state.transactions]
+    scopedAccounts.reduce((s, a) => s + (accountBalances[a.id] ?? 0), 0),
+    [scopedAccounts, accountBalances]
   );
 
   const totalProjected = useMemo(() =>
-    state.accounts.filter(a => a.active).reduce((s, a) => s + getProjectedBalance(a, state.transactions, eom, state.cards, state.installments), 0),
-    [state.accounts, state.transactions, state.cards, state.installments, eom]
+    scopedAccounts.reduce((s, a) => s + getProjectedBalance(a, state.transactions, projectionDate, state.cards, state.installments), 0),
+    [scopedAccounts, state.transactions, state.cards, state.installments, projectionDate]
+  );
+
+  const scopedCards = useMemo(
+    () => accountScope === ALL_ACCOUNTS_SCOPE
+      ? state.cards.filter(c => c.active)
+      : state.cards.filter(c => c.active && scopedAccountIds.has(c.paymentAccountId)),
+    [state.cards, accountScope, scopedAccountIds]
+  );
+
+  const scopedCardIds = useMemo(() => new Set(scopedCards.map(c => c.id)), [scopedCards]);
+
+  const scopedInstallments = useMemo(
+    () => accountScope === ALL_ACCOUNTS_SCOPE
+      ? state.installments
+      : state.installments.filter(i => scopedCardIds.has(i.cardId)),
+    [state.installments, accountScope, scopedCardIds]
+  );
+
+  const scopedPurchases = useMemo(
+    () => accountScope === ALL_ACCOUNTS_SCOPE
+      ? state.purchases
+      : state.purchases.filter(p => scopedCardIds.has(p.cardId)),
+    [state.purchases, accountScope, scopedCardIds]
   );
 
   const monthTxs = useMemo(() =>
-    state.transactions.filter(t => t.paymentDate.startsWith(selectedMonth)),
-    [state.transactions, selectedMonth]
+    state.transactions.filter(t => t.paymentDate.startsWith(selectedMonth) && inScopeTx(t)),
+    [state.transactions, selectedMonth, accountScope, scopedAccountIds]
   );
 
   // Categorias que não contam nos relatórios (ex.: Empréstimo). O dinheiro
@@ -151,17 +204,28 @@ export default function Dashboard() {
   // (status "paid" + paymentDate no mês). Empréstimo não conta como receita.
   const monthIncome = useMemo(() =>
     state.transactions
-      .filter(t => t.type === "income" && t.status === "paid" && t.paymentDate.startsWith(selectedMonth) && !excludedReportCatIds.has(t.categoryId))
+      .filter(t =>
+        t.type === "income" &&
+        t.status === "paid" &&
+        t.paymentDate.startsWith(selectedMonth) &&
+        !excludedReportCatIds.has(t.categoryId) &&
+        inScopeTx(t)
+      )
       .reduce((s, t) => s + t.amount, 0),
-    [state.transactions, selectedMonth, excludedReportCatIds]
+    [state.transactions, selectedMonth, excludedReportCatIds, accountScope, scopedAccountIds]
   );
   // Despesa = MESMA base do donut: getSpentByCategory (competência + parcelas de
   // cartão, exclui "Pagamento de Fatura"). Assim "Despesas" bate com o Total do relatório.
   const monthExpense = useMemo(() =>
     Object.values(
-      getSpentByCategory(selectedMonth, state.transactions, state.installments, state.purchases)
+      getSpentByCategory(
+        selectedMonth,
+        state.transactions.filter(t => accountScope === ALL_ACCOUNTS_SCOPE || scopedAccountIds.has(t.accountId)),
+        scopedInstallments,
+        scopedPurchases,
+      )
     ).reduce((s, v) => s + v, 0),
-    [selectedMonth, state.transactions, state.installments, state.purchases]
+    [selectedMonth, state.transactions, scopedInstallments, scopedPurchases, accountScope, scopedAccountIds]
   );
   const monthBalance = monthIncome - monthExpense;
 
@@ -171,10 +235,11 @@ export default function Dashboard() {
       .filter(t =>
         t.status !== "paid" &&
         t.paymentDate < todayStr &&
-        t.paymentDate.startsWith(selectedMonth)
+        t.paymentDate.startsWith(selectedMonth) &&
+        inScopeTx(t)
       )
       .sort((a, b) => a.paymentDate.localeCompare(b.paymentDate)),
-    [state.transactions, todayStr, selectedMonth]
+    [state.transactions, todayStr, selectedMonth, accountScope, scopedAccountIds]
   );
 
   // Pendentes: status=pending, data futura/hoje, mês selecionado (inside collapsible)
@@ -183,10 +248,11 @@ export default function Dashboard() {
       .filter(t =>
         t.status === "pending" &&
         t.paymentDate >= todayStr &&
-        t.paymentDate.startsWith(selectedMonth)
+        t.paymentDate.startsWith(selectedMonth) &&
+        inScopeTx(t)
       )
       .sort((a, b) => a.paymentDate.localeCompare(b.paymentDate)),
-    [state.transactions, todayStr, selectedMonth]
+    [state.transactions, todayStr, selectedMonth, accountScope, scopedAccountIds]
   );
 
   const expensePending = useMemo(() => pendingTxs.filter(t => t.type === "expense"), [pendingTxs]);
@@ -198,7 +264,7 @@ export default function Dashboard() {
   //   1) Fatura cujo VENCIMENTO cai no selectedMonth (se houver) — open→"open", closed/overdue→"due"; paga não entra.
   //   2) Senão: fatura "open" (ciclo corrente) — PRIORIDADE — OU "overdue" de mês anterior.
   const cardInvoices = useMemo(() => {
-    return state.cards.filter(c => c.active).flatMap(card => {
+    return scopedCards.flatMap(card => {
       const months = [...new Set(
         state.installments
           .filter(i => i.cardId === card.id)
@@ -223,28 +289,28 @@ export default function Dashboard() {
         ? [{ card, invoice: chosen, kind: (chosen.status === "open" ? "open" : "due") as "due" | "open" }]
         : [];
     });
-  }, [state.cards, state.installments, selectedMonth]);
+  }, [scopedCards, state.installments, selectedMonth]);
 
   // Donut: despesas pagas + parcelas do mês selecionado
   const catSlices = useMemo(() =>
     categoryView === "invoice"
       ? buildCatSlices(
-          state.transactions,
-          state.installments,
-          state.purchases,
+          state.transactions.filter(t => accountScope === ALL_ACCOUNTS_SCOPE || scopedAccountIds.has(t.accountId)),
+          scopedInstallments,
+          scopedPurchases,
           state.categories,
-          state.cards,
+          scopedCards,
           selectedMonth,
         )
       : buildConsumptionCatSlices(
           selectedMonth,
-          state.transactions,
-          state.installments,
-          state.purchases,
+          state.transactions.filter(t => accountScope === ALL_ACCOUNTS_SCOPE || scopedAccountIds.has(t.accountId)),
+          scopedInstallments,
+          scopedPurchases,
           state.categories,
-          state.cards,
+          scopedCards,
         ),
-    [categoryView, state.transactions, state.installments, state.purchases, state.categories, state.cards, selectedMonth]
+    [categoryView, state.transactions, scopedInstallments, scopedPurchases, state.categories, scopedCards, selectedMonth, accountScope, scopedAccountIds]
   );
 
   // Máximo 3 lançamentos recentes
@@ -413,30 +479,69 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* ── 3. Saldo Real ── */}
+        {/* ── 3. Saldo por conta ── */}
         <div
           className="card fade-up-2"
-          onClick={() => router.push("/contas")}
           style={{
             padding: "20px", marginBottom: "12px",
             background: "linear-gradient(135deg, #0F1923 0%, #0D1E34 100%)",
             borderColor: "rgba(0,229,160,0.1)",
-            cursor: "pointer",
           }}
         >
-          <p style={{
-            fontSize: "10px", fontWeight: 700, color: "var(--text-3)",
-            letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "6px",
+          <div style={{
+            display: "flex", justifyContent: "space-between", alignItems: "center",
+            marginBottom: activeAccounts.length > 0 ? "10px" : "6px",
+            gap: "8px",
           }}>
-            Saldo Real
-          </p>
+            <p style={{
+              fontSize: "10px", fontWeight: 700, color: "var(--text-3)",
+              letterSpacing: "0.1em", textTransform: "uppercase",
+            }}>
+              {accountScope === ALL_ACCOUNTS_SCOPE
+                ? "Saldo total"
+                : `Saldo · ${scopedAccounts[0]?.name ?? "Conta"}`}
+            </p>
+            <button
+              type="button"
+              onClick={() => router.push("/contas")}
+              style={{
+                background: "none", border: "none", padding: 0,
+                fontSize: "11px", fontWeight: 600, color: "var(--accent)",
+                cursor: "pointer", fontFamily: "inherit",
+              }}
+            >
+              Contas →
+            </button>
+          </div>
+
+          {activeAccounts.length > 1 && (
+            <div style={{ marginBottom: "14px" }}>
+              <AccountScopePicker
+                accounts={activeAccounts}
+                balances={accountBalances}
+                scope={accountScope}
+                onChange={setAccountScope}
+              />
+            </div>
+          )}
+
           <p className="mono" style={{
             fontSize: "34px", fontWeight: 700, letterSpacing: "-0.03em",
             color: isBalanceNegative(totalBalance) ? "var(--red)"
               : isBalancePositive(totalBalance) ? "var(--green)" : "var(--text-1)",
             lineHeight: 1,
+            opacity: accountScopeReady ? 1 : 0.35,
           }}>
             R$ {fmt(totalBalance)}
+          </p>
+          <p style={{ fontSize: "11px", color: "var(--text-3)", marginTop: "6px" }}>
+            {!accountScopeReady
+              ? "Carregando contas…"
+              : accountScope === ALL_ACCOUNTS_SCOPE && activeAccounts.length > 1
+              ? "Soma de todas as contas — escolha uma acima para ver só ela"
+              : activeAccounts.length === 0
+              ? "Cadastre uma conta para ver o saldo"
+              : "Apenas transações pagas desta conta"}
           </p>
 
           {totalProjected !== totalBalance && (
@@ -817,52 +922,70 @@ export default function Dashboard() {
         )}
 
         {/* ── 8. Gastos por Categoria (donut) ── */}
-        {catSlices.length > 0 && (
-          <div className="card fade-up-5" style={{ overflow: "hidden", marginBottom: "12px" }}>
-            <div style={{
-              padding: "12px 14px 10px",
-              borderBottom: "1px solid var(--border)",
-            }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
-                <p style={{
-                  fontSize: "11px", fontWeight: 700, color: "var(--text-3)",
-                  letterSpacing: "0.07em", textTransform: "uppercase",
-                }}>
-                  Gastos por Categoria
-                </p>
-                <Link href="/relatorios" style={{ fontSize: "11.5px", color: "var(--accent)", textDecoration: "none", fontWeight: 600 }}>
-                  Relatórios →
-                </Link>
-              </div>
-              <div style={{
-                display: "flex", gap: "4px",
-                padding: "3px", background: "rgba(255,255,255,0.04)",
-                borderRadius: "10px", border: "1px solid var(--border)",
+        <div
+          className="card fade-up-5"
+          style={{ overflow: "hidden", marginBottom: "12px" }}
+          onTouchStart={e => e.stopPropagation()}
+          onTouchMove={e => e.stopPropagation()}
+          onTouchEnd={e => e.stopPropagation()}
+        >
+          <div style={{
+            padding: "12px 14px 10px",
+            borderBottom: "1px solid var(--border)",
+          }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
+              <p style={{
+                fontSize: "11px", fontWeight: 700, color: "var(--text-3)",
+                letterSpacing: "0.07em", textTransform: "uppercase",
               }}>
-                {([
-                  { id: "invoice" as const, label: "Por fatura" },
-                  { id: "consumption" as const, label: "Gasto real" },
-                ] as const).map(opt => (
-                  <button
-                    key={opt.id}
-                    onClick={() => setCategoryView(opt.id)}
-                    style={{
-                      flex: 1, padding: "6px 6px", borderRadius: "8px",
-                      border: categoryView === opt.id ? "1px solid var(--border-accent)" : "1px solid transparent",
-                      fontSize: "11px", fontWeight: 700, fontFamily: "inherit",
-                      cursor: "pointer", touchAction: "manipulation",
-                      background: categoryView === opt.id ? "var(--accent-10)" : "transparent",
-                      color: categoryView === opt.id ? "var(--accent)" : "var(--text-3)",
-                    }}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
+                Gastos por Categoria
+              </p>
+              <Link href="/relatorios" style={{ fontSize: "11.5px", color: "var(--accent)", textDecoration: "none", fontWeight: 600 }}>
+                Relatórios →
+              </Link>
             </div>
-            <CategoryDonutSection key={`${selectedMonth}-${categoryView}`} slices={catSlices} />
+            <div style={{
+              display: "flex", gap: "4px",
+              padding: "3px", background: "rgba(255,255,255,0.04)",
+              borderRadius: "10px", border: "1px solid var(--border)",
+            }}>
+              {([
+                { id: "invoice" as const, label: "Por fatura" },
+                { id: "consumption" as const, label: "Gasto real" },
+              ] as const).map(opt => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() => setCategoryView(opt.id)}
+                  style={{
+                    flex: 1, padding: "6px 6px", borderRadius: "8px",
+                    border: categoryView === opt.id ? "1px solid var(--border-accent)" : "1px solid transparent",
+                    fontSize: "11px", fontWeight: 700, fontFamily: "inherit",
+                    cursor: "pointer", touchAction: "manipulation",
+                    background: categoryView === opt.id ? "var(--accent-10)" : "transparent",
+                    color: categoryView === opt.id ? "var(--accent)" : "var(--text-3)",
+                  }}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+            {categoryView === "consumption" && (
+              <p style={{ fontSize: "11px", color: "var(--text-3)", marginTop: "10px", lineHeight: 1.4 }}>
+                Data da compra, mesmo que a fatura seja outro mês.
+              </p>
+            )}
           </div>
-        )}
+          <CategoryDonutSection
+            key={`${selectedMonth}-${categoryView}`}
+            slices={catSlices}
+            emptyMessage={
+              categoryView === "consumption"
+                ? `Sem gasto real em ${fullMonthLabel(selectedMonth)}`
+                : `Sem despesas na fatura de ${fullMonthLabel(selectedMonth)}`
+            }
+          />
+        </div>
 
         {/* ── 9. Lançamentos recentes (máx 3) ── */}
         <div className="card fade-up-6" style={{ overflow: "hidden", marginBottom: "16px" }}>

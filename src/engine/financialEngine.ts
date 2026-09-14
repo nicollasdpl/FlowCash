@@ -52,6 +52,18 @@ export function currentMonth(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
+export function endOfMonth(yyyymm: string): string {
+  const [y, m] = yyyymm.split("-").map(Number);
+  const last = new Date(y, m, 0).getDate();
+  return `${yyyymm}-${String(last).padStart(2, "0")}`;
+}
+
+/** Horizon for projected balance. Past months keep the current month so the number does not jump when browsing history. */
+export function projectionHorizon(selectedMonth: string): string {
+  const cm = currentMonth();
+  return endOfMonth(selectedMonth < cm ? cm : selectedMonth);
+}
+
 /** Half-cent tolerance — values within this range display as zero (R$ 0,00). */
 export const BALANCE_EPSILON = 0.005;
 
@@ -242,9 +254,7 @@ export function getAccountBalance(
 }
 
 function endOfCurrentMonth(): string {
-  const d = new Date();
-  const last = new Date(d.getFullYear(), d.getMonth() + 1, 0);
-  return last.toISOString().split("T")[0];
+  return endOfMonth(currentMonth());
 }
 
 // ─── PATRIMÔNIO LÍQUIDO ──────────────────────────────────────────────────────
