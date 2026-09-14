@@ -278,15 +278,11 @@ export default function CartaoDetail() {
         padding: "0 8px 0 4px", height: "60px", flexShrink: 0,
       }}>
         <button
+          type="button"
           onClick={() => router.push("/cartoes")}
-          style={{
-            background: "none", border: "none", color: "var(--text-2)",
-            cursor: "pointer", fontSize: "24px",
-            width: "48px", height: "48px", borderRadius: "12px",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            flexShrink: 0, touchAction: "manipulation",
-            WebkitTapHighlightColor: "transparent",
-          }}
+          className="icon-btn ghost"
+          aria-label="Voltar"
+          style={{ fontSize: "24px", flexShrink: 0 }}
         >‹</button>
         <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", justifyContent: "space-between", paddingRight: "4px" }}>
           <div style={{ minWidth: 0 }}>
@@ -301,14 +297,10 @@ export default function CartaoDetail() {
             </p>
           </div>
           <button
+            type="button"
             onClick={() => router.push(`/cartoes/${card.id}/editar`)}
-            style={{
-              background: "none", border: "none", cursor: "pointer",
-              color: "var(--text-3)", padding: "10px",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              borderRadius: "10px", touchAction: "manipulation",
-              WebkitTapHighlightColor: "transparent", flexShrink: 0,
-            }}
+            className="icon-btn ghost"
+            aria-label="Editar cartão"
           >
             <Pencil size={16} strokeWidth={1.5} />
           </button>
@@ -322,7 +314,7 @@ export default function CartaoDetail() {
 
         {/* ── Resumo do limite ── */}
         {limitSummary && (
-          <div className="card fade-up-1" style={{ padding: "16px", marginBottom: "16px" }}>
+          <div className="soft-card" style={{ padding: "16px", marginBottom: "16px" }}>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "8px", marginBottom: "12px" }}>
               <div>
                 <p style={{ fontSize: "10px", color: "var(--text-3)", marginBottom: "3px" }}>Disponível</p>
@@ -363,7 +355,7 @@ export default function CartaoDetail() {
         )}
 
         {/* ── Seletor de mês ── */}
-        <div className="fade-up-2" style={{ marginBottom: "14px" }}>
+        <div style={{ marginBottom: "14px" }}>
           <div style={{
             display: "flex", gap: "6px",
             overflowX: "auto", paddingBottom: "2px",
@@ -375,9 +367,10 @@ export default function CartaoDetail() {
               return (
                 <button
                   key={m}
-                  className={`filter-btn${selectedMonth === m ? " active" : ""}`}
+                  type="button"
+                  className={`chip-btn${selectedMonth === m ? " active" : ""}`}
                   onClick={() => setSelectedMonth(m)}
-                  style={{ fontSize: "11.5px", padding: "7px 12px", flexShrink: 0 }}
+                  style={{ flexShrink: 0 }}
                 >
                   {monthTabLabel(dueDate)}
                 </button>
@@ -387,7 +380,7 @@ export default function CartaoDetail() {
         </div>
 
         {/* ── Card de fatura ── */}
-        <div className="card fade-up-3" style={{ overflow: "hidden" }}>
+        <div className="soft-card" style={{ overflow: "hidden" }}>
 
           {/* Header da fatura */}
           <div style={{
@@ -610,7 +603,7 @@ export default function CartaoDetail() {
           type="button"
           className="page-fab-pill"
           onClick={() => router.push(`/cartoes/${card.id}/nova-compra`)}
-          style={{ background: card.color, boxShadow: `0 4px 16px ${card.color}66` }}
+          style={{ background: card.color, color: "#fff", boxShadow: "var(--shadow-btn)" }}
         >
           <Plus size={17} strokeWidth={2.5} />
           Nova Compra

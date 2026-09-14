@@ -70,7 +70,7 @@ export default function DonutChart({ segments, totalLabel, total, onSegmentClick
               strokeLinecap="butt"
               opacity={isDimmed ? 0.25 : 1}
               style={{
-                filter: isHighlighted ? `drop-shadow(0 0 10px ${seg.color}88)` : `drop-shadow(0 0 4px ${seg.color}44)`,
+                filter: isHighlighted ? `drop-shadow(0 2px 6px ${seg.color}40)` : "none",
                 transition: "all 0.2s ease",
                 cursor: "pointer",
               }}

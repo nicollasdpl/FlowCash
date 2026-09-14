@@ -65,8 +65,8 @@ export default function Configuracoes() {
     <div style={{ padding: "16px", maxWidth: "640px", margin: "0 auto" }}>
 
       {/* Header */}
-      <div className="fade-up-1" style={{ marginBottom: "20px" }}>
-        <h1 style={{ fontSize: "20px", fontWeight: 700, color: "var(--text-1)", letterSpacing: "-0.03em" }}>
+      <div style={{ marginBottom: "20px" }}>
+        <h1 className="page-title" style={{ fontSize: "20px" }}>
           Configurações
         </h1>
         <p style={{ fontSize: "12px", color: "var(--text-3)", marginTop: "3px" }}>
@@ -75,9 +75,9 @@ export default function Configuracoes() {
       </div>
 
       {/* ── Navegação rápida ── */}
-      <div className="card fade-up-1" style={{ overflow: "hidden", marginBottom: "14px" }}>
+      <div className="soft-card" style={{ overflow: "hidden", marginBottom: "14px" }}>
         <div style={{ padding: "13px 16px", borderBottom: "1px solid var(--border)" }}>
-          <p style={{ fontSize: "11px", fontWeight: 700, color: "var(--text-3)", letterSpacing: "0.08em", textTransform: "uppercase" }}>
+          <p className="section-heading" style={{ marginBottom: 0 }}>
             Seções
           </p>
         </div>
@@ -109,9 +109,9 @@ export default function Configuracoes() {
       </div>
 
       {/* Perfil */}
-      <div className="card fade-up-2" style={{ overflow: "hidden", marginBottom: "14px" }}>
+      <div className="soft-card" style={{ overflow: "hidden", marginBottom: "14px" }}>
         <div style={{ padding: "13px 16px", borderBottom: "1px solid var(--border)" }}>
-          <p style={{ fontSize: "11px", fontWeight: 700, color: "var(--text-3)", letterSpacing: "0.08em", textTransform: "uppercase" }}>
+          <p className="section-heading" style={{ marginBottom: 0 }}>
             Perfil
           </p>
         </div>
@@ -181,7 +181,7 @@ export default function Configuracoes() {
                 <span style={{ fontSize: "16px", color: state.userName ? "var(--text-1)" : "var(--text-3)" }}>
                   {state.userName || "Toque para definir"}
                 </span>
-                <span style={{ fontSize: "13px", color: "var(--accent)", fontWeight: 600 }}>Editar</span>
+                <span className="link-quiet">Editar</span>
               </div>
             )}
             {saved && (
@@ -196,9 +196,9 @@ export default function Configuracoes() {
       <NotificationSettingsCard />
 
       {/* Início */}
-      <div className="card fade-up-3" style={{ overflow: "hidden", marginBottom: "14px" }}>
+      <div className="soft-card" style={{ overflow: "hidden", marginBottom: "14px" }}>
         <div style={{ padding: "13px 16px", borderBottom: "1px solid var(--border)" }}>
-          <p style={{ fontSize: "11px", fontWeight: 700, color: "var(--text-3)", letterSpacing: "0.08em", textTransform: "uppercase" }}>
+          <p className="section-heading" style={{ marginBottom: 0 }}>
             Início
           </p>
         </div>
@@ -239,9 +239,9 @@ export default function Configuracoes() {
       </div>
 
       {/* Dados */}
-      <div className="card fade-up-3" style={{ overflow: "hidden", marginBottom: "14px" }}>
+      <div className="soft-card" style={{ overflow: "hidden", marginBottom: "14px" }}>
         <div style={{ padding: "13px 16px", borderBottom: "1px solid var(--border)" }}>
-          <p style={{ fontSize: "11px", fontWeight: 700, color: "var(--text-3)", letterSpacing: "0.08em", textTransform: "uppercase" }}>
+          <p className="section-heading" style={{ marginBottom: 0 }}>
             Dados do App
           </p>
         </div>
@@ -249,17 +249,12 @@ export default function Configuracoes() {
         <div style={{ padding: "14px 16px" }}>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "14px" }}>
             {statItems.map(({ label, value, Icon }) => (
-              <div key={label} style={{
-                padding: "12px 14px",
-                background: "var(--bg-input)",
-                border: "1px solid var(--border)",
-                borderRadius: "var(--r-md)",
-              }}>
+              <div key={label} className="metric-tile">
                 <div style={{ marginBottom: "4px", color: "var(--text-3)" }}>
                   <Icon size={16} strokeWidth={1.5} />
                 </div>
-                <p style={{ fontSize: "20px", fontWeight: 700, color: "var(--text-1)", lineHeight: 1 }}>{value}</p>
-                <p style={{ fontSize: "11px", color: "var(--text-3)", marginTop: "2px" }}>{label}</p>
+                <p className="metric-tile-value" style={{ fontSize: "20px", color: "var(--text-1)" }}>{value}</p>
+                <p className="metric-tile-label" style={{ marginBottom: 0, marginTop: "2px" }}>{label}</p>
               </div>
             ))}
           </div>
@@ -341,19 +336,15 @@ export default function Configuracoes() {
       </div>
 
       {/* Categorias */}
-      <div className="card fade-up-4" style={{ overflow: "hidden", marginBottom: "14px" }}>
+      <div className="soft-card" style={{ overflow: "hidden", marginBottom: "14px" }}>
         <div style={{ padding: "13px 16px", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <p style={{ fontSize: "11px", fontWeight: 700, color: "var(--text-3)", letterSpacing: "0.08em", textTransform: "uppercase" }}>
+          <p className="section-heading" style={{ marginBottom: 0 }}>
             Categorias ({state.categories.filter(c => !c.isSystem).length})
           </p>
           <button
+            type="button"
             onClick={() => router.push("/configuracoes/categorias/nova")}
-            style={{
-              background: "var(--accent-10)", border: "1px solid var(--border-accent)",
-              borderRadius: "8px", color: "var(--accent)", fontWeight: 700,
-              fontSize: "13px", padding: "6px 12px", cursor: "pointer",
-              fontFamily: "inherit", minHeight: "36px",
-            }}
+            className="chip-btn active"
           >+ Nova</button>
         </div>
         <div style={{ padding: "12px 16px", display: "flex", flexWrap: "wrap", gap: "7px" }}>
@@ -379,7 +370,7 @@ export default function Configuracoes() {
       </div>
 
       {/* Conta */}
-      <div className="card fade-up-5" style={{ overflow: "hidden", marginBottom: "14px" }}>
+      <div className="soft-card" style={{ overflow: "hidden", marginBottom: "14px" }}>
         <div style={{
           padding: "14px 16px",
           display: "flex", alignItems: "center", justifyContent: "space-between",
@@ -404,9 +395,9 @@ export default function Configuracoes() {
       </div>
 
       {/* Zona de perigo */}
-      <div className="card fade-up-5" style={{ overflow: "hidden", marginBottom: "20px", borderColor: "var(--red-20)" }}>
+      <div className="soft-card" style={{ overflow: "hidden", marginBottom: "20px", borderColor: "var(--red-20)" }}>
         <div style={{ padding: "13px 16px", borderBottom: "1px solid var(--red-20)" }}>
-          <p style={{ fontSize: "11px", fontWeight: 700, color: "var(--red)", letterSpacing: "0.08em", textTransform: "uppercase" }}>
+          <p className="section-heading" style={{ marginBottom: 0, color: "var(--red)" }}>
             Zona de Perigo
           </p>
         </div>

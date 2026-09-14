@@ -81,17 +81,15 @@ export default function TransactionDrawer({ tx, categories, onClose, onStatusCha
           borderBottom: "1px solid var(--border)",
           display: "flex", justifyContent: "space-between", alignItems: "center",
         }}>
-          <span style={{ fontSize: "13px", fontWeight: 700, color: "var(--text-3)", letterSpacing: "0.07em", textTransform: "uppercase" }}>
+          <span className="page-title" style={{ fontSize: "16px" }}>
             Detalhes
           </span>
           <button
+            type="button"
+            className="icon-btn ghost"
             onClick={onClose}
-            style={{
-              background: "rgba(255,255,255,0.05)", border: "1px solid var(--border)",
-              borderRadius: "8px", width: "32px", height: "32px",
-              color: "var(--text-2)", fontSize: "18px", cursor: "pointer",
-              display: "flex", alignItems: "center", justifyContent: "center",
-            }}
+            aria-label="Fechar"
+            style={{ width: "32px", height: "32px", fontSize: "18px" }}
           >×</button>
         </div>
 
@@ -128,7 +126,7 @@ export default function TransactionDrawer({ tx, categories, onClose, onStatusCha
             border: `1px solid ${isIncome ? "var(--green-20)" : "var(--border)"}`,
             borderRadius: "14px", padding: "20px 22px", marginBottom: "20px", textAlign: "center",
           }}>
-            <p style={{ fontSize: "11px", color: "var(--text-3)", marginBottom: "6px", fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase" }}>
+            <p className="section-heading" style={{ marginBottom: "6px" }}>
               {isIncome ? "Receita" : tx.type === "transfer" ? "Transferência" : "Despesa"}
             </p>
             <p className="mono" style={{
@@ -151,7 +149,7 @@ export default function TransactionDrawer({ tx, categories, onClose, onStatusCha
                 background: "rgba(255,255,255,0.03)", border: "1px solid var(--border)",
                 borderRadius: "10px", padding: "12px 14px",
               }}>
-                <p style={{ fontSize: "10.5px", color: "var(--text-3)", marginBottom: "4px", fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase" }}>
+                <p className="form-label" style={{ marginBottom: "4px" }}>
                   {info.label}
                 </p>
                 <p style={{ fontSize: "13.5px", fontWeight: 600, color: info.color ?? "var(--text-1)" }}>
@@ -163,31 +161,25 @@ export default function TransactionDrawer({ tx, categories, onClose, onStatusCha
 
           {tx.notes && (
             <div style={{ background: "rgba(255,255,255,0.03)", border: "1px solid var(--border)", borderRadius: "10px", padding: "14px", marginBottom: "20px" }}>
-              <p style={{ fontSize: "10.5px", color: "var(--text-3)", marginBottom: "6px", fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase" }}>Observação</p>
+              <p className="form-label" style={{ marginBottom: "6px" }}>Observação</p>
               <p style={{ fontSize: "13px", color: "var(--text-2)", lineHeight: 1.5 }}>{tx.notes}</p>
             </div>
           )}
 
           {/* Change status */}
           <div style={{ marginBottom: "24px" }}>
-            <p style={{ fontSize: "11px", color: "var(--text-3)", fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: "10px" }}>
+            <p className="section-heading">
               Alterar status
             </p>
             <div style={{ display: "flex", gap: "8px" }}>
               {STATUS_KEYS.map(key => {
                 const active = tx.status === key;
-                const s = getStatusStyle(tx.type, key);
                 return (
                   <button
                     key={key}
+                    type="button"
+                    className={`chip-btn grow${active ? (key === "overdue" ? " danger" : " active") : ""}`}
                     onClick={() => onStatusChange(tx.id, key)}
-                    style={{
-                      flex: 1, padding: "9px 6px", borderRadius: "10px", cursor: "pointer",
-                      fontSize: "12px", fontWeight: 700, transition: "all 0.15s ease",
-                      background: active ? s.bg : "transparent",
-                      color: active ? s.color : "var(--text-3)",
-                      border: active ? `1px solid ${s.border}` : "1px solid var(--border)",
-                    }}
                   >
                     {getStatusLabel(tx.type, key)}
                   </button>
@@ -200,24 +192,18 @@ export default function TransactionDrawer({ tx, categories, onClose, onStatusCha
         {/* Footer */}
         <div style={{ padding: "16px 24px", borderTop: "1px solid var(--border)", display: "flex", gap: "10px" }}>
           <button
+            type="button"
+            className="btn-secondary"
             onClick={() => onEdit?.(tx)}
-            style={{
-              flex: 1, padding: "11px", borderRadius: "10px",
-              background: "rgba(255,255,255,0.05)", border: "1px solid var(--border)",
-              color: "var(--text-2)", fontSize: "13px", fontWeight: 600, cursor: "pointer",
-              display: "flex", alignItems: "center", justifyContent: "center", gap: "6px",
-            }}
+            style={{ flex: 1, justifyContent: "center" }}
           >
             <Pencil size={13} strokeWidth={1.5} /> Editar
           </button>
           <button
+            type="button"
+            className="chip-btn danger"
             onClick={() => { onDelete(tx.id); onClose(); }}
-            style={{
-              padding: "11px 18px", borderRadius: "10px",
-              background: "var(--red-10)", border: "1px solid var(--red-20)",
-              color: "var(--red)", fontSize: "13px", fontWeight: 600, cursor: "pointer",
-              display: "flex", alignItems: "center", justifyContent: "center", gap: "6px",
-            }}
+            style={{ padding: "11px 18px", minHeight: "44px" }}
           >
             <Trash2 size={13} strokeWidth={1.5} /> Excluir
           </button>

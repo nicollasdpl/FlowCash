@@ -146,28 +146,20 @@ export default function TransactionFormPage({ transaction }: Props) {
         flexShrink: 0,
       }}>
         <button
+          type="button"
+          className="icon-btn ghost"
           onClick={() => router.back()}
-          style={{
-            background: "none", border: "none", color: "var(--text-2)",
-            cursor: "pointer", fontSize: "24px",
-            width: "48px", height: "48px", borderRadius: "12px",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            flexShrink: 0, touchAction: "manipulation",
-            WebkitTapHighlightColor: "transparent",
-          }}
+          aria-label="Voltar"
+          style={{ fontSize: "24px", flexShrink: 0 }}
         >‹</button>
-        <span style={{ fontSize: "17px", fontWeight: 700, color: "var(--text-1)", flex: 1 }}>
+        <span className="page-title" style={{ fontSize: "17px", flex: 1 }}>
           {isEdit ? "Editar transação" : "Nova transação"}
         </span>
         {isEdit && (
           <button
+            type="button"
+            className="chip-btn danger"
             onClick={handleDelete}
-            style={{
-              background: "var(--red-10)", border: "1px solid var(--red-20)",
-              borderRadius: "10px", color: "var(--red)",
-              padding: "8px 14px", fontSize: "13px", fontWeight: 600,
-              cursor: "pointer", fontFamily: "inherit", touchAction: "manipulation",
-            }}
           >Excluir</button>
         )}
       </div>
@@ -266,21 +258,16 @@ export default function TransactionFormPage({ transaction }: Props) {
           <label className="form-label">Status</label>
           <div style={{ display: "flex", gap: "8px" }}>
             {([
-              { key: "paid" as const,    label: txType === "income" ? "Recebido" : "Pago",      color: txType === "income" ? "var(--accent)" : "var(--text-2)", bg: txType === "income" ? "var(--accent-10)" : "rgba(255,255,255,0.04)", border: txType === "income" ? "var(--border-accent)" : "var(--border)" },
-              { key: "pending" as const, label: txType === "income" ? "A receber" : "A pagar",  color: txType === "income" ? "#4A9EFF" : "var(--amber)",         bg: txType === "income" ? "rgba(74,158,255,0.1)" : "var(--amber-10)",   border: txType === "income" ? "rgba(74,158,255,0.2)" : "var(--amber-20)" },
-              { key: "overdue" as const, label: "Vencido",                                       color: "var(--red)",                                             bg: "var(--red-10)",                                                   border: "var(--red-20)" },
+              { key: "paid" as const,    label: txType === "income" ? "Recebido" : "Pago" },
+              { key: "pending" as const, label: txType === "income" ? "A receber" : "A pagar" },
+              { key: "overdue" as const, label: "Vencido", danger: true },
             ]).map(opt => (
               <button
                 key={opt.key}
+                type="button"
+                className={`chip-btn grow${status === opt.key ? (opt.danger ? " danger" : " active") : ""}`}
                 onClick={() => setStatus(opt.key)}
-                style={{
-                  flex: 1, padding: "12px 4px", borderRadius: "10px", cursor: "pointer",
-                  fontSize: "12px", fontWeight: 700, fontFamily: "inherit",
-                  background: status === opt.key ? opt.bg : "transparent",
-                  color: status === opt.key ? opt.color : "var(--text-3)",
-                  border: status === opt.key ? `1px solid ${opt.border}` : "1px solid var(--border)",
-                  minHeight: "48px", touchAction: "manipulation",
-                }}
+                style={{ minHeight: "48px" }}
               >{opt.label}</button>
             ))}
           </div>
@@ -290,7 +277,7 @@ export default function TransactionFormPage({ transaction }: Props) {
         {!isEdit && (
           <div className="form-group">
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", minHeight: "44px" }}>
-              <span style={{ fontSize: "12px", fontWeight: 700, color: "var(--text-3)", letterSpacing: "0.05em", textTransform: "uppercase", display: "flex", alignItems: "center", gap: "6px" }}>
+              <span className="form-label" style={{ marginBottom: 0, display: "flex", alignItems: "center", gap: "6px" }}>
                 <RefreshCw size={11} strokeWidth={2} />
                 Recorrente
               </span>
@@ -324,15 +311,10 @@ export default function TransactionFormPage({ transaction }: Props) {
                     ]).map(opt => (
                       <button
                         key={opt.key}
+                        type="button"
+                        className={`chip-btn grow${recurringFrequency === opt.key ? " active" : ""}`}
                         onClick={() => setFrequency(opt.key)}
-                        style={{
-                          flex: 1, padding: "10px 4px", borderRadius: "10px", cursor: "pointer",
-                          fontSize: "12px", fontWeight: 700, fontFamily: "inherit",
-                          background: recurringFrequency === opt.key ? "var(--accent-10)" : "transparent",
-                          color: recurringFrequency === opt.key ? "var(--accent)" : "var(--text-3)",
-                          border: recurringFrequency === opt.key ? "1px solid var(--border-accent)" : "1px solid var(--border)",
-                          minHeight: "44px", touchAction: "manipulation",
-                        }}
+                        style={{ minHeight: "44px" }}
                       >{opt.label}</button>
                     ))}
                   </div>

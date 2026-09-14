@@ -30,15 +30,9 @@ export default function InvestimentosPage() {
 
   return (
     <div style={{ padding: "20px 16px", maxWidth: "900px", margin: "0 auto" }}>
-      <div className="fade-up-1" style={{
-        marginBottom: "20px", display: "flex",
-        justifyContent: "space-between", alignItems: "flex-start",
-      }}>
+      <div className="page-header">
         <div>
-          <h1 style={{
-            fontSize: "20px", fontWeight: 700, color: "var(--text-1)",
-            letterSpacing: "-0.03em",
-          }}>
+          <h1 className="page-title" style={{ fontSize: "20px" }}>
             Investimentos
           </h1>
           <p style={{ fontSize: "12px", color: "var(--text-3)", marginTop: "2px" }}>
@@ -46,20 +40,17 @@ export default function InvestimentosPage() {
           </p>
         </div>
         <button
-          className="btn-primary"
+          type="button"
+          className="icon-btn primary"
           onClick={() => router.push("/investimentos/nova")}
-          style={{ fontSize: "13px", padding: "10px 16px" }}
-        >
-          + Nova
-        </button>
+          aria-label="Nova caixinha"
+          style={{ fontSize: "24px", fontWeight: 500 }}
+        >+</button>
       </div>
 
       {boxes.length > 0 && (
-        <div className="card fade-up-1" style={{ padding: "20px", marginBottom: "20px" }}>
-          <p style={{
-            fontSize: "10px", color: "var(--text-3)", fontWeight: 700,
-            letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: "6px",
-          }}>
+        <div className="soft-card" style={{ padding: "20px", marginBottom: "20px" }}>
+          <p className="section-heading">
             Dinheiro guardado
           </p>
           <p className="mono" style={{
@@ -75,7 +66,7 @@ export default function InvestimentosPage() {
       )}
 
       {boxes.length === 0 && (
-        <div className="card" style={{ padding: "48px 24px", textAlign: "center" }}>
+        <div className="soft-card" style={{ padding: "48px 24px", textAlign: "center" }}>
           <div style={{
             display: "flex", justifyContent: "center", marginBottom: "14px",
             color: "var(--text-3)",
@@ -105,12 +96,12 @@ export default function InvestimentosPage() {
         gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
         gap: "12px",
       }}>
-        {boxes.map((box, i) => {
+        {boxes.map((box) => {
           const bal = balances[box.id] ?? 0;
           return (
             <div
               key={box.id}
-              className={`card fade-up-${Math.min(i + 2, 6)}`}
+              className="soft-card"
               onClick={() => router.push(`/investimentos/${box.id}`)}
               style={{ padding: "18px", cursor: "pointer" }}
             >
@@ -147,17 +138,13 @@ export default function InvestimentosPage() {
                 </div>
                 <button
                   type="button"
+                  className="icon-btn"
                   onClick={e => {
                     e.stopPropagation();
                     router.push(`/investimentos/${box.id}/editar`);
                   }}
-                  style={{
-                    background: "rgba(255,255,255,0.05)", border: "1px solid var(--border)",
-                    borderRadius: "8px", color: "var(--text-2)",
-                    cursor: "pointer", padding: "8px",
-                    display: "flex", alignItems: "center",
-                  }}
                   aria-label="Editar"
+                  style={{ width: "36px", height: "36px" }}
                 >
                   <Pencil size={14} strokeWidth={1.5} />
                 </button>
@@ -177,16 +164,12 @@ export default function InvestimentosPage() {
                 </button>
                 <button
                   type="button"
+                  className="btn-secondary"
                   onClick={e => {
                     e.stopPropagation();
                     router.push(`/investimentos/${box.id}/resgatar`);
                   }}
-                  style={{
-                    flex: 1, fontSize: "13px", padding: "10px",
-                    borderRadius: "10px", fontWeight: 600, fontFamily: "inherit",
-                    background: "rgba(255,255,255,0.05)", border: "1px solid var(--border)",
-                    color: "var(--text-1)", cursor: "pointer",
-                  }}
+                  style={{ flex: 1, fontSize: "13px", padding: "10px", justifyContent: "center" }}
                 >
                   Resgatar
                 </button>

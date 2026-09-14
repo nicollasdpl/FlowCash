@@ -78,11 +78,7 @@ export function AccountScopePicker({
     <div
       role="group"
       aria-label="Contas no saldo"
-      style={{
-        display: "flex",
-        gap: "4px",
-        width: "100%",
-      }}
+      style={{ display: "flex", gap: "4px", width: "100%" }}
     >
       {active.map(acc => {
         const selected = selectedIds.includes(acc.id);
@@ -92,25 +88,7 @@ export function AccountScopePicker({
             type="button"
             aria-pressed={selected}
             onClick={() => onToggle(acc.id)}
-            style={{
-              flex: 1,
-              minWidth: 0,
-              padding: "6px 8px",
-              minHeight: "32px",
-              borderRadius: "8px",
-              cursor: "pointer",
-              fontFamily: "inherit",
-              fontSize: "11px",
-              fontWeight: 700,
-              textAlign: "center",
-              touchAction: "manipulation",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
-              background: selected ? "var(--accent-10)" : "rgba(255,255,255,0.04)",
-              border: selected ? "1px solid var(--border-accent)" : "1px solid var(--border)",
-              color: selected ? "var(--accent)" : "var(--text-3)",
-            }}
+            className={`chip-btn grow${selected ? " active" : ""}`}
           >
             {acc.name}
           </button>
