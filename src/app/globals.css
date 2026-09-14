@@ -89,7 +89,8 @@
   /* spring só no pop da nav; press usa curva curta sem overshoot */
   --nav-ease: cubic-bezier(0.34, 1.4, 0.64, 1);
   --press-ease: cubic-bezier(0.2, 0, 0, 1);
-  --press-ms: 90ms;
+  --press-ms: 120ms;
+  --press-scale: 0.94;
   --bottom-nav-total: calc(var(--bottom-nav-h) + var(--safe-bottom));
 
   /* ── FAB sobre o BottomNav (desktop: sem nav, apenas safe-area) ── */
@@ -155,6 +156,118 @@ body {
   text-size-adjust: 100%;
   overflow-x: hidden;
   height: 100%;
+}
+
+/* ══════════════════════════════════════════════════════
+   PRESS GLOBAL — todo botão / controle clicável
+   Feedback curto e perceptível no toque (mobile-first)
+   ══════════════════════════════════════════════════════ */
+button,
+[role="button"],
+input[type="button"],
+input[type="submit"],
+input[type="reset"],
+.chip-btn,
+.filter-btn,
+.icon-btn,
+.btn-primary,
+.btn-secondary,
+.btn-danger,
+.pay-btn,
+.page-fab-pill,
+.page-fab-icon,
+.copilot-fab,
+.type-toggle-btn,
+.link-quiet,
+.nav-link,
+.bottom-nav-item {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  transition:
+    transform var(--press-ms) var(--press-ease),
+    opacity var(--press-ms) var(--press-ease),
+    filter var(--press-ms) var(--press-ease),
+    background-color var(--press-ms) ease,
+    border-color var(--press-ms) ease,
+    box-shadow var(--press-ms) ease,
+    color var(--press-ms) ease;
+}
+
+button:active:not(:disabled):not([disabled]),
+[role="button"]:active:not([aria-disabled="true"]),
+input[type="button"]:active:not(:disabled),
+input[type="submit"]:active:not(:disabled),
+input[type="reset"]:active:not(:disabled),
+.chip-btn:active,
+.filter-btn:active,
+.icon-btn:active,
+.btn-primary:active,
+.btn-secondary:active,
+.btn-danger:active,
+.pay-btn:active,
+.page-fab-pill:active,
+.page-fab-icon:active,
+.copilot-fab:active,
+.type-toggle-btn:active,
+.link-quiet:active,
+.nav-link:active {
+  transform: scale(var(--press-scale));
+  filter: brightness(0.88);
+}
+
+/* Nav inferior: só escurece/opacidade — o pop-out cuida do movimento */
+.bottom-nav-item:active {
+  transform: none;
+  filter: none;
+  opacity: 0.7;
+}
+.bottom-nav-item:active .bottom-nav-icon {
+  transform: scale(0.92);
+  filter: brightness(0.9);
+}
+.bottom-nav-item.active:active .bottom-nav-icon {
+  transform: translateY(var(--nav-pop-lift)) scale(0.94);
+}
+
+button:disabled,
+button[disabled],
+[aria-disabled="true"] {
+  transform: none !important;
+  filter: none !important;
+  cursor: not-allowed;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  button,
+  [role="button"],
+  .chip-btn,
+  .filter-btn,
+  .icon-btn,
+  .btn-primary,
+  .btn-secondary,
+  .btn-danger,
+  .pay-btn,
+  .page-fab-pill,
+  .page-fab-icon,
+  .copilot-fab,
+  .type-toggle-btn,
+  .link-quiet,
+  .nav-link,
+  .bottom-nav-item,
+  .bottom-nav-icon {
+    transition: none !important;
+  }
+  button:active:not(:disabled),
+  [role="button"]:active,
+  .chip-btn:active,
+  .filter-btn:active,
+  .icon-btn:active,
+  .btn-primary:active,
+  .btn-secondary:active,
+  .btn-danger:active {
+    transform: none !important;
+    filter: brightness(0.9);
+  }
 }
 
 /* ── Scrollbar ── */
@@ -248,7 +361,8 @@ body {
 }
 .copilot-fab:hover { box-shadow: var(--shadow-btn-hover); }
 .copilot-fab:active {
-  transform: scale(0.94);
+  transform: scale(var(--press-scale));
+  filter: brightness(0.88);
   box-shadow: var(--shadow-btn-active);
 }
 
@@ -270,7 +384,8 @@ body {
   transition: transform var(--press-ms) var(--press-ease), box-shadow var(--press-ms) ease;
 }
 .page-fab-icon:active {
-  transform: scale(0.94);
+  transform: scale(var(--press-scale));
+  filter: brightness(0.88);
   box-shadow: var(--shadow-btn-active);
 }
 
@@ -296,7 +411,8 @@ body {
   transition: transform var(--press-ms) var(--press-ease), box-shadow var(--press-ms) ease;
 }
 .page-fab-pill:active {
-  transform: scale(0.96);
+  transform: scale(var(--press-scale));
+  filter: brightness(0.88);
   box-shadow: var(--shadow-btn-active);
 }
 
@@ -412,7 +528,7 @@ body {
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.03) inset;
   transition: transform var(--press-ms) var(--press-ease), background var(--press-ms) ease, border-color var(--press-ms) ease, color var(--press-ms) ease;
 }
-.chip-btn:active { transform: scale(0.96); }
+.chip-btn:active { transform: scale(var(--press-scale)); filter: brightness(0.88); }
 .chip-btn.active {
   background: var(--accent-10);
   border-color: rgba(0, 229, 160, 0.22);
@@ -450,7 +566,8 @@ body {
 }
 .icon-btn:hover { background: var(--bg-card-hover); }
 .icon-btn:active {
-  transform: scale(0.94);
+  transform: scale(var(--press-scale));
+  filter: brightness(0.88);
   box-shadow: none;
 }
 .icon-btn.primary {
@@ -887,7 +1004,8 @@ select.form-input {
   }
 }
 .btn-primary:active {
-  transform: scale(0.97);
+  transform: scale(var(--press-scale));
+  filter: brightness(0.88);
   box-shadow: var(--shadow-btn-active);
 }
 
@@ -916,7 +1034,8 @@ select.form-input {
   }
 }
 .btn-secondary:active {
-  transform: scale(0.97);
+  transform: scale(var(--press-scale));
+  filter: brightness(0.88);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
 }
 
@@ -944,7 +1063,8 @@ select.form-input {
   }
 }
 .btn-danger:active {
-  transform: scale(0.97);
+  transform: scale(var(--press-scale));
+  filter: brightness(0.88);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
 }
 
@@ -1001,7 +1121,7 @@ select.form-input {
   flex-shrink: 0;
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.03) inset;
 }
-.filter-btn:active { transform: scale(0.96); }
+.filter-btn:active { transform: scale(var(--press-scale)); filter: brightness(0.88); }
 .filter-btn.active {
   background: var(--accent-10);
   color: var(--accent);
@@ -1044,7 +1164,8 @@ select.form-input {
     0 2px 6px rgba(0, 0, 0, 0.15);
 }
 .pay-btn:active {
-  transform: scale(0.95);
+  transform: scale(var(--press-scale));
+  filter: brightness(0.88);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
@@ -1123,8 +1244,15 @@ select.form-input {
   border: 0;
 }
 
+.bottom-nav-item:active {
+  opacity: 0.7;
+}
 .bottom-nav-item:active .bottom-nav-icon {
-  transform: scale(0.94);
+  transform: scale(0.92);
+  filter: brightness(0.9);
+}
+.bottom-nav-item.active:active .bottom-nav-icon {
+  transform: translateY(var(--nav-pop-lift)) scale(0.94);
 }
 
 .bottom-nav-item.active {
