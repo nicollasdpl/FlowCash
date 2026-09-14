@@ -1,5 +1,5 @@
 "use client";
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useTransition, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useRouter, useParams } from "next/navigation";
 import { useApp, newId } from "@/context/AppContext";
@@ -36,10 +36,16 @@ function monthTabLabel(dueDate: string) {
   return `${MONTHS_SHORT[m - 1]}/${String(y).slice(2)}`;
 }
 
+function buildMonthWindow(center: string, radius = 3) {
+  return Array.from({ length: radius * 2 + 1 }, (_, i) => addMonths(center, i - radius));
+}
+
 export default function CartaoDetail() {
   const { cardId } = useParams<{ cardId: string }>();
   const router = useRouter();
   const { state, dispatch } = useApp();
+  const [isPending, startTransition] = useTransition();
+  const monthStripRef = useRef<HTMLDivElement>(null);
 
   const card = state.cards.find(c => c.id === cardId);
 
@@ -48,6 +54,8 @@ export default function CartaoDetail() {
   const [payWarning, setPayWarning] = useState("");
   const [showPayConfirm, setShowPayConfirm] = useState(false);
   const [portalReady, setPortalReady] = useState(false);
+  // Janela fixa — não recentraliza a cada clique (isso deixava a UI “travada”).
+  const [monthWindow] = useState(() => buildMonthWindow(currentMonth(), 3));
 
   useEffect(() => {
     setPortalReady(true);
@@ -56,11 +64,33 @@ export default function CartaoDetail() {
   // Ao abrir o cartão, foca na fatura em aberto (não no mês do calendário).
   useEffect(() => {
     if (!card) return;
-    setSelectedMonth(getDefaultInvoiceMonth(card, state.installments));
+    const next = getDefaultInvoiceMonth(card, state.installments);
+    setSelectedMonth(next);
   }, [cardId]); // eslint-disable-line react-hooks/exhaustive-deps -- só ao trocar de cartão
 
   const months = useMemo(() => {
-    return Array.from({ length: 5 }, (_, i) => addMonths(selectedMonth, i - 2));
+    if (monthWindow.includes(selectedMonth)) return monthWindow;
+    // Se o mês padrão cair fora da janela, estende sem recentralizar a cada clique.
+    const extraBefore = [];
+    let cursor = monthWindow[0];
+    while (cursor > selectedMonth) {
+      cursor = addMonths(cursor, -1);
+      extraBefore.unshift(cursor);
+    }
+    const extraAfter = [];
+    cursor = monthWindow[monthWindow.length - 1];
+    while (cursor < selectedMonth) {
+      cursor = addMonths(cursor, 1);
+      extraAfter.push(cursor);
+    }
+    return [...extraBefore, ...monthWindow, ...extraAfter];
+  }, [monthWindow, selectedMonth]);
+
+  useEffect(() => {
+    const strip = monthStripRef.current;
+    if (!strip) return;
+    const active = strip.querySelector<HTMLElement>("[data-month-active='true']");
+    active?.scrollIntoView({ inline: "center", block: "nearest", behavior: "smooth" });
   }, [selectedMonth]);
 
   const invoices = useMemo(() => {
@@ -81,6 +111,10 @@ export default function CartaoDetail() {
     if (!card) return null;
     return getCardLimitSummary(card, state.installments, state.purchases);
   }, [card, state.installments, state.purchases]);
+
+  function selectMonth(m: string) {
+    startTransition(() => setSelectedMonth(m));
+  }
 
   function payInstallment(inst: CardInstallment) {
     dispatch({
@@ -356,20 +390,27 @@ export default function CartaoDetail() {
 
         {/* ── Seletor de mês ── */}
         <div style={{ marginBottom: "14px" }}>
-          <div style={{
-            display: "flex", gap: "6px",
-            overflowX: "auto", paddingBottom: "2px",
-            WebkitOverflowScrolling: "touch", scrollbarWidth: "none",
-            touchAction: "pan-x",
-          }}>
+          <div
+            ref={monthStripRef}
+            style={{
+              display: "flex", gap: "6px",
+              overflowX: "auto", paddingBottom: "2px",
+              WebkitOverflowScrolling: "touch", scrollbarWidth: "none",
+              touchAction: "pan-x",
+              opacity: isPending ? 0.85 : 1,
+              transition: "opacity var(--press-ms) var(--press-ease)",
+            }}
+          >
             {months.map(m => {
               const { dueDate } = getInvoiceDates(m, card.closingDay, card.dueDay);
+              const active = selectedMonth === m;
               return (
                 <button
                   key={m}
                   type="button"
-                  className={`chip-btn${selectedMonth === m ? " active" : ""}`}
-                  onClick={() => setSelectedMonth(m)}
+                  data-month-active={active ? "true" : undefined}
+                  className={`chip-btn${active ? " active" : ""}`}
+                  onClick={() => selectMonth(m)}
                   style={{ flexShrink: 0 }}
                 >
                   {monthTabLabel(dueDate)}
@@ -433,35 +474,33 @@ export default function CartaoDetail() {
             <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
               {installmentsThisMonth.length > 0 && (
                 <button
+                  type="button"
                   onClick={requestPayInvoice}
                   disabled={allPaid}
+                  className={allPaid ? "btn-secondary" : "btn-primary"}
                   style={{
-                    width: "100%", padding: "11px 16px", borderRadius: "10px",
-                    fontSize: "13px", fontWeight: 700, fontFamily: "inherit",
-                    cursor: allPaid ? "not-allowed" : "pointer",
-                    background: allPaid ? "rgba(255,255,255,0.04)" : "var(--green)",
-                    color: allPaid ? "var(--text-3)" : "#000",
-                    border: allPaid ? "1px solid var(--border)" : "none",
+                    width: "100%",
+                    background: allPaid ? undefined : "var(--green)",
                     opacity: allPaid ? 0.7 : 1,
-                    minHeight: "44px", transition: "opacity 0.15s",
+                    cursor: allPaid ? "not-allowed" : "pointer",
                   }}
                 >
                   {allPaid ? "✓ Fatura já paga" : `Pagar Fatura · R$ ${fmt(pendingTotal)}`}
                 </button>
               )}
               <button
+                type="button"
                 onClick={() => router.push(`/cartoes/${card.id}/importar?month=${selectedMonth}`)}
+                className="btn-secondary"
                 style={{
-                  width: "100%", padding: "11px 16px", borderRadius: "10px",
-                  fontSize: "13px", fontWeight: 600, fontFamily: "inherit",
-                  cursor: "pointer",
-                  background: "var(--accent-10)",
+                  width: "100%",
                   color: "var(--accent)",
-                  border: "1px solid var(--border-accent)",
-                  minHeight: "44px",
-                  display: "flex", alignItems: "center", justifyContent: "center", gap: "8px",
-                  touchAction: "manipulation",
-                  WebkitTapHighlightColor: "transparent",
+                  borderColor: "rgba(0, 229, 160, 0.22)",
+                  background: "var(--accent-10)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "8px",
                 }}
               >
                 <Upload size={15} strokeWidth={1.75} />
@@ -469,18 +508,15 @@ export default function CartaoDetail() {
               </button>
               {installmentsThisMonth.length > 0 && (
                 <button
+                  type="button"
                   onClick={exportInvoice}
+                  className="btn-secondary"
                   style={{
-                    width: "100%", padding: "11px 16px", borderRadius: "10px",
-                    fontSize: "13px", fontWeight: 600, fontFamily: "inherit",
-                    cursor: "pointer",
-                    background: "rgba(255,255,255,0.04)",
-                    color: "var(--text-2)",
-                    border: "1px solid var(--border)",
-                    minHeight: "44px",
-                    display: "flex", alignItems: "center", justifyContent: "center", gap: "8px",
-                    touchAction: "manipulation",
-                    WebkitTapHighlightColor: "transparent",
+                    width: "100%",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "8px",
                   }}
                 >
                   <Download size={15} strokeWidth={1.75} />
@@ -548,39 +584,30 @@ export default function CartaoDetail() {
                       </p>
                       <div style={{ display: "flex", gap: "5px" }}>
                         <button
+                          type="button"
                           onClick={() => inst.paid ? unpayInstallment(inst) : payInstallment(inst)}
-                          style={{
-                            padding: "5px 10px", borderRadius: "7px", cursor: "pointer",
-                            fontSize: "11px", fontWeight: 700, fontFamily: "inherit",
-                            background: inst.paid ? "var(--green-10)" : "rgba(255,255,255,0.05)",
-                            color: inst.paid ? "var(--green)" : "var(--text-3)",
-                            border: inst.paid ? "1px solid var(--green-20)" : "1px solid var(--border)",
-                            minHeight: "30px",
-                          }}
+                          className={`chip-btn${inst.paid ? " active" : ""}`}
+                          style={{ minHeight: "30px", padding: "5px 10px", fontSize: "11px" }}
                         >
                           {inst.paid ? "✓ Pago" : "Pagar"}
                         </button>
                         {purchase && (
                           <>
                             <button
+                              type="button"
                               onClick={() => router.push(`/cartoes/${card.id}/compras/${purchase.id}/editar`)}
-                              style={{
-                                width: "30px", height: "30px", borderRadius: "7px", cursor: "pointer",
-                                background: "var(--bg-elevated)", border: "1px solid var(--border)",
-                                color: "var(--text-3)", fontFamily: "inherit",
-                                display: "flex", alignItems: "center", justifyContent: "center",
-                              }}
+                              className="icon-btn ghost"
+                              style={{ width: "30px", height: "30px", borderRadius: "7px", border: "1px solid var(--border)", background: "var(--bg-elevated)" }}
+                              aria-label="Editar compra"
                             >
                               <Pencil size={12} strokeWidth={1.5} />
                             </button>
                             <button
+                              type="button"
                               onClick={() => deletePurchase(purchase.id)}
-                              style={{
-                                width: "30px", height: "30px", borderRadius: "7px", cursor: "pointer",
-                                background: "var(--red-10)", border: "1px solid var(--red-20)",
-                                color: "var(--red)", fontFamily: "inherit",
-                                display: "flex", alignItems: "center", justifyContent: "center",
-                              }}
+                              className="icon-btn ghost"
+                              style={{ width: "30px", height: "30px", borderRadius: "7px", background: "var(--red-10)", border: "1px solid var(--red-20)", color: "var(--red)" }}
+                              aria-label="Excluir compra"
                             >
                               <Trash2 size={12} strokeWidth={1.5} />
                             </button>
