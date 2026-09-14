@@ -27,6 +27,10 @@ export const SEED_LOAN_EXPENSE_CATEGORY_ID = "loan_expense";
 export const SEED_REIMBURSEMENT_INCOME_CATEGORY_ID = "reimbursement_income";
 export const SEED_REIMBURSEMENT_EXPENSE_CATEGORY_ID = "reimbursement_expense";
 
+// Transferência interna entre contas (guardar/resgatar caixinhas).
+// Não conta como receita nem despesa; só move saldo.
+export const SEED_INTERNAL_TRANSFER_CATEGORY_ID = "system_internal_transfer";
+
 // ─── CONTA BANCÁRIA ───────────────────────────────────────────────────────────
 // Onde o dinheiro EXISTE fisicamente.
 export interface Account {

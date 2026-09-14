@@ -20,6 +20,7 @@ import {
   SEED_LOAN_EXPENSE_CATEGORY_ID,
   SEED_REIMBURSEMENT_INCOME_CATEGORY_ID,
   SEED_REIMBURSEMENT_EXPENSE_CATEGORY_ID,
+  SEED_INTERNAL_TRANSFER_CATEGORY_ID,
 } from "@/types/financial";
 import { generateInstallments, generateSubscriptionInstallment, getCompetenceMonth } from "@/engine/invoiceEngine";
 import { addMonths } from "@/engine/financialEngine";
@@ -102,6 +103,7 @@ const SEED_CATEGORIES: Category[] = [
   { id: SEED_LOAN_EXPENSE_CATEGORY_ID, name: "Empréstimos", type: "expense", color: "#F59E0B", icon: "Landmark" },
   { id: SEED_REIMBURSEMENT_INCOME_CATEGORY_ID, name: "Reembolso", type: "income", color: "#38BDF8", icon: "RefreshCw", excludeFromReports: true },
   { id: SEED_REIMBURSEMENT_EXPENSE_CATEGORY_ID, name: "Reembolso", type: "expense", color: "#38BDF8", icon: "RefreshCw" },
+  { id: SEED_INTERNAL_TRANSFER_CATEGORY_ID, name: "Transferência interna", type: "expense", color: "#6B7280", icon: "ArrowLeftRight", isSystem: true, excludeFromReports: true },
 ];
 
 export const SEED_CATEGORY_IDS = new Set(SEED_CATEGORIES.map(c => c.id));
@@ -171,6 +173,7 @@ function reducer(state: AppState, action: Action): AppState {
         SEED_LOAN_EXPENSE_CATEGORY_ID,
         SEED_REIMBURSEMENT_INCOME_CATEGORY_ID,
         SEED_REIMBURSEMENT_EXPENSE_CATEGORY_ID,
+        SEED_INTERNAL_TRANSFER_CATEGORY_ID,
       ];
       const categories = ensuredSeedIds.reduce((cats, id) => {
         if (cats.some(c => c.id === id)) return cats;

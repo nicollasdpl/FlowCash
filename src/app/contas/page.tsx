@@ -122,18 +122,38 @@ export default function Contas() {
                     </p>
                   </div>
                 </div>
-                <button
-                  onClick={() => router.push(`/contas/${acc.id}/editar`)}
-                  style={{
-                    background: "rgba(255,255,255,0.05)", border: "1px solid var(--border)",
-                    borderRadius: "8px", color: "var(--text-2)",
-                    cursor: "pointer", fontSize: "13px", fontWeight: 600,
-                    display: "flex", alignItems: "center", gap: "6px",
-                    padding: "8px 12px", minHeight: "36px", fontFamily: "inherit",
-                  }}
-                >
-                  <Pencil size={13} strokeWidth={1.5} /> Editar
-                </button>
+                <div style={{ display: "flex", gap: "8px", flexShrink: 0 }}>
+                  {acc.type === "investment" && (
+                    <button
+                      onClick={() => router.push(`/investimentos/${acc.id}`)}
+                      style={{
+                        background: "var(--accent-10)", border: "1px solid var(--border-accent)",
+                        borderRadius: "8px", color: "var(--accent)",
+                        cursor: "pointer", fontSize: "13px", fontWeight: 600,
+                        display: "flex", alignItems: "center", gap: "6px",
+                        padding: "8px 12px", minHeight: "36px", fontFamily: "inherit",
+                      }}
+                    >
+                      Caixinha →
+                    </button>
+                  )}
+                  <button
+                    onClick={() => router.push(
+                      acc.type === "investment"
+                        ? `/investimentos/${acc.id}/editar`
+                        : `/contas/${acc.id}/editar`
+                    )}
+                    style={{
+                      background: "rgba(255,255,255,0.05)", border: "1px solid var(--border)",
+                      borderRadius: "8px", color: "var(--text-2)",
+                      cursor: "pointer", fontSize: "13px", fontWeight: 600,
+                      display: "flex", alignItems: "center", gap: "6px",
+                      padding: "8px 12px", minHeight: "36px", fontFamily: "inherit",
+                    }}
+                  >
+                    <Pencil size={13} strokeWidth={1.5} /> Editar
+                  </button>
+                </div>
               </div>
 
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "10px" }}>

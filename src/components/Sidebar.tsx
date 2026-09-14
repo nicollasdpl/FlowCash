@@ -74,10 +74,21 @@ function IconBank() {
   );
 }
 
+function IconPiggy() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M19 5c-1.5 0-2.8 1.4-3 2-3.5-1.5-11-.3-11 5 0 1.8 0 3 2 4.5V19h4v-2h4v2h4v-4c1-.5 1.7-1 2-2h1v-4h-1c0-1-.5-1.5-1-2z" />
+      <path d="M2 9v1a5 5 0 0 0 5 5" />
+      <circle cx="13" cy="11" r="1" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
 const navItems = [
   { href: "/", label: "Dashboard", icon: <IconGrid /> },
   { href: "/transacoes", label: "Transações", icon: <IconArrows /> },
   { href: "/contas", label: "Contas", icon: <IconBank /> },
+  { href: "/investimentos", label: "Investimentos", icon: <IconPiggy /> },
   { href: "/cartoes", label: "Cartões", icon: <IconCard /> },
   { href: "/metas", label: "Metas", icon: <IconTarget /> },
   { href: "/relatorios", label: "Relatórios", icon: <IconChart /> },
@@ -166,7 +177,9 @@ export default function Sidebar() {
           Menu
         </div>
         {navItems.map((item) => {
-          const active = pathname === item.href;
+          const active = item.href === "/"
+            ? pathname === "/"
+            : pathname === item.href || pathname.startsWith(`${item.href}/`);
           return (
             <Link
               key={item.href}
