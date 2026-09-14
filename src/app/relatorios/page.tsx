@@ -516,16 +516,17 @@ export default function Relatorios() {
         </div>
       </div>
 
-      {/* ── SEÇÃO 4: Mapa de calor — gastos por dia ─────────────────────── */}
+      {/* ── SEÇÃO 4: Mapa de calor — fluxo por dia ──────────────────────── */}
       <div className="card fade-up-5" style={{ padding: "16px 18px", marginBottom: "16px" }}>
         <p style={{ fontSize: "10px", fontWeight: 700, color: "var(--text-3)", letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: "14px" }}>
-          Gastos por dia
+          Fluxo por dia
         </p>
         <SpendingHeatmapCalendar
           month={selectedMonth}
           transactions={state.transactions}
           installments={state.installments}
           purchases={state.purchases}
+          categories={state.categories}
         />
       </div>
 
@@ -644,6 +645,11 @@ export default function Relatorios() {
               <CategoryExpenseDetailPanel
                 slice={selectedSlice}
                 onClose={() => setSelectedCategoryId(null)}
+                month={selectedMonth}
+                transactions={state.transactions}
+                installments={state.installments}
+                purchases={state.purchases}
+                categories={state.categories}
               />
             )}
           </>
