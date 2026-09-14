@@ -515,7 +515,7 @@ export default function Dashboard() {
           </div>
 
           {activeAccounts.length > 1 && (
-            <div style={{ marginBottom: "14px" }}>
+            <div style={{ marginBottom: "10px" }}>
               <AccountScopePicker
                 accounts={activeAccounts}
                 balances={accountBalances}

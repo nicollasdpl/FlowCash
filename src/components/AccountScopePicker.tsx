@@ -86,7 +86,10 @@ export function AccountScopePicker({
   if (active.length === 0) return null;
 
   const total = active.reduce((s, a) => s + (balances[a.id] ?? 0), 0);
-  const showTotalChip = active.length > 1;
+  const chips: { id: AccountScope; label: string; value: number }[] = [
+    ...active.map(acc => ({ id: acc.id, label: acc.name, value: balances[acc.id] ?? 0 })),
+    ...(active.length > 1 ? [{ id: ALL_ACCOUNTS_SCOPE, label: "Total", value: total }] : []),
+  ];
 
   return (
     <div
@@ -94,34 +97,32 @@ export function AccountScopePicker({
       aria-label="Conta para o saldo"
       style={{
         display: "flex",
-        gap: "6px",
-        overflowX: "auto",
-        paddingBottom: "2px",
-        WebkitOverflowScrolling: "touch",
+        gap: "4px",
+        width: "100%",
       }}
     >
-      {active.map(acc => {
-        const selected = scope === acc.id;
-        const value = balances[acc.id] ?? 0;
+      {chips.map(chip => {
+        const selected = scope === chip.id;
         return (
           <button
-            key={acc.id}
+            key={chip.id}
             type="button"
             role="tab"
             aria-selected={selected}
-            onClick={() => onChange(acc.id)}
+            onClick={() => onChange(chip.id)}
             style={{
-              flexShrink: 0,
+              flex: 1,
+              minWidth: 0,
               display: "flex",
               flexDirection: "column",
-              alignItems: "flex-start",
-              gap: "2px",
-              padding: "8px 12px",
-              minHeight: "44px",
-              borderRadius: "12px",
+              alignItems: "center",
+              gap: "1px",
+              padding: "5px 6px",
+              minHeight: "36px",
+              borderRadius: "8px",
               cursor: "pointer",
               fontFamily: "inherit",
-              textAlign: "left",
+              textAlign: "center",
               touchAction: "manipulation",
               background: selected ? "var(--accent-10)" : "rgba(255,255,255,0.04)",
               border: selected ? "1px solid var(--border-accent)" : "1px solid var(--border)",
@@ -129,68 +130,33 @@ export function AccountScopePicker({
             }}
           >
             <span style={{
-              fontSize: "11px",
+              fontSize: "10px",
               fontWeight: 700,
               letterSpacing: "0.01em",
-              display: "flex",
-              alignItems: "center",
-              gap: "5px",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+              maxWidth: "100%",
             }}>
-              <span aria-hidden>{acc.icon}</span>
-              {acc.name}
+              {chip.label}
             </span>
             <span
               className="mono"
               style={{
-                fontSize: "11px",
+                fontSize: "10px",
                 fontWeight: 700,
-                color: selected ? amountColor(value, "var(--accent)") : amountColor(value, "var(--text-2)"),
+                color: selected ? amountColor(chip.value, "var(--accent)") : amountColor(chip.value, "var(--text-2)"),
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+                maxWidth: "100%",
               }}
             >
-              R$ {fmt(value)}
+              R$ {fmt(chip.value)}
             </span>
           </button>
         );
       })}
-      {showTotalChip && (
-        <button
-          type="button"
-          role="tab"
-          aria-selected={scope === ALL_ACCOUNTS_SCOPE}
-          onClick={() => onChange(ALL_ACCOUNTS_SCOPE)}
-          style={{
-            flexShrink: 0,
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "flex-start",
-            gap: "2px",
-            padding: "8px 12px",
-            minHeight: "44px",
-            borderRadius: "12px",
-            cursor: "pointer",
-            fontFamily: "inherit",
-            textAlign: "left",
-            touchAction: "manipulation",
-            background: scope === ALL_ACCOUNTS_SCOPE ? "var(--accent-10)" : "rgba(255,255,255,0.04)",
-            border: scope === ALL_ACCOUNTS_SCOPE ? "1px solid var(--border-accent)" : "1px solid var(--border)",
-            color: scope === ALL_ACCOUNTS_SCOPE ? "var(--accent)" : "var(--text-2)",
-          }}
-        >
-          <span style={{ fontSize: "11px", fontWeight: 700 }}>Total</span>
-          <span
-            className="mono"
-            style={{
-              fontSize: "11px",
-              fontWeight: 700,
-              color: scope === ALL_ACCOUNTS_SCOPE
-                ? amountColor(total, "var(--accent)")
-                : amountColor(total, "var(--text-2)"),
-            }}
-          >
-            R$ {fmt(total)}
-          </span>
-        </button>
-      )}
     </div>
   );
 }
