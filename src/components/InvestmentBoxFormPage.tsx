@@ -1,10 +1,16 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useApp, newId, ACCOUNT_COLORS, ACCOUNT_ICONS } from "@/context/AppContext";
+import { useApp, newId, ACCOUNT_COLORS } from "@/context/AppContext";
 import type { Account } from "@/context/AppContext";
 import { getCurrentBalance } from "@/engine/financialEngine";
 import { buildTransferTransaction, validateTransferAmount } from "@/lib/createTransfer";
+import CategoryIcon, { isLucideIcon } from "@/components/CategoryIcon";
+
+const BOX_ICONS = [
+  "PiggyBank", "TrendingUp", "Target", "Home", "Plane", "Car",
+  "GraduationCap", "Heart", "Smartphone", "Gift", "Shield", "Wallet",
+];
 
 interface Props {
   account?: Account;
@@ -25,7 +31,9 @@ export default function InvestmentBoxFormPage({ account }: Props) {
     ?? "";
 
   const [name, setName] = useState(account?.name ?? "");
-  const [icon, setIcon] = useState(account?.icon ?? "📈");
+  const [icon, setIcon] = useState(
+    account?.icon && isLucideIcon(account.icon) ? account.icon : "PiggyBank"
+  );
   const [color, setColor] = useState(account?.color ?? ACCOUNT_COLORS[2]);
   const [initialAmount, setInitialAmount] = useState(
     account ? String(account.initialBalance) : ""
@@ -84,7 +92,7 @@ export default function InvestmentBoxFormPage({ account }: Props) {
       dispatch({ type: "ADD_TX", payload: tx });
     }
 
-    router.replace(isEdit ? `/investimentos/${id}` : `/investimentos/${id}`);
+    router.replace(`/investimentos/${id}`);
   }
 
   function handleDelete() {
@@ -142,22 +150,27 @@ export default function InvestmentBoxFormPage({ account }: Props) {
         <div className="form-group">
           <label className="form-label">Ícone</label>
           <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-            {ACCOUNT_ICONS.map(ic => {
-              const selected = icon === ic;
+            {BOX_ICONS.map(iconName => {
+              const selected = icon === iconName;
               return (
                 <button
-                  key={ic}
+                  key={iconName}
                   type="button"
-                  onClick={() => setIcon(ic)}
+                  onClick={() => setIcon(iconName)}
                   style={{
                     width: "44px", height: "44px", borderRadius: "12px",
                     display: "flex", alignItems: "center", justifyContent: "center",
-                    fontSize: "20px",
                     background: selected ? "var(--accent-10)" : "rgba(255,255,255,0.04)",
                     border: selected ? "1px solid var(--border-accent)" : "1px solid var(--border)",
                     cursor: "pointer", touchAction: "manipulation",
                   }}
-                >{ic}</button>
+                >
+                  <CategoryIcon
+                    icon={iconName}
+                    color={selected ? "var(--accent)" : "var(--text-3)"}
+                    size={20}
+                  />
+                </button>
               );
             })}
           </div>
@@ -249,7 +262,7 @@ export default function InvestmentBoxFormPage({ account }: Props) {
                     <option value="">Nenhuma conta disponível</option>
                   )}
                   {liquidAccounts.map(a => (
-                    <option key={a.id} value={a.id}>{a.icon} {a.name}</option>
+                    <option key={a.id} value={a.id}>{a.name}</option>
                   ))}
                 </select>
               </div>

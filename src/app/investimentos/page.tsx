@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useApp } from "@/context/AppContext";
 import { getCurrentBalance, fmt, isBalancePositive } from "@/engine/financialEngine";
 import { PiggyBank, Pencil } from "lucide-react";
+import CategoryIcon, { isLucideIcon } from "@/components/CategoryIcon";
 
 export default function InvestimentosPage() {
   const router = useRouter();
@@ -122,9 +123,12 @@ export default function InvestimentosPage() {
                     width: "44px", height: "44px", borderRadius: "14px", flexShrink: 0,
                     background: `${box.color}18`, border: `1px solid ${box.color}30`,
                     display: "flex", alignItems: "center", justifyContent: "center",
-                    fontSize: "20px",
                   }}>
-                    {box.icon}
+                    <CategoryIcon
+                      icon={isLucideIcon(box.icon) ? box.icon : "PiggyBank"}
+                      color={box.color}
+                      size={20}
+                    />
                   </div>
                   <div style={{ minWidth: 0 }}>
                     <p style={{

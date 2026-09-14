@@ -13,7 +13,7 @@ import { computeInvoice } from "@/engine/invoiceEngine";
 import { getSpentByCategory } from "@/engine/budgetEngine";
 import {
   AlertTriangle, CreditCard, Wallet, TrendingUp, Package, RefreshCw,
-  ArrowDown, ArrowUp, ChevronDown, ChevronUp, Plus, PiggyBank,
+  ArrowDown, ArrowUp, ChevronDown, ChevronUp, Plus,
 } from "lucide-react";
 import CategoryIcon from "@/components/CategoryIcon";
 import { CopilotFab } from "@/components/CopilotFab";
@@ -153,16 +153,6 @@ export default function Dashboard() {
     if (onlyInvestments) return scopedAccounts;
     return scopedAccounts.filter(a => a.type !== "investment");
   }, [scopedAccounts]);
-
-  const investmentBoxes = useMemo(
-    () => activeAccounts.filter(a => a.type === "investment"),
-    [activeAccounts]
-  );
-
-  const totalInvested = useMemo(
-    () => investmentBoxes.reduce((s, a) => s + (accountBalances[a.id] ?? 0), 0),
-    [investmentBoxes, accountBalances]
-  );
 
   const totalBalance = useMemo(() =>
     balanceAccounts.reduce((s, a) => s + (accountBalances[a.id] ?? 0), 0),
@@ -523,48 +513,6 @@ export default function Dashboard() {
             </div>
           )}
         </div>
-
-        {/* ── 3b. Dinheiro guardado (caixinhas) ── */}
-        <button
-          type="button"
-          className="card fade-up-2"
-          onClick={() => router.push("/investimentos")}
-          style={{
-            width: "100%", textAlign: "left",
-            padding: "16px 18px", marginBottom: "12px",
-            display: "flex", alignItems: "center", gap: "14px",
-            cursor: "pointer", fontFamily: "inherit",
-            background: "var(--bg-card)", border: "1px solid var(--border)",
-          }}
-        >
-          <div style={{
-            width: "40px", height: "40px", borderRadius: "12px", flexShrink: 0,
-            background: "var(--accent-10)", border: "1px solid var(--border-accent)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            color: "var(--accent)",
-          }}>
-            <PiggyBank size={20} strokeWidth={1.5} />
-          </div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <p style={{
-              fontSize: "10px", fontWeight: 700, color: "var(--text-3)",
-              letterSpacing: "0.08em", textTransform: "uppercase",
-            }}>
-              Dinheiro guardado
-            </p>
-            <p className="mono" style={{
-              fontSize: "18px", fontWeight: 700, marginTop: "2px",
-              color: isBalancePositive(totalInvested) ? "var(--green)" : "var(--text-1)",
-            }}>
-              R$ {fmt(totalInvested)}
-            </p>
-            <p style={{ fontSize: "11px", color: "var(--text-3)", marginTop: "2px" }}>
-              {investmentBoxes.length === 0
-                ? "Criar caixinhas →"
-                : `${investmentBoxes.length} caixinha${investmentBoxes.length !== 1 ? "s" : ""} →`}
-            </p>
-          </div>
-        </button>
 
         {/* ── 4. Receitas / Despesas / Balanço ── */}
         <div className="fade-up-2" style={{

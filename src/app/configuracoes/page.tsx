@@ -44,6 +44,7 @@ export default function Configuracoes() {
 
   const navItems = [
     { href: "/contas", Icon: Landmark, label: "Minhas Contas", desc: `${stats.accounts} conta${stats.accounts !== 1 ? "s" : ""} cadastrada${stats.accounts !== 1 ? "s" : ""}` },
+    { href: "/metas", Icon: Target, label: "Metas", desc: `${stats.goals} meta${stats.goals !== 1 ? "s" : ""} cadastrada${stats.goals !== 1 ? "s" : ""}` },
     { href: "/orcamentos", Icon: BarChart2, label: "Orçamentos", desc: `${state.budgets.length} limite${state.budgets.length !== 1 ? "s" : ""} definido${state.budgets.length !== 1 ? "s" : ""}` },
     { href: "/relatorios", Icon: TrendingUp, label: "Relatórios", desc: "Análises e gráficos" },
   ];

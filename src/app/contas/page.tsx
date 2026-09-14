@@ -8,6 +8,7 @@ import {
   fmt, isBalanceNegative, isBalancePositive,
 } from "@/engine/financialEngine";
 import { Landmark, Pencil } from "lucide-react";
+import CategoryIcon, { isLucideIcon } from "@/components/CategoryIcon";
 
 function balanceColor(
   v: number,
@@ -113,8 +114,20 @@ export default function Contas() {
                   <div style={{
                     width: "48px", height: "48px", borderRadius: "14px", flexShrink: 0,
                     background: `${acc.color}18`, border: `1px solid ${acc.color}30`,
-                    display: "flex", alignItems: "center", justifyContent: "center", fontSize: "22px",
-                  }}>{acc.icon}</div>
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                  }}>
+                    <CategoryIcon
+                      icon={
+                        isLucideIcon(acc.icon)
+                          ? acc.icon
+                          : acc.type === "investment"
+                            ? "PiggyBank"
+                            : "Landmark"
+                      }
+                      color={acc.color}
+                      size={22}
+                    />
+                  </div>
                   <div>
                     <p style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-1)" }}>{acc.name}</p>
                     <p style={{ fontSize: "12px", color: "var(--text-3)", marginTop: "2px" }}>

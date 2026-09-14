@@ -97,7 +97,7 @@ export default function InvestmentMoveFormPage({ boxId, mode }: Props) {
           borderRadius: "12px", marginBottom: "24px",
         }}>
           <p style={{ fontSize: "13px", color: "var(--text-2)", lineHeight: 1.6 }}>
-            Caixinha: <strong style={{ color: "var(--text-1)" }}>{box.icon} {box.name}</strong>
+            Caixinha: <strong style={{ color: "var(--text-1)" }}>{box.name}</strong>
           </p>
           <p style={{ fontSize: "13px", color: "var(--text-2)", marginTop: "4px" }}>
             Saldo na caixinha:{" "}
@@ -128,7 +128,7 @@ export default function InvestmentMoveFormPage({ boxId, mode }: Props) {
               <option value="">Nenhuma conta disponível</option>
             )}
             {liquidAccounts.map(a => (
-              <option key={a.id} value={a.id}>{a.icon} {a.name}</option>
+              <option key={a.id} value={a.id}>{a.name}</option>
             ))}
           </select>
         </div>

@@ -1,13 +1,13 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, ArrowUpDown, CreditCard, Target, Settings } from "lucide-react";
+import { Home, ArrowUpDown, CreditCard, PiggyBank, Settings } from "lucide-react";
 
 const NAV = [
   { href: "/", label: "Início", Icon: Home },
   { href: "/transacoes", label: "Transações", Icon: ArrowUpDown },
   { href: "/cartoes", label: "Cartões", Icon: CreditCard },
-  { href: "/metas", label: "Metas", Icon: Target },
+  { href: "/investimentos", label: "Investir", Icon: PiggyBank },
   { href: "/configuracoes", label: "Config", Icon: Settings },
 ];
 
@@ -24,7 +24,11 @@ export default function BottomNav() {
         <Link
           key={href}
           href={href}
-          className={`bottom-nav-item${pathname === href ? " active" : ""}`}
+          className={`bottom-nav-item${
+            href === "/"
+              ? pathname === "/" ? " active" : ""
+              : pathname === href || pathname.startsWith(`${href}/`) ? " active" : ""
+          }`}
         >
           <Icon size={22} strokeWidth={1.5} />
           <span>{label}</span>

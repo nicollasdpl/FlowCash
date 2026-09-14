@@ -32,16 +32,6 @@ function IconCard() {
   );
 }
 
-function IconTarget() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="10" />
-      <circle cx="12" cy="12" r="6" />
-      <circle cx="12" cy="12" r="2" fill="currentColor" stroke="none" />
-    </svg>
-  );
-}
-
 function IconChart() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -90,7 +80,6 @@ const navItems = [
   { href: "/contas", label: "Contas", icon: <IconBank /> },
   { href: "/investimentos", label: "Investimentos", icon: <IconPiggy /> },
   { href: "/cartoes", label: "Cartões", icon: <IconCard /> },
-  { href: "/metas", label: "Metas", icon: <IconTarget /> },
   { href: "/relatorios", label: "Relatórios", icon: <IconChart /> },
 ];
 

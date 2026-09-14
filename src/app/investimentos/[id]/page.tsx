@@ -4,6 +4,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useApp } from "@/context/AppContext";
 import { getCurrentBalance, fmt, isBalancePositive } from "@/engine/financialEngine";
 import { Pencil, ArrowDownToLine, ArrowUpFromLine } from "lucide-react";
+import CategoryIcon, { isLucideIcon } from "@/components/CategoryIcon";
 
 function fmtDate(d: string) {
   if (!d) return "—";
@@ -60,8 +61,14 @@ export default function CaixinhaDetailPage() {
             fontSize: "20px", fontWeight: 700, color: "var(--text-1)",
             letterSpacing: "-0.03em",
             overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+            display: "flex", alignItems: "center", gap: "8px",
           }}>
-            {box.icon} {box.name}
+            <CategoryIcon
+              icon={isLucideIcon(box.icon) ? box.icon : "PiggyBank"}
+              color={box.color}
+              size={22}
+            />
+            {box.name}
           </h1>
         </div>
         <button
