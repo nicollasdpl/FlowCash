@@ -130,4 +130,76 @@ describe("repairCardState", () => {
     );
     expect(withoutGuard).toBe(300 - 206.77);
   });
+
+  it("projetado ignora parcela antiga se fatura posterior do cartão já foi paga", () => {
+    const nubank: CreditCard = {
+      ...card,
+      id: "nubank",
+      name: "Nubank",
+      closingDay: 10,
+      dueDay: 17,
+      paymentAccountId: "acc1",
+    };
+    const leftover: CardInstallment = {
+      id: "old",
+      purchaseId: "p-old",
+      cardId: "nubank",
+      installmentNumber: 1,
+      totalInstallments: 1,
+      amount: 12.59,
+      competenceMonth: "2025-09",
+      paid: false,
+    };
+    const later: CardInstallment = {
+      id: "new",
+      purchaseId: "p-new",
+      cardId: "nubank",
+      installmentNumber: 1,
+      totalInstallments: 1,
+      amount: 100,
+      competenceMonth: "2026-09",
+      paid: true,
+    };
+    const account = {
+      id: "acc1",
+      name: "Nubank",
+      type: "checking" as const,
+      initialBalance: 173.9,
+      active: true,
+      createdAt: "2026-01-01",
+    };
+    expect(getProjectedBalance(account, [], "2026-09-30", [nubank], [leftover, later])).toBe(173.9);
+  });
+
+  it("marca fatura antiga unpaid quando um mês posterior do cartão já está 100% pago", () => {
+    const leftover: CardInstallment = {
+      id: "old_inst_1",
+      purchaseId: "old",
+      cardId: "card1",
+      installmentNumber: 1,
+      totalInstallments: 1,
+      amount: 12.59,
+      competenceMonth: "2025-09",
+      paid: false,
+    };
+    const laterPaid: CardInstallment = {
+      id: "new_inst_1",
+      purchaseId: "new",
+      cardId: "card1",
+      installmentNumber: 1,
+      totalInstallments: 1,
+      amount: 100,
+      competenceMonth: "2026-09",
+      paid: true,
+      paidAt: "2026-09-17",
+    };
+    const { state, changed } = repairCardState({
+      cards: [card],
+      purchases: [purchase],
+      installments: [leftover, laterPaid],
+      transactions: [],
+    });
+    expect(changed).toBe(true);
+    expect(state.installments.find(i => i.id === "old_inst_1")?.paid).toBe(true);
+  });
 });
