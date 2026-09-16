@@ -7,6 +7,7 @@ function baseState(overrides: Partial<AppState> = {}): AppState {
   return {
     userName: "",
     notificationPrefs: { ...DEFAULT_NOTIFICATION_PREFS, enabled: true },
+    dashboardAccountFilter: false,
     accounts: [],
     transactions: [],
     cards: [],

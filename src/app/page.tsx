@@ -22,8 +22,7 @@ import { CategoryDonutSection, buildCatSlices } from "@/components/CategoryDonut
 import { buildConsumptionCatSlices } from "@/app/relatorios/consumptionByCategory";
 import {
   AccountScopePicker,
-  ALL_ACCOUNTS_SCOPE,
-  useAccountScope,
+  useSelectedAccountIds,
 } from "@/components/AccountScopePicker";
 
 const MONTH_NAMES = [
@@ -89,7 +88,8 @@ export default function Dashboard() {
   const [selectedMonth, setSelectedMonth] = useState(currentMonth());
   const [pendingExpanded, setPendingExpanded] = useState(false);
   const [categoryView, setCategoryView] = useState<"invoice" | "consumption">("invoice");
-  const [accountScope, setAccountScope, accountScopeReady] = useAccountScope(state.accounts);
+  const [selectedAccountIds, toggleAccountId] = useSelectedAccountIds(state.accounts);
+  const accountFilterOn = state.dashboardAccountFilter === true;
 
   function openTransaction(tx: Transaction) {
     router.push(`/transacoes/${tx.id}/editar`);
@@ -130,17 +130,11 @@ export default function Dashboard() {
     [state.accounts]
   );
 
-  const scopedAccounts = useMemo(
-    () => accountScope === ALL_ACCOUNTS_SCOPE
-      ? activeAccounts
-      : activeAccounts.filter(a => a.id === accountScope),
-    [activeAccounts, accountScope]
-  );
-
-  const scopedAccountIds = useMemo(
-    () => new Set(scopedAccounts.map(a => a.id)),
-    [scopedAccounts]
-  );
+  const scopedAccounts = useMemo(() => {
+    if (!accountFilterOn || activeAccounts.length < 2) return activeAccounts;
+    const picked = activeAccounts.filter(a => selectedAccountIds.includes(a.id));
+    return picked.length > 0 ? picked : activeAccounts;
+  }, [accountFilterOn, activeAccounts, selectedAccountIds]);
 
   const accountBalances = useMemo(() => {
     const map: Record<string, number> = {};
@@ -150,47 +144,29 @@ export default function Dashboard() {
     return map;
   }, [activeAccounts, state.transactions]);
 
-  const inScopeTx = (t: Transaction) =>
-    accountScope === ALL_ACCOUNTS_SCOPE
-    || scopedAccountIds.has(t.accountId)
-    || (t.transferToAccountId ? scopedAccountIds.has(t.transferToAccountId) : false);
+  // Saldo principal = dinheiro gastável. Exclui caixinhas, a menos que o
+  // filtro esteja focado só em contas de investimento.
+  const balanceAccounts = useMemo(() => {
+    const onlyInvestments =
+      scopedAccounts.length > 0 &&
+      scopedAccounts.every(a => a.type === "investment");
+    if (onlyInvestments) return scopedAccounts;
+    return scopedAccounts.filter(a => a.type !== "investment");
+  }, [scopedAccounts]);
 
   const totalBalance = useMemo(() =>
-    scopedAccounts.reduce((s, a) => s + (accountBalances[a.id] ?? 0), 0),
-    [scopedAccounts, accountBalances]
+    balanceAccounts.reduce((s, a) => s + (accountBalances[a.id] ?? 0), 0),
+    [balanceAccounts, accountBalances]
   );
 
   const totalProjected = useMemo(() =>
-    scopedAccounts.reduce((s, a) => s + getProjectedBalance(a, state.transactions, projectionDate, state.cards, state.installments), 0),
-    [scopedAccounts, state.transactions, state.cards, state.installments, projectionDate]
-  );
-
-  const scopedCards = useMemo(
-    () => accountScope === ALL_ACCOUNTS_SCOPE
-      ? state.cards.filter(c => c.active)
-      : state.cards.filter(c => c.active && scopedAccountIds.has(c.paymentAccountId)),
-    [state.cards, accountScope, scopedAccountIds]
-  );
-
-  const scopedCardIds = useMemo(() => new Set(scopedCards.map(c => c.id)), [scopedCards]);
-
-  const scopedInstallments = useMemo(
-    () => accountScope === ALL_ACCOUNTS_SCOPE
-      ? state.installments
-      : state.installments.filter(i => scopedCardIds.has(i.cardId)),
-    [state.installments, accountScope, scopedCardIds]
-  );
-
-  const scopedPurchases = useMemo(
-    () => accountScope === ALL_ACCOUNTS_SCOPE
-      ? state.purchases
-      : state.purchases.filter(p => scopedCardIds.has(p.cardId)),
-    [state.purchases, accountScope, scopedCardIds]
+    balanceAccounts.reduce((s, a) => s + getProjectedBalance(a, state.transactions, projectionDate, state.cards, state.installments), 0),
+    [balanceAccounts, state.transactions, state.cards, state.installments, projectionDate]
   );
 
   const monthTxs = useMemo(() =>
-    state.transactions.filter(t => t.paymentDate.startsWith(selectedMonth) && inScopeTx(t)),
-    [state.transactions, selectedMonth, accountScope, scopedAccountIds]
+    state.transactions.filter(t => t.paymentDate.startsWith(selectedMonth)),
+    [state.transactions, selectedMonth]
   );
 
   // Categorias que não contam nos relatórios (ex.: Empréstimo). O dinheiro
@@ -204,28 +180,17 @@ export default function Dashboard() {
   // (status "paid" + paymentDate no mês). Empréstimo não conta como receita.
   const monthIncome = useMemo(() =>
     state.transactions
-      .filter(t =>
-        t.type === "income" &&
-        t.status === "paid" &&
-        t.paymentDate.startsWith(selectedMonth) &&
-        !excludedReportCatIds.has(t.categoryId) &&
-        inScopeTx(t)
-      )
+      .filter(t => t.type === "income" && t.status === "paid" && t.paymentDate.startsWith(selectedMonth) && !excludedReportCatIds.has(t.categoryId))
       .reduce((s, t) => s + t.amount, 0),
-    [state.transactions, selectedMonth, excludedReportCatIds, accountScope, scopedAccountIds]
+    [state.transactions, selectedMonth, excludedReportCatIds]
   );
   // Despesa = MESMA base do donut: getSpentByCategory (competência + parcelas de
   // cartão, exclui "Pagamento de Fatura"). Assim "Despesas" bate com o Total do relatório.
   const monthExpense = useMemo(() =>
     Object.values(
-      getSpentByCategory(
-        selectedMonth,
-        state.transactions.filter(t => accountScope === ALL_ACCOUNTS_SCOPE || scopedAccountIds.has(t.accountId)),
-        scopedInstallments,
-        scopedPurchases,
-      )
+      getSpentByCategory(selectedMonth, state.transactions, state.installments, state.purchases)
     ).reduce((s, v) => s + v, 0),
-    [selectedMonth, state.transactions, scopedInstallments, scopedPurchases, accountScope, scopedAccountIds]
+    [selectedMonth, state.transactions, state.installments, state.purchases]
   );
   const monthBalance = monthIncome - monthExpense;
 
@@ -235,11 +200,10 @@ export default function Dashboard() {
       .filter(t =>
         t.status !== "paid" &&
         t.paymentDate < todayStr &&
-        t.paymentDate.startsWith(selectedMonth) &&
-        inScopeTx(t)
+        t.paymentDate.startsWith(selectedMonth)
       )
       .sort((a, b) => a.paymentDate.localeCompare(b.paymentDate)),
-    [state.transactions, todayStr, selectedMonth, accountScope, scopedAccountIds]
+    [state.transactions, todayStr, selectedMonth]
   );
 
   // Pendentes: status=pending, data futura/hoje, mês selecionado (inside collapsible)
@@ -248,11 +212,10 @@ export default function Dashboard() {
       .filter(t =>
         t.status === "pending" &&
         t.paymentDate >= todayStr &&
-        t.paymentDate.startsWith(selectedMonth) &&
-        inScopeTx(t)
+        t.paymentDate.startsWith(selectedMonth)
       )
       .sort((a, b) => a.paymentDate.localeCompare(b.paymentDate)),
-    [state.transactions, todayStr, selectedMonth, accountScope, scopedAccountIds]
+    [state.transactions, todayStr, selectedMonth]
   );
 
   const expensePending = useMemo(() => pendingTxs.filter(t => t.type === "expense"), [pendingTxs]);
@@ -264,7 +227,7 @@ export default function Dashboard() {
   //   1) Fatura cujo VENCIMENTO cai no selectedMonth (se houver) — open→"open", closed/overdue→"due"; paga não entra.
   //   2) Senão: fatura "open" (ciclo corrente) — PRIORIDADE — OU "overdue" de mês anterior.
   const cardInvoices = useMemo(() => {
-    return scopedCards.flatMap(card => {
+    return state.cards.filter(c => c.active).flatMap(card => {
       const months = [...new Set(
         state.installments
           .filter(i => i.cardId === card.id)
@@ -289,28 +252,28 @@ export default function Dashboard() {
         ? [{ card, invoice: chosen, kind: (chosen.status === "open" ? "open" : "due") as "due" | "open" }]
         : [];
     });
-  }, [scopedCards, state.installments, selectedMonth]);
+  }, [state.cards, state.installments, selectedMonth]);
 
   // Donut: despesas pagas + parcelas do mês selecionado
   const catSlices = useMemo(() =>
     categoryView === "invoice"
       ? buildCatSlices(
-          state.transactions.filter(t => accountScope === ALL_ACCOUNTS_SCOPE || scopedAccountIds.has(t.accountId)),
-          scopedInstallments,
-          scopedPurchases,
+          state.transactions,
+          state.installments,
+          state.purchases,
           state.categories,
-          scopedCards,
+          state.cards,
           selectedMonth,
         )
       : buildConsumptionCatSlices(
           selectedMonth,
-          state.transactions.filter(t => accountScope === ALL_ACCOUNTS_SCOPE || scopedAccountIds.has(t.accountId)),
-          scopedInstallments,
-          scopedPurchases,
+          state.transactions,
+          state.installments,
+          state.purchases,
           state.categories,
-          scopedCards,
+          state.cards,
         ),
-    [categoryView, state.transactions, scopedInstallments, scopedPurchases, state.categories, scopedCards, selectedMonth, accountScope, scopedAccountIds]
+    [categoryView, state.transactions, state.installments, state.purchases, state.categories, state.cards, selectedMonth]
   );
 
   // Máximo 3 lançamentos recentes
@@ -377,15 +340,8 @@ export default function Dashboard() {
           </p>
           <button
             onClick={() => payNow(tx)}
-            style={{
-              padding: "5px 10px", minHeight: "28px", minWidth: "60px",
-              background: isExpense ? "rgba(255,77,106,0.1)" : "var(--accent-10)",
-              color: isExpense ? "var(--red)" : "var(--accent)",
-              border: `1px solid ${isExpense ? "var(--red-20)" : "var(--border-accent)"}`,
-              borderRadius: "8px", fontSize: "11px", fontWeight: 700,
-              cursor: "pointer", fontFamily: "inherit",
-              touchAction: "manipulation",
-            }}
+            className={`chip-btn${isExpense ? " danger" : " active"}`}
+            style={{ minHeight: "28px", minWidth: "60px", padding: "5px 10px", fontSize: "11px" }}
           >
             {isExpense ? "Pagar" : "Receber"}
           </button>
@@ -409,56 +365,36 @@ export default function Dashboard() {
       >
 
         {/* ── 1. Saudação + data ── */}
-        <div className="fade-up-1" style={{ marginBottom: "16px" }}>
-          <p style={{
-            fontSize: "18px", fontWeight: 700, color: "var(--text-1)",
-            letterSpacing: "-0.02em", lineHeight: 1.2,
-            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-          }}>
+        <div style={{ marginBottom: "16px" }}>
+          <p className="page-title" style={{ fontSize: "18px" }}>
             {name ? `${greeting()}, ${name}` : greeting()}
           </p>
-          <p style={{ fontSize: "11.5px", color: "var(--text-3)", marginTop: "3px" }}>
+          <p style={{ fontSize: "12px", color: "var(--text-3)", marginTop: "3px" }}>
             {new Date().toLocaleDateString("pt-BR", { weekday: "short", day: "numeric", month: "short" })}
           </p>
         </div>
 
         {/* ── 2. Navegação de mês ── */}
-        <div className="fade-up-1" style={{ marginBottom: "14px" }}>
-          <div style={{
-            display: "flex", alignItems: "center", justifyContent: "center",
-            background: "var(--bg-card)",
-            border: "1px solid var(--border)",
-            borderRadius: "var(--r-lg)",
-            padding: "4px",
-          }}>
+        <div style={{ marginBottom: "14px" }}>
+          <div className="month-nav">
             <button
+              type="button"
               onClick={() => setSelectedMonth(m => addMonths(m, -1))}
-              style={{
-                background: "none", border: "none", color: "var(--text-2)",
-                cursor: "pointer", fontSize: "20px",
-                padding: "8px 16px", minHeight: "44px", minWidth: "48px",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                borderRadius: "var(--r-sm)",
-              }}
+              className="icon-btn ghost"
               aria-label="Mês anterior"
+              style={{ fontSize: "20px" }}
             >‹</button>
 
-            <div style={{ textAlign: "center", flex: 1 }}>
-              <p style={{
-                fontSize: "15px", fontWeight: 700, color: "var(--text-1)",
-                letterSpacing: "-0.01em",
-              }}>
+            <div className="month-nav-label">
+              <p style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-1)", letterSpacing: "-0.01em" }}>
                 {fullMonthLabel(selectedMonth)}
               </p>
               {!isCurrentMonth && (
                 <button
+                  type="button"
                   onClick={() => setSelectedMonth(currentMonth())}
-                  style={{
-                    background: "none", border: "none",
-                    color: "var(--accent)", cursor: "pointer",
-                    fontSize: "11px", fontWeight: 600, padding: "0",
-                    fontFamily: "inherit",
-                  }}
+                  className="link-quiet"
+                  style={{ fontSize: "11px" }}
                 >
                   Ir para hoje
                 </button>
@@ -466,61 +402,45 @@ export default function Dashboard() {
             </div>
 
             <button
+              type="button"
               onClick={() => setSelectedMonth(m => addMonths(m, 1))}
-              style={{
-                background: "none", border: "none", color: "var(--text-2)",
-                cursor: "pointer", fontSize: "20px",
-                padding: "8px 16px", minHeight: "44px", minWidth: "48px",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                borderRadius: "var(--r-sm)",
-              }}
+              className="icon-btn ghost"
               aria-label="Próximo mês"
+              style={{ fontSize: "20px" }}
             >›</button>
           </div>
         </div>
 
-        {/* ── 3. Saldo por conta ── */}
+        {/* ── 3. Saldo ── */}
         <div
-          className="card fade-up-2"
-          style={{
-            padding: "20px", marginBottom: "12px",
-            background: "linear-gradient(135deg, #0F1923 0%, #0D1E34 100%)",
-            borderColor: "rgba(0,229,160,0.1)",
-          }}
+          className="soft-card"
+          style={{ padding: "20px", marginBottom: "12px" }}
         >
           <div style={{
             display: "flex", justifyContent: "space-between", alignItems: "center",
-            marginBottom: activeAccounts.length > 0 ? "10px" : "6px",
+            marginBottom: accountFilterOn && activeAccounts.length > 1 ? "10px" : "6px",
             gap: "8px",
           }}>
-            <p style={{
-              fontSize: "10px", fontWeight: 700, color: "var(--text-3)",
-              letterSpacing: "0.1em", textTransform: "uppercase",
-            }}>
-              {accountScope === ALL_ACCOUNTS_SCOPE
-                ? "Saldo total"
-                : `Saldo · ${scopedAccounts[0]?.name ?? "Conta"}`}
+            <p className="section-heading" style={{ marginBottom: 0 }}>
+              {accountFilterOn && balanceAccounts.length === 1
+                ? `Saldo · ${balanceAccounts[0].name}`
+                : "Saldo real"}
             </p>
             <button
               type="button"
               onClick={() => router.push("/contas")}
-              style={{
-                background: "none", border: "none", padding: 0,
-                fontSize: "11px", fontWeight: 600, color: "var(--accent)",
-                cursor: "pointer", fontFamily: "inherit",
-              }}
+              className="link-quiet"
             >
               Contas →
             </button>
           </div>
 
-          {activeAccounts.length > 1 && (
-            <div style={{ marginBottom: "14px" }}>
+          {accountFilterOn && activeAccounts.length > 1 && (
+            <div style={{ marginBottom: "10px" }}>
               <AccountScopePicker
                 accounts={activeAccounts}
-                balances={accountBalances}
-                scope={accountScope}
-                onChange={setAccountScope}
+                selectedIds={selectedAccountIds}
+                onToggle={toggleAccountId}
               />
             </div>
           )}
@@ -530,18 +450,8 @@ export default function Dashboard() {
             color: isBalanceNegative(totalBalance) ? "var(--red)"
               : isBalancePositive(totalBalance) ? "var(--green)" : "var(--text-1)",
             lineHeight: 1,
-            opacity: accountScopeReady ? 1 : 0.35,
           }}>
             R$ {fmt(totalBalance)}
-          </p>
-          <p style={{ fontSize: "11px", color: "var(--text-3)", marginTop: "6px" }}>
-            {!accountScopeReady
-              ? "Carregando contas…"
-              : accountScope === ALL_ACCOUNTS_SCOPE && activeAccounts.length > 1
-              ? "Soma de todas as contas — escolha uma acima para ver só ela"
-              : activeAccounts.length === 0
-              ? "Cadastre uma conta para ver o saldo"
-              : "Apenas transações pagas desta conta"}
           </p>
 
           {totalProjected !== totalBalance && (
@@ -563,7 +473,7 @@ export default function Dashboard() {
         </div>
 
         {/* ── 4. Receitas / Despesas / Balanço ── */}
-        <div className="fade-up-2" style={{
+        <div style={{
           display: "grid", gridTemplateColumns: "1fr 1fr 1fr",
           gap: "8px", marginBottom: "14px",
         }}>
@@ -572,41 +482,30 @@ export default function Dashboard() {
               label: "Receitas",
               value: monthIncome,
               color: "var(--green)",
-              icon: "↑",
               href: "/transacoes?tipo=income",
               hint: totalIncomePending > 0
                 ? `+${totalIncomePending >= 1000 ? `${(totalIncomePending / 1000).toFixed(1)}k` : fmt(totalIncomePending)} a receber`
                 : undefined,
             },
-            { label: "Despesas", value: monthExpense, color: monthExpense > monthIncome ? "var(--red)" : "var(--text-1)", icon: "↓", href: "/transacoes?tipo=expense" },
-            { label: "Balanço", value: monthBalance, color: isBalanceNegative(monthBalance) ? "var(--red)" : isBalancePositive(monthBalance) ? "var(--accent)" : "var(--text-2)", icon: isBalancePositive(monthBalance) ? "+" : "", prefix: true, href: null },
+            { label: "Despesas", value: monthExpense, color: monthExpense > monthIncome ? "var(--red)" : "var(--text-1)", href: "/transacoes?tipo=expense" },
+            { label: "Balanço", value: monthBalance, color: isBalanceNegative(monthBalance) ? "var(--red)" : isBalancePositive(monthBalance) ? "var(--accent)" : "var(--text-2)", prefix: true, href: null as string | null },
           ].map((m, i) => (
             <div
               key={i}
-              className="card"
+              className="metric-tile"
               onClick={m.href ? () => router.push(m.href!) : undefined}
-              style={{ padding: "12px 10px", cursor: m.href ? "pointer" : "default" }}
+              style={{ cursor: m.href ? "pointer" : "default" }}
             >
-              <p style={{
-                fontSize: "9px", color: "var(--text-3)",
-                fontWeight: 700, letterSpacing: "0.06em",
-                textTransform: "uppercase", marginBottom: "5px",
-                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-              }}>
-                {m.icon} {m.label}
-              </p>
-              <p className="mono" style={{
-                fontSize: "13px", fontWeight: 700, color: m.color,
-                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-              }}>
-                {m.prefix && isBalancePositive(m.value) ? "+" : ""}
+              <p className="metric-tile-label">{m.label}</p>
+              <p className="metric-tile-value" style={{ color: m.color }}>
+                {"prefix" in m && m.prefix && isBalancePositive(m.value) ? "+" : ""}
                 {Math.abs(m.value) >= 1000
                   ? `${(m.value / 1000).toFixed(1)}k`
                   : fmt(m.value)}
               </p>
               {"hint" in m && m.hint && (
                 <p style={{
-                  fontSize: "9px", fontWeight: 600, color: "var(--accent)",
+                  fontSize: "10px", fontWeight: 600, color: "var(--accent)",
                   marginTop: "3px", lineHeight: 1.2,
                   overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                 }}>
@@ -619,7 +518,7 @@ export default function Dashboard() {
 
         {/* ── 5. Vencidas — acima do card Pendentes ── */}
         {overduePending.length > 0 && (
-          <div className="fade-up-3" style={{
+          <div style={{
             background: "rgba(255,77,106,0.06)",
             border: "1px solid var(--red-20)",
             borderRadius: "var(--r-lg)",
@@ -632,10 +531,7 @@ export default function Dashboard() {
               display: "flex", alignItems: "center", gap: "8px",
             }}>
               <AlertTriangle size={13} strokeWidth={1.5} color="var(--red)" />
-              <p style={{
-                fontSize: "11px", fontWeight: 700, color: "var(--red)",
-                letterSpacing: "0.07em", textTransform: "uppercase",
-              }}>
+              <p className="section-heading" style={{ marginBottom: 0, color: "var(--red)" }}>
                 Vencidas
               </p>
               <span style={{ marginLeft: "auto", fontSize: "11px", color: "var(--red)", opacity: 0.7 }}>
@@ -711,7 +607,7 @@ export default function Dashboard() {
 
         {/* ── 6. Pendentes (collapsível) ── */}
         {pendingTxs.length > 0 && (
-          <div className="card fade-up-3" style={{ overflow: "hidden", marginBottom: "12px" }}>
+          <div className="soft-card" style={{ overflow: "hidden", marginBottom: "12px" }}>
 
             {/* Header — clicável */}
             <div
@@ -723,10 +619,7 @@ export default function Dashboard() {
                 borderBottom: pendingExpanded ? "1px solid var(--border)" : "none",
               }}
             >
-              <p style={{
-                fontSize: "11px", fontWeight: 700, color: "var(--text-3)",
-                letterSpacing: "0.07em", textTransform: "uppercase",
-              }}>
+              <p className="section-heading" style={{ marginBottom: 0 }}>
                 Pendentes
               </p>
               <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
@@ -786,10 +679,7 @@ export default function Dashboard() {
                       display: "flex", alignItems: "center", gap: "6px",
                     }}>
                       <ArrowDown size={11} strokeWidth={1.5} color="var(--red)" />
-                      <span style={{
-                        fontSize: "10px", fontWeight: 700, color: "var(--red)",
-                        letterSpacing: "0.07em", textTransform: "uppercase",
-                      }}>
+                      <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--red)" }}>
                         A pagar
                       </span>
                       <span style={{ marginLeft: "auto", fontSize: "10px", color: "var(--text-3)" }}>
@@ -812,10 +702,7 @@ export default function Dashboard() {
                       display: "flex", alignItems: "center", gap: "6px",
                     }}>
                       <ArrowUp size={11} strokeWidth={1.5} color="var(--accent)" />
-                      <span style={{
-                        fontSize: "10px", fontWeight: 700, color: "var(--accent)",
-                        letterSpacing: "0.07em", textTransform: "uppercase",
-                      }}>
+                      <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--accent)" }}>
                         A receber
                       </span>
                       <span style={{ marginLeft: "auto", fontSize: "10px", color: "var(--text-3)" }}>
@@ -834,19 +721,16 @@ export default function Dashboard() {
 
         {/* ── 7. Faturas de Cartão ── */}
         {cardInvoices.length > 0 && (
-          <div className="card fade-up-4" style={{ overflow: "hidden", marginBottom: "12px" }}>
+          <div className="soft-card" style={{ overflow: "hidden", marginBottom: "12px" }}>
             <div style={{
               padding: "12px 14px 10px",
               borderBottom: "1px solid var(--border)",
               display: "flex", justifyContent: "space-between", alignItems: "center",
             }}>
-              <p style={{
-                fontSize: "11px", fontWeight: 700, color: "var(--text-3)",
-                letterSpacing: "0.07em", textTransform: "uppercase",
-              }}>
+              <p className="section-heading" style={{ marginBottom: 0 }}>
                 Faturas de Cartão
               </p>
-              <Link href="/cartoes" style={{ fontSize: "11.5px", color: "var(--accent)", textDecoration: "none", fontWeight: 600 }}>
+              <Link href="/cartoes" className="link-quiet">
                 Ver →
               </Link>
             </div>
@@ -923,7 +807,7 @@ export default function Dashboard() {
 
         {/* ── 8. Gastos por Categoria (donut) ── */}
         <div
-          className="card fade-up-5"
+          className="soft-card"
           style={{ overflow: "hidden", marginBottom: "12px" }}
           onTouchStart={e => e.stopPropagation()}
           onTouchMove={e => e.stopPropagation()}
@@ -934,13 +818,10 @@ export default function Dashboard() {
             borderBottom: "1px solid var(--border)",
           }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
-              <p style={{
-                fontSize: "11px", fontWeight: 700, color: "var(--text-3)",
-                letterSpacing: "0.07em", textTransform: "uppercase",
-              }}>
+              <p className="section-heading" style={{ marginBottom: 0 }}>
                 Gastos por Categoria
               </p>
-              <Link href="/relatorios" style={{ fontSize: "11.5px", color: "var(--accent)", textDecoration: "none", fontWeight: 600 }}>
+              <Link href="/relatorios" className="link-quiet">
                 Relatórios →
               </Link>
             </div>
@@ -957,14 +838,7 @@ export default function Dashboard() {
                   key={opt.id}
                   type="button"
                   onClick={() => setCategoryView(opt.id)}
-                  style={{
-                    flex: 1, padding: "6px 6px", borderRadius: "8px",
-                    border: categoryView === opt.id ? "1px solid var(--border-accent)" : "1px solid transparent",
-                    fontSize: "11px", fontWeight: 700, fontFamily: "inherit",
-                    cursor: "pointer", touchAction: "manipulation",
-                    background: categoryView === opt.id ? "var(--accent-10)" : "transparent",
-                    color: categoryView === opt.id ? "var(--accent)" : "var(--text-3)",
-                  }}
+                  className={`chip-btn grow${categoryView === opt.id ? " active" : ""}`}
                 >
                   {opt.label}
                 </button>
@@ -988,19 +862,16 @@ export default function Dashboard() {
         </div>
 
         {/* ── 9. Lançamentos recentes (máx 3) ── */}
-        <div className="card fade-up-6" style={{ overflow: "hidden", marginBottom: "16px" }}>
+        <div className="soft-card" style={{ overflow: "hidden", marginBottom: "16px" }}>
           <div style={{
             padding: "12px 14px 10px",
             borderBottom: "1px solid var(--border)",
             display: "flex", justifyContent: "space-between", alignItems: "center",
           }}>
-            <p style={{
-              fontSize: "11px", fontWeight: 700, color: "var(--text-3)",
-              letterSpacing: "0.07em", textTransform: "uppercase",
-            }}>
+            <p className="section-heading" style={{ marginBottom: 0 }}>
               Lançamentos
             </p>
-            <Link href="/transacoes" style={{ fontSize: "11.5px", color: "var(--accent)", textDecoration: "none", fontWeight: 600 }}>
+            <Link href="/transacoes" className="link-quiet">
               Ver todos →
             </Link>
           </div>

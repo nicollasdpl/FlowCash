@@ -245,34 +245,24 @@ export default function Transacoes() {
     <div style={{ padding: "16px", maxWidth: "860px", margin: "0 auto" }}>
 
       {/* ── Header ── */}
-      <div className="fade-up-1" style={{
-        display: "flex", justifyContent: "space-between",
-        alignItems: "center", marginBottom: "16px",
-      }}>
+      <div className="page-header">
         <div>
-          <h1 style={{
-            fontSize: "20px", fontWeight: 700, color: "var(--text-1)",
-            letterSpacing: "-0.03em",
-          }}>Transações</h1>
+          <h1 className="page-title" style={{ fontSize: "20px" }}>Transações</h1>
           <p style={{ fontSize: "12px", color: "var(--text-3)", marginTop: "2px" }}>
             {state.transactions.length} registros
           </p>
         </div>
         <button
-          className="btn-primary"
+          type="button"
+          className="icon-btn primary"
           onClick={() => router.push("/transacoes/nova")}
-          style={{
-            fontSize: "24px", padding: "0",
-            width: "48px", height: "48px",
-            borderRadius: "14px",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            flexShrink: 0,
-          }}
+          aria-label="Nova transação"
+          style={{ fontSize: "24px", fontWeight: 500 }}
         >+</button>
       </div>
 
       {/* ── Busca ── */}
-      <div className="fade-up-1" style={{ marginBottom: "12px", position: "relative" }}>
+      <div style={{ marginBottom: "12px", position: "relative" }}>
         <Search
           size={16} strokeWidth={1.5}
           style={{ position: "absolute", left: "14px", top: "50%", transform: "translateY(-50%)", color: "var(--text-3)", pointerEvents: "none" }}
@@ -304,38 +294,26 @@ export default function Transacoes() {
       </div>
 
       {/* ── Seletor de Mês ── */}
-      <div className="fade-up-1" style={{ marginBottom: "14px" }}>
-        <div style={{
-          display: "flex", alignItems: "center", justifyContent: "center",
-          background: "var(--bg-card)", border: "1px solid var(--border)",
-          borderRadius: "var(--r-lg)", padding: "4px",
-          opacity: hasCustomPeriod ? 0.5 : 1,
-        }}>
+      <div style={{ marginBottom: "14px" }}>
+        <div className="month-nav" style={{ opacity: hasCustomPeriod ? 0.5 : 1 }}>
           <button
+            type="button"
             onClick={() => setSelectedMonth(m => addMonths(m, -1))}
             disabled={hasCustomPeriod}
-            style={{
-              background: "none", border: "none", color: "var(--text-2)",
-              cursor: hasCustomPeriod ? "default" : "pointer", fontSize: "20px",
-              padding: "8px 16px", minHeight: "44px", minWidth: "48px",
-              display: "flex", alignItems: "center", justifyContent: "center",
-            }}
+            className="icon-btn ghost"
+            style={{ fontSize: "20px", opacity: hasCustomPeriod ? 0.5 : 1 }}
+            aria-label="Mês anterior"
           >‹</button>
-          <p style={{
-            fontSize: "15px", fontWeight: 700, color: "var(--text-1)",
-            letterSpacing: "-0.01em", flex: 1, textAlign: "center",
-          }}>
+          <p className="month-nav-label">
             {fullMonthLabel(selectedMonth)}
           </p>
           <button
+            type="button"
             onClick={() => setSelectedMonth(m => addMonths(m, 1))}
             disabled={hasCustomPeriod}
-            style={{
-              background: "none", border: "none", color: "var(--text-2)",
-              cursor: hasCustomPeriod ? "default" : "pointer", fontSize: "20px",
-              padding: "8px 16px", minHeight: "44px", minWidth: "48px",
-              display: "flex", alignItems: "center", justifyContent: "center",
-            }}
+            className="icon-btn ghost"
+            style={{ fontSize: "20px", opacity: hasCustomPeriod ? 0.5 : 1 }}
+            aria-label="Próximo mês"
           >›</button>
         </div>
         {hasCustomPeriod && (
@@ -346,59 +324,51 @@ export default function Transacoes() {
       </div>
 
       {/* ── Resumo ── */}
-      <div className="fade-up-2" style={{
+      <div style={{
         display: "grid", gridTemplateColumns: "1fr 1fr",
         gap: "8px", marginBottom: "14px",
       }}>
-        <div className="card" style={{ padding: "13px 14px" }}>
-          <p style={{ fontSize: "10px", color: "var(--text-3)", fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: "4px" }}>↑ Receitas</p>
-          <p className="mono" style={{ fontSize: "17px", fontWeight: 700, color: "var(--green)" }}>R$ {fmt(income)}</p>
+        <div className="metric-tile">
+          <p className="metric-tile-label">Receitas</p>
+          <p className="metric-tile-value" style={{ color: "var(--green)", fontSize: "17px" }}>R$ {fmt(income)}</p>
         </div>
-        <div className="card" style={{ padding: "13px 14px" }}>
-          <p style={{ fontSize: "10px", color: "var(--text-3)", fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: "4px" }}>↓ Despesas</p>
-          <p className="mono" style={{ fontSize: "17px", fontWeight: 700, color: expense > income ? "var(--red)" : "var(--text-1)" }}>R$ {fmt(expense)}</p>
+        <div className="metric-tile">
+          <p className="metric-tile-label">Despesas</p>
+          <p className="metric-tile-value" style={{ color: expense > income ? "var(--red)" : "var(--text-1)", fontSize: "17px" }}>R$ {fmt(expense)}</p>
         </div>
         <div
-          className="card"
+          className="metric-tile"
           style={{
-            padding: "13px 14px",
             background: isBalanceNegative(monthBalance) ? "var(--red-10)" : "var(--accent-10)",
             borderColor: isBalanceNegative(monthBalance) ? "var(--red-20)" : "var(--border-accent)",
           }}
         >
-          <p style={{
-            fontSize: "10px",
+          <p className="metric-tile-label" style={{
             color: isBalanceNegative(monthBalance) ? "var(--red)" : isBalancePositive(monthBalance) ? "var(--accent)" : "var(--text-2)",
-            fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase",
-            marginBottom: "4px",
           }}>
             Balanço
           </p>
-          <p className="mono" style={{
-            fontSize: "17px", fontWeight: 700,
+          <p className="metric-tile-value" style={{
+            fontSize: "17px",
             color: isBalanceNegative(monthBalance) ? "var(--red)" : isBalancePositive(monthBalance) ? "var(--green)" : "var(--text-2)",
           }}>
             {isBalanceNegative(monthBalance) ? "−" : ""}R$ {fmt(Math.abs(monthBalance))}
           </p>
         </div>
         <div
-          className="card"
+          className="metric-tile"
           style={{
-            padding: "13px 14px",
             background: isBalanceNegative(totalProjected) ? "var(--red-10)" : "var(--accent-10)",
             borderColor: isBalanceNegative(totalProjected) ? "var(--red-20)" : "var(--border-accent)",
           }}
         >
-          <p style={{
-            fontSize: "10px",
+          <p className="metric-tile-label" style={{
             color: isBalanceNegative(totalProjected) ? "var(--red)" : isBalancePositive(totalProjected) ? "var(--accent)" : "var(--text-2)",
-            fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase",
-            marginBottom: "4px",
           }}>
             Projetado
           </p>
-          <p className="mono" style={{
-            fontSize: "17px", fontWeight: 700,
+          <p className="metric-tile-value" style={{
+            fontSize: "17px",
             color: isBalanceNegative(totalProjected) ? "var(--red)" : isBalancePositive(totalProjected) ? "var(--green)" : "var(--text-2)",
           }}>
             {isBalanceNegative(totalProjected) ? "−" : ""}R$ {fmt(Math.abs(totalProjected))}
@@ -407,7 +377,7 @@ export default function Transacoes() {
       </div>
 
       {/* ── Filtros de status + avançados ── */}
-      <div className="fade-up-3" style={{ marginBottom: "12px" }}>
+      <div style={{ marginBottom: "12px" }}>
         <div style={{
           display: "flex", gap: "7px", alignItems: "center",
           overflowX: "auto", paddingBottom: "4px",
@@ -447,7 +417,7 @@ export default function Transacoes() {
           <div className="card" style={{ marginTop: "10px", padding: "14px", display: "flex", flexDirection: "column", gap: "10px" }}>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
               <div>
-                <label style={{ fontSize: "10px", fontWeight: 700, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.06em", display: "block", marginBottom: "5px" }}>
+                <label className="form-label">
                   Categoria
                 </label>
                 <select value={categoryId} onChange={e => setCategoryId(e.target.value)} style={selectStyle}>
@@ -458,7 +428,7 @@ export default function Transacoes() {
                 </select>
               </div>
               <div>
-                <label style={{ fontSize: "10px", fontWeight: 700, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.06em", display: "block", marginBottom: "5px" }}>
+                <label className="form-label">
                   Conta
                 </label>
                 <select value={accountId} onChange={e => setAccountId(e.target.value)} style={selectStyle}>
@@ -471,7 +441,7 @@ export default function Transacoes() {
             </div>
 
             <div>
-              <label style={{ fontSize: "10px", fontWeight: 700, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.06em", display: "block", marginBottom: "5px" }}>
+              <label className="form-label">
                 Tipo
               </label>
               <select
@@ -487,13 +457,13 @@ export default function Transacoes() {
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
               <div>
-                <label style={{ fontSize: "10px", fontWeight: 700, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.06em", display: "block", marginBottom: "5px" }}>
+                <label className="form-label">
                   De
                 </label>
                 <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} style={inputStyle} />
               </div>
               <div>
-                <label style={{ fontSize: "10px", fontWeight: 700, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.06em", display: "block", marginBottom: "5px" }}>
+                <label className="form-label">
                   Até
                 </label>
                 <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} style={inputStyle} />
@@ -517,7 +487,7 @@ export default function Transacoes() {
       </div>
 
       {/* ── Lista agrupada por dia ── */}
-      <div className="fade-up-4">
+      <div>
         {filtered.length === 0 ? (
           <div className="card" style={{ padding: "48px 16px", textAlign: "center" }}>
             <div style={{ display: "flex", justifyContent: "center", marginBottom: "10px", color: "var(--text-3)" }}>

@@ -380,43 +380,29 @@ export default function Relatorios() {
     <div style={{ padding: "20px 16px", maxWidth: "680px", margin: "0 auto" }}>
 
       {/* ── Header com nav de mês ────────────────────────────────────────── */}
-      <div className="fade-up-1" style={{ marginBottom: "20px" }}>
-        <h1 style={{ fontSize: "22px", fontWeight: 700, color: "var(--text-1)", letterSpacing: "-0.03em", marginBottom: "12px" }}>
+      <div style={{ marginBottom: "20px" }}>
+        <h1 className="page-title" style={{ marginBottom: "12px" }}>
           Relatórios
         </h1>
-        <div style={{
-          display: "flex", alignItems: "center", justifyContent: "center",
-          background: "var(--bg-card)", border: "1px solid var(--border)",
-          borderRadius: "var(--r-lg)", padding: "4px",
-        }}>
+        <div className="month-nav">
           <button
+            type="button"
             onClick={() => changeMonth(-1)}
             aria-label="Mês anterior"
-            style={{
-              background: "none", border: "none", color: "var(--text-2)", cursor: "pointer",
-              padding: "8px 14px", minHeight: "44px", minWidth: "44px",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              touchAction: "manipulation", WebkitTapHighlightColor: "transparent",
-            }}
+            className="icon-btn ghost"
           >
             <ChevronLeft size={18} strokeWidth={1.5} />
           </button>
-          <p style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-1)", flex: 1, textAlign: "center" }}>
+          <p className="month-nav-label">
             {fullMonth(selectedMonth)}
           </p>
           <button
+            type="button"
             onClick={() => changeMonth(1)}
             disabled={atCurrentMonth}
             aria-label="Próximo mês"
-            style={{
-              background: "none", border: "none",
-              color: atCurrentMonth ? "var(--text-3)" : "var(--text-2)",
-              cursor: atCurrentMonth ? "default" : "pointer",
-              opacity: atCurrentMonth ? 0.4 : 1,
-              padding: "8px 14px", minHeight: "44px", minWidth: "44px",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              touchAction: "manipulation", WebkitTapHighlightColor: "transparent",
-            }}
+            className="icon-btn ghost"
+            style={{ opacity: atCurrentMonth ? 0.4 : 1 }}
           >
             <ChevronRight size={18} strokeWidth={1.5} />
           </button>
@@ -424,7 +410,7 @@ export default function Relatorios() {
       </div>
 
       {/* ── SEÇÃO 1: Resumo do mês (2x2) ────────────────────────────────── */}
-      <div className="fade-up-2" style={{
+      <div style={{
         display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "16px",
       }}>
         <SummaryCard
@@ -450,8 +436,8 @@ export default function Relatorios() {
 
       {/* ── SEÇÃO 2: Projeção (só mês corrente) ─────────────────────────── */}
       {projection && (
-        <div className="card fade-up-3" style={{ padding: "16px 18px", marginBottom: "16px" }}>
-          <p style={{ fontSize: "10px", fontWeight: 700, color: "var(--text-3)", letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: "8px" }}>
+        <div className="soft-card" style={{ padding: "16px 18px", marginBottom: "16px" }}>
+          <p className="section-heading">
             Gasto projetado do mês
           </p>
           <div style={{ display: "flex", alignItems: "baseline", gap: "12px", marginBottom: "10px", flexWrap: "wrap" }}>
@@ -500,8 +486,8 @@ export default function Relatorios() {
       )}
 
       {/* ── SEÇÃO 3: Evolução mensal (bar + line) ───────────────────────── */}
-      <div className="card fade-up-4" style={{ padding: "16px 18px", marginBottom: "16px" }}>
-        <p style={{ fontSize: "10px", fontWeight: 700, color: "var(--text-3)", letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: "14px" }}>
+      <div className="soft-card" style={{ padding: "16px 18px", marginBottom: "16px" }}>
+        <p className="section-heading" style={{ marginBottom: "14px" }}>
           Evolução mensal · 3 meses
         </p>
 
@@ -516,30 +502,27 @@ export default function Relatorios() {
         </div>
       </div>
 
-      {/* ── SEÇÃO 4: Mapa de calor — gastos por dia ─────────────────────── */}
-      <div className="card fade-up-5" style={{ padding: "16px 18px", marginBottom: "16px" }}>
-        <p style={{ fontSize: "10px", fontWeight: 700, color: "var(--text-3)", letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: "14px" }}>
-          Gastos por dia
+      {/* ── SEÇÃO 4: Mapa de calor — fluxo por dia ──────────────────────── */}
+      <div className="soft-card" style={{ padding: "16px 18px", marginBottom: "16px" }}>
+        <p className="section-heading" style={{ marginBottom: "14px" }}>
+          Fluxo por dia
         </p>
         <SpendingHeatmapCalendar
           month={selectedMonth}
           transactions={state.transactions}
           installments={state.installments}
           purchases={state.purchases}
+          categories={state.categories}
         />
       </div>
 
       {/* ── SEÇÃO 5: Categorias (donut + lista com variação) ────────────── */}
-      <div className="card fade-up-5" style={{ overflow: "hidden", marginBottom: "16px" }}>
+      <div className="soft-card" style={{ overflow: "hidden", marginBottom: "16px" }}>
         <div style={{ padding: "14px 18px", borderBottom: "1px solid var(--border)" }}>
-          <p style={{ fontSize: "10px", fontWeight: 700, color: "var(--text-3)", letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: "12px" }}>
+          <p className="section-heading" style={{ marginBottom: "12px" }}>
             Gastos por categoria
           </p>
-          <div style={{
-            display: "flex", gap: "6px",
-            padding: "3px", background: "rgba(255,255,255,0.04)",
-            borderRadius: "10px", border: "1px solid var(--border)",
-          }}>
+          <div style={{ display: "flex", gap: "6px" }}>
             {([
               { id: "invoice" as const, label: "Por fatura" },
               { id: "consumption" as const, label: "Gasto real" },
@@ -548,14 +531,7 @@ export default function Relatorios() {
                 key={opt.id}
                 type="button"
                 onClick={() => setCategoryView(opt.id)}
-                style={{
-                  flex: 1, padding: "8px 6px", borderRadius: "8px",
-                  border: categoryView === opt.id ? "1px solid var(--border-accent)" : "1px solid transparent",
-                  fontSize: "11.5px", fontWeight: 700, fontFamily: "inherit",
-                  cursor: "pointer", touchAction: "manipulation",
-                  background: categoryView === opt.id ? "var(--accent-10)" : "transparent",
-                  color: categoryView === opt.id ? "var(--accent)" : "var(--text-3)",
-                }}
+                className={`chip-btn grow${categoryView === opt.id ? " active" : ""}`}
               >
                 {opt.label}
               </button>
@@ -644,6 +620,11 @@ export default function Relatorios() {
               <CategoryExpenseDetailPanel
                 slice={selectedSlice}
                 onClose={() => setSelectedCategoryId(null)}
+                month={selectedMonth}
+                transactions={state.transactions}
+                installments={state.installments}
+                purchases={state.purchases}
+                categories={state.categories}
               />
             )}
           </>
@@ -652,9 +633,9 @@ export default function Relatorios() {
 
       {/* ── SEÇÃO 6: Orçamentos (só se houver) ──────────────────────────── */}
       {budgetsThisMonth.length > 0 && (
-        <div className="card fade-up-5" style={{ overflow: "hidden", marginBottom: "16px" }}>
+        <div className="soft-card" style={{ overflow: "hidden", marginBottom: "16px" }}>
           <div style={{ padding: "14px 18px", borderBottom: "1px solid var(--border)" }}>
-            <p style={{ fontSize: "10px", fontWeight: 700, color: "var(--text-3)", letterSpacing: "0.07em", textTransform: "uppercase" }}>
+            <p className="section-heading" style={{ marginBottom: 0 }}>
               Orçamentos do mês
             </p>
           </div>
@@ -701,10 +682,10 @@ export default function Relatorios() {
       )}
 
       {/* ── SEÇÃO 7: Insights IA ────────────────────────────────────────── */}
-      <div className="card fade-up-5" style={{ padding: "16px 18px", marginBottom: "20px" }}>
+      <div className="soft-card" style={{ padding: "16px 18px", marginBottom: "20px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "10px" }}>
           <Sparkles size={14} strokeWidth={1.5} color="var(--accent)" />
-          <p style={{ fontSize: "10px", fontWeight: 700, color: "var(--accent)", letterSpacing: "0.07em", textTransform: "uppercase" }}>
+          <p className="section-heading" style={{ marginBottom: 0, color: "var(--accent)" }}>
             Insights da IA
           </p>
         </div>
@@ -759,7 +740,7 @@ export default function Relatorios() {
 
       {/* Sem dados global (3 meses todos zerados) */}
       {monthData.every(d => d.income === 0 && d.expense === 0) && (
-        <div className="card" style={{ padding: "32px 18px", textAlign: "center" }}>
+        <div className="soft-card" style={{ padding: "32px 18px", textAlign: "center" }}>
           <div style={{ display: "flex", justifyContent: "center", marginBottom: "12px", color: "var(--text-3)" }}>
             <BarChart2 size={36} strokeWidth={1.5} />
           </div>
@@ -778,14 +759,9 @@ function SummaryCard({ label, value, valueColor, subtitle }: {
   label: string; value: string; valueColor: string; subtitle?: string;
 }) {
   return (
-    <div className="card" style={{ padding: "12px 14px", minWidth: 0 }}>
-      <p style={{ fontSize: "9px", color: "var(--text-3)", fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: "6px" }}>
-        {label}
-      </p>
-      <p className="mono" style={{
-        fontSize: "15px", fontWeight: 700, color: valueColor,
-        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-      }}>
+    <div className="metric-tile" style={{ minWidth: 0 }}>
+      <p className="metric-tile-label">{label}</p>
+      <p className="metric-tile-value" style={{ color: valueColor, fontSize: "15px" }}>
         {value}
       </p>
       {subtitle && (

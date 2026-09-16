@@ -73,6 +73,40 @@ function repairCorruptedPurchases(state: RepairableState): RepairableState {
   return changed ? { ...state, purchases, installments } : state;
 }
 
+/**
+ * Parcela órfã de fatura antiga (ex.: import 2025) que ficou unpaid depois
+ * de faturas mais novas do mesmo cartão já estarem 100% pagas. Sem isso o
+ * projetado desconta o valor para sempre.
+ */
+function repairLeftoverUnpaidAfterLaterPaidMonth(state: RepairableState): RepairableState {
+  let installments = state.installments;
+  let changed = false;
+
+  for (const card of state.cards) {
+    const cardInst = installments.filter(i => i.cardId === card.id);
+    const months = [...new Set(cardInst.map(i => i.competenceMonth))].sort();
+    const latestFullyPaid = [...months].reverse().find(month => {
+      const m = cardInst.filter(i => i.competenceMonth === month);
+      return m.length > 0 && m.every(i => i.paid);
+    });
+    if (!latestFullyPaid) continue;
+
+    for (const month of months) {
+      if (month >= latestFullyPaid) continue;
+      const unpaid = cardInst.filter(i => i.competenceMonth === month && !i.paid);
+      if (unpaid.length === 0) continue;
+      const { dueDate } = getInvoiceDates(month, card.closingDay, card.dueDay);
+      installments = installments.map(i => {
+        if (i.cardId !== card.id || i.competenceMonth !== month || i.paid) return i;
+        changed = true;
+        return { ...i, paid: true, paidAt: i.paidAt ?? dueDate };
+      });
+    }
+  }
+
+  return changed ? { ...state, installments } : state;
+}
+
 /** Marca parcelas como pagas quando já existe liquidação no extrato. */
 function repairPaidFlagsFromInvoicePayments(state: RepairableState): RepairableState {
   let installments = state.installments;
@@ -123,6 +157,7 @@ export function repairCardState<T extends RepairableState>(state: T): { state: T
   let next: RepairableState = state;
   next = repairCorruptedPurchases(next);
   next = repairPaidFlagsFromInvoicePayments(next);
+  next = repairLeftoverUnpaidAfterLaterPaidMonth(next);
 
   const after = JSON.stringify({
     p: next.purchases.map(x => [x.id, x.amount]),

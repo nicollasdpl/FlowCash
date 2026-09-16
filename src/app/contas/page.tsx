@@ -8,6 +8,7 @@ import {
   fmt, isBalanceNegative, isBalancePositive,
 } from "@/engine/financialEngine";
 import { Landmark, Pencil } from "lucide-react";
+import CategoryIcon, { isLucideIcon } from "@/components/CategoryIcon";
 
 function balanceColor(
   v: number,
@@ -48,25 +49,26 @@ export default function Contas() {
   return (
     <div style={{ padding: "20px 16px", maxWidth: "900px" }}>
 
-      <div className="fade-up-1" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "24px" }}>
+      <div className="page-header">
         <div>
-          <h1 style={{ fontSize: "22px", fontWeight: 700, color: "var(--text-1)", letterSpacing: "-0.03em" }}>Contas</h1>
+          <h1 className="page-title">Contas</h1>
           <p style={{ fontSize: "13px", color: "var(--text-2)", marginTop: "3px" }}>
             {state.accounts.length} conta{state.accounts.length !== 1 ? "s" : ""} cadastrada{state.accounts.length !== 1 ? "s" : ""}
           </p>
         </div>
         <button
-          className="btn-primary"
+          type="button"
+          className="icon-btn primary"
           onClick={() => router.push("/contas/nova")}
-        >
-          + Nova conta
-        </button>
+          aria-label="Nova conta"
+          style={{ fontSize: "24px", fontWeight: 500 }}
+        >+</button>
       </div>
 
       {/* Resumo total */}
-      <div className="fade-up-1" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "24px" }}>
-        <div className="card" style={{ padding: "20px" }}>
-          <p style={{ fontSize: "11px", color: "var(--text-3)", fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", marginBottom: "8px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "24px" }}>
+        <div className="soft-card" style={{ padding: "20px" }}>
+          <p className="section-heading">
             Soma de todas as contas
           </p>
           <p className="mono" style={{ fontSize: "28px", fontWeight: 700, color: balanceColor(totalCurrent, "var(--green)"), letterSpacing: "-0.03em" }}>
@@ -74,8 +76,8 @@ export default function Contas() {
           </p>
           <p style={{ fontSize: "11.5px", color: "var(--text-3)", marginTop: "6px" }}>Não é o saldo de uma conta só — veja cada uma abaixo</p>
         </div>
-        <div className="card" style={{ padding: "20px" }}>
-          <p style={{ fontSize: "11px", color: "var(--text-3)", fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", marginBottom: "8px" }}>
+        <div className="soft-card" style={{ padding: "20px" }}>
+          <p className="section-heading">
             Projetado (fim do mês)
           </p>
           <p className="mono" style={{ fontSize: "28px", fontWeight: 700, color: balanceColor(totalProjected, "var(--text-1)"), letterSpacing: "-0.03em" }}>
@@ -87,7 +89,7 @@ export default function Contas() {
 
       {/* Estado vazio */}
       {state.accounts.length === 0 && (
-        <div className="card" style={{ padding: "48px", textAlign: "center" }}>
+        <div className="soft-card" style={{ padding: "48px", textAlign: "center" }}>
           <div style={{ display: "flex", justifyContent: "center", marginBottom: "16px", color: "var(--text-3)" }}>
             <Landmark size={48} strokeWidth={1.5} />
           </div>
@@ -101,20 +103,32 @@ export default function Contas() {
 
       {/* Lista de contas */}
       <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-        {state.accounts.map((acc, i) => {
+        {state.accounts.map((acc) => {
           const current   = getCurrentBalance(acc, state.transactions);
           const projected = getProjectedBalance(acc, state.transactions, eom, state.cards, state.installments);
           const available = getAvailableBalance(acc, state.transactions, state.goals, eom, state.cards, state.installments);
           const reserved  = projected - available;
           return (
-            <div key={acc.id} className={`card fade-up-${Math.min(i + 2, 6)}`} style={{ padding: "22px" }}>
+            <div key={acc.id} className="soft-card" style={{ padding: "22px" }}>
               <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "20px" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
                   <div style={{
                     width: "48px", height: "48px", borderRadius: "14px", flexShrink: 0,
                     background: `${acc.color}18`, border: `1px solid ${acc.color}30`,
-                    display: "flex", alignItems: "center", justifyContent: "center", fontSize: "22px",
-                  }}>{acc.icon}</div>
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                  }}>
+                    <CategoryIcon
+                      icon={
+                        isLucideIcon(acc.icon)
+                          ? acc.icon
+                          : acc.type === "investment"
+                            ? "PiggyBank"
+                            : "Landmark"
+                      }
+                      color={acc.color}
+                      size={22}
+                    />
+                  </div>
                   <div>
                     <p style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-1)" }}>{acc.name}</p>
                     <p style={{ fontSize: "12px", color: "var(--text-3)", marginTop: "2px" }}>
@@ -122,18 +136,29 @@ export default function Contas() {
                     </p>
                   </div>
                 </div>
-                <button
-                  onClick={() => router.push(`/contas/${acc.id}/editar`)}
-                  style={{
-                    background: "rgba(255,255,255,0.05)", border: "1px solid var(--border)",
-                    borderRadius: "8px", color: "var(--text-2)",
-                    cursor: "pointer", fontSize: "13px", fontWeight: 600,
-                    display: "flex", alignItems: "center", gap: "6px",
-                    padding: "8px 12px", minHeight: "36px", fontFamily: "inherit",
-                  }}
-                >
-                  <Pencil size={13} strokeWidth={1.5} /> Editar
-                </button>
+                <div style={{ display: "flex", gap: "8px", flexShrink: 0 }}>
+                  {acc.type === "investment" && (
+                    <button
+                      type="button"
+                      className="chip-btn"
+                      onClick={() => router.push(`/investimentos/${acc.id}`)}
+                      style={{ color: "var(--accent)", borderColor: "var(--border-accent)", background: "var(--accent-10)" }}
+                    >
+                      Caixinha →
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="chip-btn"
+                    onClick={() => router.push(
+                      acc.type === "investment"
+                        ? `/investimentos/${acc.id}/editar`
+                        : `/contas/${acc.id}/editar`
+                    )}
+                  >
+                    <Pencil size={13} strokeWidth={1.5} /> Editar
+                  </button>
+                </div>
               </div>
 
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "10px" }}>
@@ -146,7 +171,7 @@ export default function Contas() {
                     background: "rgba(255,255,255,0.03)", border: "1px solid var(--border)",
                     borderRadius: "12px", padding: "14px 16px",
                   }}>
-                    <p style={{ fontSize: "10.5px", color: "var(--text-3)", fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase", marginBottom: "6px" }}>
+                    <p className="section-heading" style={{ marginBottom: "6px" }}>
                       {metric.label}
                     </p>
                     <p className="mono" style={{ fontSize: "18px", fontWeight: 700, color: metric.color, letterSpacing: "-0.02em" }}>

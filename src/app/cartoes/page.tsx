@@ -17,9 +17,9 @@ export default function Cartoes() {
     <div style={{ padding: "20px 16px", maxWidth: "600px", margin: "0 auto" }}>
 
       {/* Header */}
-      <div className="fade-up-1" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "20px" }}>
+      <div className="page-header">
         <div>
-          <h1 style={{ fontSize: "20px", fontWeight: 700, color: "var(--text-1)", letterSpacing: "-0.03em" }}>
+          <h1 className="page-title" style={{ fontSize: "20px" }}>
             Cartões de Crédito
           </h1>
           <p style={{ fontSize: "12px", color: "var(--text-3)", marginTop: "2px" }}>
@@ -27,17 +27,17 @@ export default function Cartoes() {
           </p>
         </div>
         <button
-          className="btn-primary"
+          type="button"
+          className="icon-btn primary"
           onClick={() => router.push("/cartoes/nova")}
-          style={{ fontSize: "13px", padding: "10px 16px" }}
-        >
-          + Novo
-        </button>
+          aria-label="Novo cartão"
+          style={{ fontSize: "24px", fontWeight: 500 }}
+        >+</button>
       </div>
 
       {/* Empty state */}
       {state.cards.length === 0 && (
-        <div className="card" style={{ padding: "48px 24px", textAlign: "center" }}>
+        <div className="soft-card" style={{ padding: "48px 24px", textAlign: "center" }}>
           <div style={{ display: "flex", justifyContent: "center", marginBottom: "14px", color: "var(--text-3)" }}>
             <CreditCardIcon size={44} strokeWidth={1.5} />
           </div>
@@ -53,7 +53,7 @@ export default function Cartoes() {
 
       {/* Card list */}
       <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-        {state.cards.map((card, i) => {
+        {state.cards.map((card) => {
           const summary = getCardLimitSummary(card, state.installments, state.purchases);
           const usedPct = summary.totalLimit > 0
             ? Math.min((summary.usedLimit / summary.totalLimit) * 100, 100)
@@ -64,7 +64,7 @@ export default function Cartoes() {
             <Link
               key={card.id}
               href={`/cartoes/${card.id}`}
-              className={`card fade-up-${Math.min(i + 2, 5)}`}
+              className="soft-card"
               style={{ padding: "18px", cursor: "pointer", transition: "opacity 0.15s", display: "block", textDecoration: "none" }}
             >
               {/* Nome + fatura atual */}
@@ -86,7 +86,7 @@ export default function Cartoes() {
                   </div>
                 </div>
                 <div style={{ textAlign: "right", flexShrink: 0 }}>
-                  <p style={{ fontSize: "10px", color: "var(--text-3)", marginBottom: "3px" }}>Fatura atual</p>
+                  <p className="section-heading" style={{ marginBottom: "3px", fontSize: "12px" }}>Fatura atual</p>
                   <p className="mono" style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-1)" }}>
                     R$ {fmt(summary.currentInvoiceAmount)}
                   </p>
@@ -96,7 +96,7 @@ export default function Cartoes() {
               {/* Limit bar */}
               <div style={{ marginBottom: "12px" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
-                  <span style={{ fontSize: "10px", color: "var(--text-3)" }}>Limite usado</span>
+                  <span className="section-heading" style={{ marginBottom: 0, fontSize: "12px" }}>Limite usado</span>
                   <span className="mono" style={{ fontSize: "10px", fontWeight: 700, color: overLimit ? "var(--red)" : card.color }}>
                     {Math.round(usedPct)}%
                   </span>
@@ -113,19 +113,19 @@ export default function Cartoes() {
               {/* Disponível / Usado / Limite */}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "8px" }}>
                 <div>
-                  <p style={{ fontSize: "10px", color: "var(--text-3)", marginBottom: "3px" }}>Disponível</p>
+                  <p className="section-heading" style={{ marginBottom: "3px", fontSize: "12px" }}>Disponível</p>
                   <p className="mono" style={{ fontSize: "13px", fontWeight: 700, color: "var(--green)" }}>
                     R$ {fmt(summary.availableLimit)}
                   </p>
                 </div>
                 <div style={{ textAlign: "center" }}>
-                  <p style={{ fontSize: "10px", color: "var(--text-3)", marginBottom: "3px" }}>Usado</p>
+                  <p className="section-heading" style={{ marginBottom: "3px", fontSize: "12px" }}>Usado</p>
                   <p className="mono" style={{ fontSize: "13px", fontWeight: 700, color: "var(--red)" }}>
                     R$ {fmt(summary.usedLimit)}
                   </p>
                 </div>
                 <div style={{ textAlign: "right" }}>
-                  <p style={{ fontSize: "10px", color: "var(--text-3)", marginBottom: "3px" }}>Limite</p>
+                  <p className="section-heading" style={{ marginBottom: "3px", fontSize: "12px" }}>Limite</p>
                   <p className="mono" style={{ fontSize: "13px", fontWeight: 700, color: "var(--text-2)" }}>
                     R$ {fmt(summary.totalLimit)}
                   </p>

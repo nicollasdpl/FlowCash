@@ -76,18 +76,14 @@ export default function PurchaseFormPage({ card }: Props) {
         flexShrink: 0,
       }}>
         <button
+          type="button"
+          className="icon-btn ghost"
           onClick={() => router.back()}
-          style={{
-            background: "none", border: "none", color: "var(--text-2)",
-            cursor: "pointer", fontSize: "24px",
-            width: "48px", height: "48px", borderRadius: "12px",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            flexShrink: 0, touchAction: "manipulation",
-            WebkitTapHighlightColor: "transparent",
-          }}
+          aria-label="Voltar"
+          style={{ fontSize: "24px", flexShrink: 0 }}
         >‹</button>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <span style={{ fontSize: "17px", fontWeight: 700, color: "var(--text-1)" }}>
+          <span className="page-title" style={{ fontSize: "17px" }}>
             Nova compra
           </span>
           <span style={{ fontSize: "12px", color: "var(--text-3)", marginLeft: "8px" }}>
@@ -118,7 +114,7 @@ export default function PurchaseFormPage({ card }: Props) {
         {/* Assinatura mensal */}
         <div className="form-group">
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", minHeight: "44px" }}>
-            <span style={{ fontSize: "12px", fontWeight: 700, color: "var(--text-3)", letterSpacing: "0.05em", textTransform: "uppercase" }}>
+            <span className="form-label" style={{ marginBottom: 0 }}>
               Assinatura mensal
             </span>
             <button

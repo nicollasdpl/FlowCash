@@ -199,6 +199,12 @@ export function getProjectedBalance(
     for (const month of months) {
       const monthInst = cardInst.filter(i => i.competenceMonth === month);
       if (monthInst.every(i => i.paid)) continue;
+      const laterMonthFullyPaid = [...months].some(m => {
+        if (m <= month) return false;
+        const later = cardInst.filter(i => i.competenceMonth === m);
+        return later.length > 0 && later.every(i => i.paid);
+      });
+      if (laterMonthFullyPaid) continue;
       const unpaidTotal = monthInst.filter(i => !i.paid).reduce((s, i) => s + i.amount, 0);
       if (unpaidTotal <= 0) continue;
       // Inline mirror of getInvoiceDates (no import — circular dep with invoiceEngine)
