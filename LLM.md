@@ -105,6 +105,8 @@ Nunca apagar/recriar parcelas pagas como não pagas. Parse de valor pt-BR: `"1.2
 
 Documento único do usuário. `ignoreUndefinedProperties` no Firestore. Sync ao mudar estado e ao voltar ao primeiro plano (PWA).
 
+**Nunca** liberar `setDoc` do estado só com cache `localStorage` — só depois do pull/listener confirmar o servidor (`hasHydratedRef`). Antes de gravar, `persistState` compara riqueza local vs remoto (`isDestructiveOverwrite` em `src/lib/syncGuards.ts`) e **bloqueia wipe** (estado vazio/parcial sobrescrevendo doc rico). Restore de emergência: rota escondida `/importar-backup` (sem link no app; exige login + digitar `CONFIRMAR`).
+
 Não commitar `.env*`, `public/fcm-init.js`, chaves Firebase. `NEXT_PUBLIC_FIREBASE_*` e `GEMINI_API_KEY` / equivalentes só em env da Vercel.
 
 ## Como trabalhar neste repo
@@ -128,6 +130,7 @@ Não commitar `.env*`, `public/fcm-init.js`, chaves Firebase. `NEXT_PUBLIC_FIREB
 | Receitas infladas | Empréstimo/reembolso sem `excludeFromReports` |
 | Donut ≠ card Despesas | Funções diferentes (`getSpentByCategory` vs consumo vs caixa) |
 | App quebrado no celular | Service worker / FCM; ver rotas `fcm-init` e PWA |
+| Dados sumiram / estado quase vazio | Sync gravou seed antes do remoto; ver `hasHydratedRef` + `isDestructiveOverwrite` |
 
 ## Comandos
 
