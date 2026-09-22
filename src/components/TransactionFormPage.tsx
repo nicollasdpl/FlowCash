@@ -1,10 +1,11 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useApp, newId } from "@/context/AppContext";
 import type { Transaction } from "@/context/AppContext";
 import type { RecurringFrequency } from "@/types/financial";
+import { today } from "@/engine/financialEngine";
 import { iconLabel } from "@/components/CategoryIcon";
 import { RefreshCw } from "lucide-react";
 
@@ -37,16 +38,20 @@ interface Props {
 export default function TransactionFormPage({ transaction }: Props) {
   const router = useRouter();
   const { state, dispatch } = useApp();
-  const todayStr = new Date().toISOString().split("T")[0];
+  const todayStr = today();
 
   const expenseCategories = state.categories.filter(c => c.type === "expense" && !c.isSystem);
   const incomeCategories  = state.categories.filter(c => c.type === "income" && !c.isSystem);
+  const activeAccounts = useMemo(
+    () => state.accounts.filter(a => a.active),
+    [state.accounts],
+  );
 
   const [txType, setTxType]   = useState<"income" | "expense">(transaction?.type === "income" ? "income" : "expense");
   const [description, setDesc]  = useState(transaction?.description ?? "");
   const [amount, setAmount]     = useState(transaction ? String(transaction.amount) : "");
-  const [accountId, setAccount] = useState(transaction?.accountId ?? (state.accounts[0]?.id ?? ""));
-  const [categoryId, setCategory] = useState(transaction?.categoryId ?? expenseCategories[0]?.id ?? "");
+  const [accountId, setAccount] = useState(transaction?.accountId ?? "");
+  const [categoryId, setCategory] = useState(transaction?.categoryId ?? "");
   const [competenceDate, setCompetence] = useState(transaction?.competenceDate ?? todayStr);
   const [paymentDate, setPayment]       = useState(transaction?.paymentDate ?? todayStr);
   const [status, setStatus] = useState<Transaction["status"]>(transaction?.status ?? "paid");
@@ -56,13 +61,25 @@ export default function TransactionFormPage({ transaction }: Props) {
   const [recurringFrequency, setFrequency]      = useState<RecurringFrequency>("monthly");
   const [recurringEndDate, setRecurringEndDate] = useState("");
 
-  // Atualiza categoria quando o tipo muda (nova transação)
+  // Conta ativa após hidratação do Firestore (evita select visual ≠ state vazio).
+  useEffect(() => {
+    if (transaction?.accountId) return;
+    setAccount(prev => {
+      if (prev && activeAccounts.some(a => a.id === prev)) return prev;
+      return activeAccounts[0]?.id ?? "";
+    });
+  }, [activeAccounts, transaction?.accountId]);
+
+  // Categoria padrão após hidratação / troca de tipo.
   useEffect(() => {
     if (transaction) return;
     const cats = txType === "income" ? incomeCategories : expenseCategories;
-    setCategory(cats[0]?.id ?? "");
+    setCategory(prev => {
+      if (prev && cats.some(c => c.id === prev)) return prev;
+      return cats[0]?.id ?? "";
+    });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [txType]);
+  }, [txType, state.categories]);
 
   const currentCategories = txType === "income" ? incomeCategories : expenseCategories;
 
@@ -70,7 +87,12 @@ export default function TransactionFormPage({ transaction }: Props) {
     if (!description.trim()) return setError("Informe a descrição.");
     const amt = parseFloat(amount.replace(",", "."));
     if (!amount || isNaN(amt) || amt <= 0) return setError("Informe um valor válido.");
-    if (!accountId) return setError("Selecione uma conta.");
+    const resolvedAccountId =
+      accountId && activeAccounts.some(a => a.id === accountId)
+        ? accountId
+        : activeAccounts[0]?.id ?? "";
+    if (!resolvedAccountId) return setError("Selecione uma conta.");
+    if (resolvedAccountId !== accountId) setAccount(resolvedAccountId);
     setError("");
 
     const baseId = transaction?.id ?? newId();
@@ -79,7 +101,7 @@ export default function TransactionFormPage({ transaction }: Props) {
 
     const baseTx: Transaction = {
       id: baseId,
-      accountId,
+      accountId: resolvedAccountId,
       type: txType,
       amount: amt,
       description: description.trim(),
@@ -172,11 +194,13 @@ export default function TransactionFormPage({ transaction }: Props) {
           <label className="form-label">Tipo</label>
           <div className="type-toggle">
             <button
+              type="button"
               className={`type-toggle-btn${txType === "expense" ? " active-expense" : ""}`}
               onClick={() => setTxType("expense")}
               style={{ touchAction: "manipulation" }}
             >↓ Despesa</button>
             <button
+              type="button"
               className={`type-toggle-btn${txType === "income" ? " active-income" : ""}`}
               onClick={() => setTxType("income")}
               style={{ touchAction: "manipulation" }}
@@ -219,6 +243,9 @@ export default function TransactionFormPage({ transaction }: Props) {
         <div className="form-group">
           <label className="form-label">Categoria</label>
           <select className="form-input" value={categoryId} onChange={e => setCategory(e.target.value)}>
+            {currentCategories.length === 0 && (
+              <option value="">Nenhuma categoria</option>
+            )}
             {currentCategories.map(c => (
               <option key={c.id} value={c.id}>{iconLabel(c.icon, c.name)}</option>
             ))}
@@ -228,13 +255,13 @@ export default function TransactionFormPage({ transaction }: Props) {
         {/* Conta */}
         <div className="form-group">
           <label className="form-label">Conta</label>
-          {state.accounts.filter(a => a.active).length === 0 ? (
+          {activeAccounts.length === 0 ? (
             <p style={{ fontSize: "13px", color: "var(--red)", padding: "12px 0" }}>
               Nenhuma conta. <Link href="/contas" style={{ color: "var(--accent)" }}>Criar conta</Link>
             </p>
           ) : (
             <select className="form-input" value={accountId} onChange={e => setAccount(e.target.value)}>
-              {state.accounts.filter(a => a.active).map(a => (
+              {activeAccounts.map(a => (
                 <option key={a.id} value={a.id}>{a.icon} {a.name}</option>
               ))}
             </select>
@@ -282,6 +309,7 @@ export default function TransactionFormPage({ transaction }: Props) {
                 Recorrente
               </span>
               <button
+                type="button"
                 onClick={() => setIsRecurring(v => !v)}
                 style={{
                   width: "44px", height: "24px", borderRadius: "12px", flexShrink: 0,
@@ -370,6 +398,7 @@ export default function TransactionFormPage({ transaction }: Props) {
           <p style={{ color: "var(--red)", fontSize: "13px", fontWeight: 600, textAlign: "center" }}>{error}</p>
         )}
         <button
+          type="button"
           className="btn-primary"
           onClick={handleSave}
           style={{ width: "100%", textAlign: "center", justifyContent: "center" }}
