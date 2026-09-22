@@ -39,6 +39,8 @@ export interface MatchPair {
   score: number;
   /** true quando o usuário vinculou manualmente. */
   manual?: boolean;
+  /** true quando a IA emparelhou com confiança (valor+nome). */
+  ai?: boolean;
 }
 
 /** Par com valor quase igual (ex.: 147,07 vs 146,99). */

@@ -561,6 +561,7 @@ export default function ImportReview({
                     <div style={{ fontSize: 14, fontWeight: 600 }}>{pair.app.description}</div>
                     <div style={{ fontSize: 11, color: "var(--text-3)", marginTop: 2 }}>
                       Extrato: {pair.imported.description}
+                      {pair.ai ? " · IA" : pair.manual ? " · manual" : ""}
                     </div>
                   </div>
                   <div style={{ textAlign: "right" }}>

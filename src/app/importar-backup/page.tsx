@@ -1,99 +1,176 @@
 "use client";
-import { useState } from "react";
-import { doc, setDoc, serverTimestamp } from "firebase/firestore";
-import { db } from "@/lib/firebase";
-import { useApp } from "@/context/AppContext";
 
-export default function ImportarBackup() {
-  const { user, dispatch } = useApp();
-  const [fileName, setFileName] = useState<string | null>(null);
-  const [parsed, setParsed] = useState<any>(null);
-  const [status, setStatus] = useState<"idle" | "loading" | "done" | "error">("idle");
-  const [message, setMessage] = useState("");
+import { useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useApp, type AppState } from "@/context/AppContext";
 
-  function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
+function isAppStateShape(v: unknown): v is AppState {
+  if (!v || typeof v !== "object") return false;
+  const o = v as Record<string, unknown>;
+  return (
+    Array.isArray(o.accounts) &&
+    Array.isArray(o.transactions) &&
+    Array.isArray(o.cards) &&
+    Array.isArray(o.purchases) &&
+    Array.isArray(o.installments) &&
+    Array.isArray(o.categories)
+  );
+}
+
+/**
+ * Rota de emergência — NÃO linkada no app.
+ * Acesse só pela URL: /importar-backup
+ * Exige login + digitar CONFIRMAR antes de gravar no Firestore.
+ */
+export default function ImportarBackupPage() {
+  const { user, authLoading, signIn, restoreFromBackup, state } = useApp();
+  const router = useRouter();
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [confirmText, setConfirmText] = useState("");
+  const [pending, setPending] = useState<AppState | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  async function onFile(file: File | null) {
+    setMsg(null);
+    setPending(null);
+    setConfirmText("");
     if (!file) return;
-    setFileName(file.name);
-    setStatus("idle");
-    setMessage("");
-    const reader = new FileReader();
-    reader.onload = () => {
-      try {
-        const json = JSON.parse(reader.result as string);
-        setParsed(json);
-      } catch {
-        setStatus("error");
-        setMessage("Esse arquivo não é um JSON válido.");
+    try {
+      const parsed: unknown = JSON.parse(await file.text());
+      if (!isAppStateShape(parsed)) {
+        throw new Error("Arquivo inválido — precisa ser backup JSON do FlowCash.");
       }
-    };
-    reader.readAsText(file);
+      setPending(parsed);
+    } catch (err) {
+      setMsg(err instanceof Error ? err.message : "Falha ao ler o arquivo.");
+    }
   }
 
-  async function handleImport() {
-    if (!user) {
-      setStatus("error");
-      setMessage("Você precisa estar logado no app pra importar.");
+  async function runRestore() {
+    if (!pending) return;
+    if (confirmText !== "CONFIRMAR") {
+      setMsg('Digite exatamente CONFIRMAR para continuar.');
       return;
     }
-    if (!parsed) return;
-    setStatus("loading");
+    setBusy(true);
+    setMsg(null);
     try {
-      const ref = doc(db, "users", user.uid, "app", "state");
-      await setDoc(ref, { ...parsed, updatedAt: serverTimestamp() });
-      dispatch({ type: "LOAD", payload: parsed });
-      setStatus("done");
-      setMessage("Importado com sucesso. Recarregue a página (F5) pra conferir tudo.");
-    } catch (err: any) {
-      setStatus("error");
-      setMessage("Erro ao importar: " + (err?.message ?? String(err)));
+      await restoreFromBackup(pending);
+      setMsg(
+        `Restaurado: ${pending.transactions.length} transações · ${pending.purchases.length} compras.`,
+      );
+      setPending(null);
+      setConfirmText("");
+      if (fileRef.current) fileRef.current.value = "";
+    } catch (err) {
+      setMsg(err instanceof Error ? err.message : "Falha ao restaurar.");
+    } finally {
+      setBusy(false);
     }
+  }
+
+  if (authLoading) {
+    return (
+      <div style={{ padding: 24, maxWidth: 480, margin: "0 auto" }}>
+        <p style={{ color: "var(--text-3)" }}>Carregando…</p>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div style={{ padding: 24, maxWidth: 480, margin: "0 auto" }}>
+        <h1 className="page-title" style={{ fontSize: 20, marginBottom: 8 }}>
+          Restaurar backup
+        </h1>
+        <p style={{ fontSize: 13, color: "var(--text-3)", marginBottom: 16, lineHeight: 1.45 }}>
+          Faça login para restaurar um JSON no servidor desta conta.
+        </p>
+        <button className="btn-primary" type="button" onClick={() => void signIn()} style={{ width: "100%" }}>
+          Entrar com Google
+        </button>
+      </div>
+    );
   }
 
   return (
-    <div style={{ maxWidth: 480, margin: "0 auto", padding: 24, fontFamily: "sans-serif" }}>
-      <h1 style={{ fontSize: 20, fontWeight: 700, marginBottom: 4 }}>Importar backup</h1>
-      <p style={{ fontSize: 14, color: "#888", marginBottom: 24 }}>
-        {user ? `Logado como ${user.email ?? user.uid}` : "Você não está logado."}
+    <div style={{ padding: 24, maxWidth: 480, margin: "0 auto" }}>
+      <h1 className="page-title" style={{ fontSize: 20, marginBottom: 8 }}>
+        Restaurar backup
+      </h1>
+      <p style={{ fontSize: 13, color: "var(--text-3)", marginBottom: 16, lineHeight: 1.45 }}>
+        Rota de emergência. Substitui <strong>todos</strong> os dados da conta logada
+        ({user.email}) no Firestore. Estado atual: {state.transactions.length} tx ·{" "}
+        {state.purchases.length} compras.
       </p>
 
       <input
+        ref={fileRef}
         type="file"
-        accept="application/json"
-        onChange={handleFile}
-        style={{ marginBottom: 16, display: "block" }}
+        accept="application/json,.json"
+        onChange={(e) => void onFile(e.target.files?.[0] ?? null)}
+        style={{ width: "100%", marginBottom: 12, fontSize: 13 }}
       />
 
-      {fileName && <p style={{ fontSize: 13, marginBottom: 8 }}>Arquivo: {fileName}</p>}
+      {pending && (
+        <div
+          className="soft-card"
+          style={{ padding: 14, marginBottom: 12, border: "1px solid var(--red)", borderRadius: 12 }}
+        >
+          <p style={{ fontSize: 13, marginBottom: 10, lineHeight: 1.4 }}>
+            Backup: <strong>{pending.transactions.length}</strong> transações ·{" "}
+            <strong>{pending.purchases.length}</strong> compras ·{" "}
+            <strong>{pending.cards.length}</strong> cartões
+          </p>
+          <label style={{ display: "block", fontSize: 12, color: "var(--text-3)", marginBottom: 6 }}>
+            Digite <strong>CONFIRMAR</strong> para gravar no servidor
+          </label>
+          <input
+            type="text"
+            value={confirmText}
+            onChange={(e) => setConfirmText(e.target.value)}
+            placeholder="CONFIRMAR"
+            autoComplete="off"
+            style={{
+              width: "100%",
+              padding: "10px 12px",
+              borderRadius: 8,
+              border: "1px solid var(--border)",
+              background: "var(--bg-2)",
+              color: "var(--text-1)",
+              marginBottom: 10,
+              fontSize: 14,
+            }}
+          />
+          <button
+            type="button"
+            className="btn-primary"
+            disabled={busy || confirmText !== "CONFIRMAR"}
+            onClick={() => void runRestore()}
+            style={{ width: "100%", opacity: confirmText !== "CONFIRMAR" ? 0.5 : 1 }}
+          >
+            {busy ? "Restaurando…" : "Sobrescrever dados no servidor"}
+          </button>
+        </div>
+      )}
 
-      {parsed && (
-        <p style={{ fontSize: 13, color: "#888", marginBottom: 16 }}>
-          {parsed.accounts?.length ?? 0} contas · {parsed.transactions?.length ?? 0} transações ·{" "}
-          {parsed.cards?.length ?? 0} cartões · {parsed.installments?.length ?? 0} parcelas
+      {msg && (
+        <p
+          style={{
+            fontSize: 12,
+            marginBottom: 12,
+            color: msg.startsWith("Restaurado") ? "var(--green)" : "var(--red)",
+            lineHeight: 1.4,
+          }}
+        >
+          {msg}
         </p>
       )}
 
-      <button
-        onClick={handleImport}
-        disabled={!parsed || status === "loading" || !user}
-        style={{
-          padding: "10px 20px",
-          borderRadius: 8,
-          border: "none",
-          background: !parsed || status === "loading" || !user ? "#444" : "#00E5A0",
-          color: "#000",
-          fontWeight: 600,
-          cursor: !parsed || status === "loading" ? "default" : "pointer",
-        }}
-      >
-        {status === "loading" ? "Importando..." : "Importar e substituir dados do Firestore"}
+      <button type="button" className="btn-secondary" onClick={() => router.push("/")} style={{ width: "100%" }}>
+        Voltar ao início
       </button>
-
-      {message && (
-        <p style={{ marginTop: 16, fontSize: 14, color: status === "error" ? "#FF4D6A" : "#00E5A0" }}>
-          {message}
-        </p>
-      )}
     </div>
   );
 }

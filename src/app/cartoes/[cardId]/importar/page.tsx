@@ -105,7 +105,10 @@ function ImportarFaturaContent() {
   const [readingFile, setReadingFile] = useState(false);
   const [hasParsed, setHasParsed] = useState(false);
   const [manualLinks, setManualLinks] = useState<Record<string, string>>({});
-  const aiRequestedRef = useRef(false);
+  const [aiLinks, setAiLinks] = useState<Record<string, string>>({});
+  const [aiMatchStatus, setAiMatchStatus] = useState<"idle" | "loading" | "done">("idle");
+  const aiCatRequestedRef = useRef(false);
+  const aiMatchRequestedRef = useRef(false);
 
   const installmentsThisMonth = useMemo(() => {
     if (!card || !competenceMonth) return [];
@@ -135,8 +138,9 @@ function ImportarFaturaContent() {
   const match = useMemo(() => {
     if (!hasParsed) return emptyMatch();
     const base = matchInvoiceLines(imported, appLines, { merchantMap });
-    return applyManualLinks(base, manualLinks);
-  }, [imported, appLines, hasParsed, merchantMap, manualLinks]);
+    const withAi = applyManualLinks(base, aiLinks, { ai: true });
+    return applyManualLinks(withAi, manualLinks);
+  }, [imported, appLines, hasParsed, merchantMap, manualLinks, aiLinks]);
 
   useEffect(() => {
     if (!card || !hasParsed || !competenceMonth) return;
@@ -172,14 +176,107 @@ function ImportarFaturaContent() {
     });
   }, [match.onlyBank, card, hasParsed, state.categories, competenceMonth, merchantMap]);
 
-  // IA em lote: 1 chamada por import para as linhas de baixa confiança.
+  // IA de match: 1 chamada por import para sobras (só extrato ↔ só app).
+  // Só aplica pares que a API validou (valor+data); não chuta.
   useEffect(() => {
-    if (!hasParsed || aiRequestedRef.current || !user) return;
+    if (!hasParsed || aiMatchRequestedRef.current || !user) return;
+    const bankLeft = match.onlyBank;
+    const appLeft = match.onlyApp;
+    if (bankLeft.length === 0 || appLeft.length === 0) {
+      setAiMatchStatus("done");
+      return;
+    }
+    aiMatchRequestedRef.current = true;
+    setAiMatchStatus("loading");
+
+    void (async () => {
+      try {
+        const idToken = await user.getIdToken();
+        const res = await fetch("/api/ai-match", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${idToken}`,
+          },
+          body: JSON.stringify({
+            bank: bankLeft.map(l => ({
+              id: l.id,
+              date: l.date,
+              description: l.description,
+              amount: l.amount,
+              installmentHint: l.installmentHint,
+              isSubscriptionHint: l.isSubscriptionHint,
+            })),
+            app: appLeft.map(l => ({
+              installmentId: l.installmentId,
+              purchaseId: l.purchaseId,
+              date: l.date,
+              description: l.description,
+              amount: l.amount,
+              installmentNumber: l.installmentNumber,
+              totalInstallments: l.totalInstallments,
+              isSubscription: l.isSubscription,
+              categoryId: l.categoryId,
+              categoryName: l.categoryName,
+            })),
+            near: match.nearMatches.slice(0, 20).map(n => ({
+              imported: {
+                id: n.imported.id,
+                date: n.imported.date,
+                description: n.imported.description,
+                amount: n.imported.amount,
+              },
+              app: {
+                installmentId: n.app.installmentId,
+                purchaseId: n.app.purchaseId,
+                date: n.app.date,
+                description: n.app.description,
+                amount: n.app.amount,
+                installmentNumber: n.app.installmentNumber,
+                totalInstallments: n.app.totalInstallments,
+                categoryId: n.app.categoryId,
+                categoryName: n.app.categoryName,
+              },
+              score: n.score,
+              amountDiff: n.amountDiff,
+            })),
+          }),
+        });
+        if (!res.ok) {
+          setAiMatchStatus("done");
+          return;
+        }
+        const data = (await res.json()) as {
+          pairs?: { importedId: string; installmentId: string }[];
+        };
+        const next: Record<string, string> = {};
+        for (const p of data.pairs ?? []) {
+          if (p.importedId && p.installmentId) {
+            next[p.importedId] = p.installmentId;
+          }
+        }
+        if (Object.keys(next).length > 0) {
+          setAiLinks(next);
+          setDrafts(prev => prev.filter(d => !next[d.key]));
+        }
+      } catch {
+        // rede/token falhou: mantém match heurístico
+      } finally {
+        setAiMatchStatus("done");
+      }
+    })();
+  }, [hasParsed, user, match.onlyBank, match.onlyApp, match.nearMatches]);
+
+  // IA em lote: 1 chamada por import para as linhas de baixa confiança.
+  // Espera o match por IA (status "done") para não categorizar o que vai ser pareado.
+  useEffect(() => {
+    if (!hasParsed || aiCatRequestedRef.current || !user) return;
+    if (aiMatchStatus !== "done") return;
     const lowDrafts = drafts.filter(
       d => d.catConfidence === "low" && !d.catEdited && !d.covered,
     );
     if (lowDrafts.length === 0) return;
-    aiRequestedRef.current = true;
+    aiCatRequestedRef.current = true;
 
     void (async () => {
       try {
@@ -222,7 +319,7 @@ function ImportarFaturaContent() {
         // rede/token falhou: segue com a sugestão local
       }
     })();
-  }, [drafts, hasParsed, user, expenseCategories]);
+  }, [drafts, hasParsed, user, expenseCategories, aiMatchStatus]);
 
   const applyText = useCallback(
     (text: string) => {
@@ -247,7 +344,10 @@ function ImportarFaturaContent() {
       setImported(lines);
       setHasParsed(true);
       setManualLinks({});
-      aiRequestedRef.current = false;
+      setAiLinks({});
+      setAiMatchStatus("idle");
+      aiCatRequestedRef.current = false;
+      aiMatchRequestedRef.current = false;
       setFormatLabel(
         format === "flowcash_csv"
           ? "CSV FlowCash"
@@ -545,6 +645,18 @@ function ImportarFaturaContent() {
               {info}
             </p>
           )}
+          {aiMatchStatus === "loading" && (
+            <p
+              style={{
+                padding: "4px 16px 0",
+                fontSize: 12,
+                color: "var(--text-3)",
+                margin: 0,
+              }}
+            >
+              IA conferindo nomes e valores que ainda não bateram…
+            </p>
+          )}
           <div style={{ padding: "8px 16px", display: "flex", gap: 8 }}>
             <button
               type="button"
@@ -554,6 +666,11 @@ function ImportarFaturaContent() {
                 setDrafts([]);
                 setInfo("");
                 setError("");
+                setManualLinks({});
+                setAiLinks({});
+                setAiMatchStatus("idle");
+                aiCatRequestedRef.current = false;
+                aiMatchRequestedRef.current = false;
               }}
               style={{
                 background: "none",
