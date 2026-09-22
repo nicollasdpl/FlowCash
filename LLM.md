@@ -37,6 +37,7 @@ Next.js desta versão **não** é o da sua memória de treino. Consulte `node_mo
 | `src/lib/ai/` | Contexto, intents, respostas locais, sanitização |
 | `src/app/api/ai/route.ts` | Copiloto |
 | `src/app/api/ai-categorize/route.ts` | Categoria no import |
+| `src/app/api/ai-match/route.ts` | Emparelha sobras do import (valor+nome; sem chute) |
 | `src/app/api/ai-budget/route.ts` | Sugestão de orçamento |
 | `src/components/AccountScopePicker.tsx` | Filtro de conta no dashboard |
 
