@@ -205,13 +205,14 @@ export default function SpendingHeatmapCalendar({
       )}
 
       <div style={{
-        display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: "4px",
+        display: "grid", gridTemplateColumns: "repeat(7, minmax(0, 1fr))", gap: "3px",
         marginBottom: "4px",
       }}>
         {WEEKDAYS.map(w => (
           <div key={w} style={{
             textAlign: "center", fontSize: "9px", fontWeight: 700,
-            color: "var(--text-3)", letterSpacing: "0.04em",
+            color: "var(--text-3)", letterSpacing: "0.02em",
+            overflow: "hidden", whiteSpace: "nowrap",
           }}>
             {w}
           </div>
@@ -219,11 +220,11 @@ export default function SpendingHeatmapCalendar({
       </div>
 
       <div style={{
-        display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: "4px",
+        display: "grid", gridTemplateColumns: "repeat(7, minmax(0, 1fr))", gap: "3px",
       }}>
         {grid.map((date, i) => {
           if (!date) {
-            return <div key={`empty-${i}`} style={{ aspectRatio: compact ? "1" : "1", minHeight: compact ? 28 : 36 }} />;
+            return <div key={`empty-${i}`} style={{ aspectRatio: "1" }} />;
           }
           const dayNum = Number(date.split("-")[2]);
           const day = dailyMap[date];
@@ -245,8 +246,9 @@ export default function SpendingHeatmapCalendar({
               aria-label={`${dayNum}, R$ ${fmt(Math.abs(display))}`}
               style={{
                 aspectRatio: "1",
-                minHeight: compact ? "28px" : "42px",
-                borderRadius: "8px",
+                minWidth: 0,
+                overflow: "hidden",
+                borderRadius: "7px",
                 border: isSelected
                   ? "2px solid var(--accent)"
                   : isToday
@@ -273,10 +275,14 @@ export default function SpendingHeatmapCalendar({
               </span>
               {hasFlow && (
                 <span className="mono" style={{
-                  fontSize: compact ? "7px" : "8px",
+                  fontSize: compact ? "7px" : "7.5px",
                   fontWeight: 700,
                   lineHeight: 1,
                   opacity: 0.95,
+                  maxWidth: "100%",
+                  overflow: "hidden",
+                  whiteSpace: "nowrap",
+                  letterSpacing: "-0.02em",
                 }}>
                   {fmtCell(display)}
                 </span>
@@ -365,7 +371,7 @@ function DayDetail({
       </div>
 
       <div style={{
-        display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px",
+        display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "8px",
         marginBottom: "12px",
       }}>
         <div style={{
