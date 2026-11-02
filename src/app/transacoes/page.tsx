@@ -161,7 +161,7 @@ export default function Transacoes() {
     return state.accounts
       .filter(a => a.active)
       .reduce(
-        (s, a) => s + getProjectedBalance(a, state.transactions, horizon, state.cards, state.installments),
+        (s, a) => s + getProjectedBalance(a, state.transactions, horizon, state.cards, state.installments, state.purchases),
         0,
       );
   }, [state.accounts, state.transactions, state.cards, state.installments, selectedMonth]);

@@ -70,9 +70,9 @@ export default function Relatorios() {
 
   const room = useMemo(
     () => atCurrentMonth
-      ? getSpendingRoom(state.accounts, state.transactions, state.cards, state.installments, todayStr)
+      ? getSpendingRoom(state.accounts, state.transactions, state.cards, state.installments, todayStr, state.purchases)
       : null,
-    [atCurrentMonth, state.accounts, state.transactions, state.cards, state.installments, todayStr],
+    [atCurrentMonth, state.accounts, state.transactions, state.cards, state.installments, state.purchases, todayStr],
   );
 
   const outliers = useMemo(

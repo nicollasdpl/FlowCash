@@ -5,6 +5,7 @@ import { useApp } from "@/context/AppContext";
 import type { CardPurchase } from "@/context/AppContext";
 import { iconLabel } from "@/components/CategoryIcon";
 import { parsePtBrAmount } from "@/lib/invoiceImport/csvShared";
+import PurchaseResponsibleField from "@/components/PurchaseResponsibleField";
 
 function formatAmountInput(v: number): string {
   // Sem separador de milhar — evita "1.240,62" virar 1,24 no parse antigo.
@@ -27,6 +28,7 @@ export default function EditarCompra() {
   const [categoryId, setCategoryId]               = useState(purchase?.categoryId ?? "");
   const [selectedCardId, setSelectedCardId]       = useState(purchase?.cardId ?? cardId);
   const [error, setError]                         = useState("");
+  const [responsiblePerson, setResponsiblePerson] = useState(purchase?.responsiblePerson ?? "");
 
   const installmentPreview = useMemo(() => {
     const amt = parsePtBrAmount(amount);
@@ -63,6 +65,7 @@ export default function EditarCompra() {
     if (!description.trim()) return setError("Informe a descrição.");
     const amt = parsePtBrAmount(amount);
     if (amt == null || amt <= 0) return setError("Informe um valor válido.");
+    if (responsiblePerson && !responsiblePerson.trim()) return setError("Informe o nome da pessoa.");
     const inst = parseInt(totalInstallments, 10);
     if (!inst || inst < 1 || inst > 60) return setError("Parcelas inválidas (1–60).");
     if (!selectedCardId) return setError("Selecione um cartão.");
@@ -81,6 +84,7 @@ export default function EditarCompra() {
       totalInstallments: inst,
       createdAt: purchase.createdAt,
       isSubscription: purchase.isSubscription,
+      responsiblePerson: responsiblePerson.trim() || undefined,
     };
 
     // UPD_PURCHASE: categoria/descrição não recria parcelas; valor/parcelas/data preservam "pago".
@@ -130,7 +134,8 @@ export default function EditarCompra() {
           }}>
             <p style={{ fontSize: "12px", color: "var(--amber)", lineHeight: 1.5 }}>
               Mudar só a categoria não mexe nas parcelas. Se alterar valor, parcelas ou data,
-              o status “pago” das parcelas é mantido.
+              o status “pago” das parcelas é mantido. Mudar o responsável não altera pagamentos
+              já lançados na conta.
             </p>
           </div>
         )}
@@ -194,6 +199,9 @@ export default function EditarCompra() {
             autoCorrect="off"
           />
         </div>
+
+        <PurchaseResponsibleField person={responsiblePerson} onChange={setResponsiblePerson}
+          suggestions={[...new Set(state.purchases.map(p => p.responsiblePerson?.trim()).filter((name): name is string => Boolean(name)))]} />
 
         {/* Categoria */}
         <div className="form-group">

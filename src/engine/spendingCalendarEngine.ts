@@ -124,6 +124,7 @@ export function buildDailySpendingMap(
       if (inst.competenceMonth !== month) continue;
       const purchase = purchaseById.get(inst.purchaseId);
       if (!purchase) continue;
+      if (purchase.responsiblePerson?.trim()) continue;
       if (onlyCat && purchase.categoryId !== onlyCat) continue;
       const date = installmentCalendarDay(inst.competenceMonth, purchase.purchaseDate);
       addItem(map, date, {
@@ -169,6 +170,7 @@ export function buildDailySpendingMap(
       if (!inst.paidAt.startsWith(month)) continue;
       const purchase = purchaseById.get(inst.purchaseId);
       if (!purchase) continue;
+      if (purchase.responsiblePerson?.trim()) continue;
       if (onlyCat && purchase.categoryId !== onlyCat) continue;
       addItem(map, inst.paidAt, {
         id: inst.id,

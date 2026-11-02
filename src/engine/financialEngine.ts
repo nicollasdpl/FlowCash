@@ -135,6 +135,7 @@ export function getProjectedBalance(
   upToDate: string,
   cards: CreditCard[] = [],
   installments: CardInstallment[] = [],
+  purchases: CardPurchase[] = [],
 ): number {
   let balance = getCurrentBalance(account, transactions);
 
@@ -192,6 +193,7 @@ export function getProjectedBalance(
   // Mirrors getInvoiceDates: both closingDate and dueDate are in the competenceMonth itself.
   // Se já existe "Pagamento Fatura" no extrato para aquele vencimento, NÃO desconta de novo
   // (evita projetado quebrado quando parcelas perderam o flag paid).
+  const purchaseById = new Map(purchases.map(p => [p.id, p]));
   for (const card of cards) {
     if (card.paymentAccountId !== account.id) continue;
     const cardInst = installments.filter(i => i.cardId === card.id);
@@ -205,7 +207,8 @@ export function getProjectedBalance(
         return later.length > 0 && later.every(i => i.paid);
       });
       if (laterMonthFullyPaid) continue;
-      const unpaidTotal = monthInst.filter(i => !i.paid).reduce((s, i) => s + i.amount, 0);
+      const unpaidTotal = monthInst.filter(i => !i.paid && !purchaseById.get(i.purchaseId)?.responsiblePerson?.trim())
+        .reduce((s, i) => s + i.amount, 0);
       if (unpaidTotal <= 0) continue;
       // Inline mirror of getInvoiceDates (no import — circular dep with invoiceEngine)
       const [y, m] = month.split("-").map(Number);
@@ -236,8 +239,9 @@ export function getAvailableBalance(
   upToDate: string,
   cards: CreditCard[] = [],
   installments: CardInstallment[] = [],
+  purchases: CardPurchase[] = [],
 ): number {
-  const projected = getProjectedBalance(account, transactions, upToDate, cards, installments);
+  const projected = getProjectedBalance(account, transactions, upToDate, cards, installments, purchases);
   const reserved = goals
     .filter(g => g.accountId === account.id && !g.completed)
     .reduce((s, g) => s + g.currentAmount, 0);
@@ -385,6 +389,7 @@ export function getMonthlyProjections(
   transactions: Transaction[],
   months = 6,
   installments: CardInstallment[] = [],
+  purchases: CardPurchase[] = [],
 ): MonthlyProjection[] {
   const results: MonthlyProjection[] = [];
   const cm = currentMonth();
@@ -410,7 +415,7 @@ export function getMonthlyProjections(
       .filter(t => t.type === "expense")
       .reduce((s, t) => s + t.amount, 0);
 
-    const cardExpense = getCardCommittedByMonth(installments, month);
+    const cardExpense = getCardCommittedByMonth(installments, month, purchases);
     const expense = txExpense + cardExpense;
 
     runningBalance += income - expense;
@@ -488,9 +493,11 @@ export function getOverdueTransactions(transactions: Transaction[]): Transaction
 export function getCardCommittedByMonth(
   installments: CardInstallment[],
   month: string,
+  purchases: CardPurchase[] = [],
 ): number {
+  const purchaseById = new Map(purchases.map(p => [p.id, p]));
   return installments
-    .filter(i => i.competenceMonth === month && !i.paid)
+    .filter(i => i.competenceMonth === month && !i.paid && !purchaseById.get(i.purchaseId)?.responsiblePerson?.trim())
     .reduce((s, i) => s + i.amount, 0);
 }
 

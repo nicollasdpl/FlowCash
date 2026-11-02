@@ -113,7 +113,7 @@ export function buildFinancialContext(input: BuildFinancialContextInput): Financ
     id: acc.id,
     name: acc.name,
     currentBalance: getCurrentBalance(acc, transactions),
-    projectedBalance: getProjectedBalance(acc, transactions, monthEnd, cards, installments),
+    projectedBalance: getProjectedBalance(acc, transactions, monthEnd, cards, installments, purchases),
   }));
 
   const cardSummaries = cards.map(card => {

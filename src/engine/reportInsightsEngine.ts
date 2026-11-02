@@ -117,19 +117,22 @@ export function getSpendingRoom(
   cards: CreditCard[],
   installments: CardInstallment[],
   todayStr: string,
+  purchases: CardPurchase[] = [],
 ): SpendingRoom {
   const month = todayStr.slice(0, 7);
   const endDate = endOfMonth(month);
   const spendable = accounts.filter(a => a.active && a.type !== "investment");
-  const free = sum(spendable.map(a => getProjectedBalance(a, transactions, endDate, cards, installments)));
+  const free = sum(spendable.map(a => getProjectedBalance(a, transactions, endDate, cards, installments, purchases)));
   const daysLeft = Math.max(1, daysInMonth(month) - Number(todayStr.slice(8, 10)) + 1);
   const nextMonth = addMonths(month, 1);
 
   let nextInvoice = 0;
+  const purchaseById = new Map(purchases.map(p => [p.id, p]));
   for (const card of cards) {
     const unpaidByMonth = new Map<string, number>();
     for (const inst of installments) {
       if (inst.cardId !== card.id || inst.paid) continue;
+      if (purchaseById.get(inst.purchaseId)?.responsiblePerson?.trim()) continue;
       unpaidByMonth.set(inst.competenceMonth, (unpaidByMonth.get(inst.competenceMonth) ?? 0) + inst.amount);
     }
     for (const [competence, amount] of unpaidByMonth) {
@@ -307,12 +310,14 @@ export function getFutureCommitments(
     const row = rowByMonth.get(inst.competenceMonth);
     if (!row || inst.paid) continue;
     const purchase = purchaseById.get(inst.purchaseId);
+    if (purchase?.responsiblePerson?.trim()) continue;
     if (purchase?.isSubscription) row.subscriptions += inst.amount;
     else row.installments += inst.amount;
   }
 
   // Assinaturas ativas continuam além das cobranças já geradas.
   for (const purchase of purchases) {
+    if (purchase.responsiblePerson?.trim()) continue;
     const insts = byPurchase.get(purchase.id) ?? [];
     if (!isActiveSubscription(purchase, insts, fromMonth)) continue;
     const sorted = [...insts].sort((a, b) => a.competenceMonth.localeCompare(b.competenceMonth));
@@ -328,6 +333,7 @@ export function getFutureCommitments(
   for (const [purchaseId, insts] of byPurchase) {
     const purchase = purchaseById.get(purchaseId);
     if (!purchase || purchase.isSubscription || (purchase.totalInstallments ?? 1) <= 1) continue;
+    if (purchase.responsiblePerson?.trim()) continue;
     if (!insts.some(i => !i.paid && i.competenceMonth >= fromMonth)) continue;
     const last = insts.reduce((a, b) => (b.competenceMonth > a.competenceMonth ? b : a));
     const releaseMonth = addMonths(last.competenceMonth, 1);
@@ -398,6 +404,7 @@ export function getRecurringCosts(
     byPurchase.set(inst.purchaseId, list);
   }
   for (const purchase of purchases) {
+    if (purchase.responsiblePerson?.trim()) continue;
     const insts = byPurchase.get(purchase.id) ?? [];
     if (!isActiveSubscription(purchase, insts, fromMonth)) continue;
     const next = insts

@@ -42,7 +42,7 @@ export default function Contas() {
     [state.accounts, state.transactions]
   );
   const totalProjected = useMemo(() =>
-    state.accounts.filter(a => a.active).reduce((s, a) => s + getProjectedBalance(a, state.transactions, eom, state.cards, state.installments), 0),
+    state.accounts.filter(a => a.active).reduce((s, a) => s + getProjectedBalance(a, state.transactions, eom, state.cards, state.installments, state.purchases), 0),
     [state.accounts, state.transactions, state.cards, state.installments, eom]
   );
 
@@ -105,8 +105,8 @@ export default function Contas() {
       <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
         {state.accounts.map((acc) => {
           const current   = getCurrentBalance(acc, state.transactions);
-          const projected = getProjectedBalance(acc, state.transactions, eom, state.cards, state.installments);
-          const available = getAvailableBalance(acc, state.transactions, state.goals, eom, state.cards, state.installments);
+          const projected = getProjectedBalance(acc, state.transactions, eom, state.cards, state.installments, state.purchases);
+          const available = getAvailableBalance(acc, state.transactions, state.goals, eom, state.cards, state.installments, state.purchases);
           const reserved  = projected - available;
           return (
             <div key={acc.id} className="soft-card" style={{ padding: "22px" }}>

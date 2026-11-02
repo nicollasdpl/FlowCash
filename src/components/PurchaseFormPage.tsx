@@ -4,6 +4,9 @@ import { useRouter } from "next/navigation";
 import { useApp, newId } from "@/context/AppContext";
 import type { CreditCard, CardPurchase } from "@/context/AppContext";
 import { iconLabel } from "@/components/CategoryIcon";
+import PurchaseResponsibleField from "@/components/PurchaseResponsibleField";
+import { parsePtBrAmount } from "@/lib/invoiceImport/csvShared";
+import { today } from "@/engine/financialEngine";
 
 interface Props {
   card: CreditCard;
@@ -12,7 +15,7 @@ interface Props {
 export default function PurchaseFormPage({ card }: Props) {
   const router = useRouter();
   const { state, dispatch } = useApp();
-  const todayStr = new Date().toISOString().split("T")[0];
+  const todayStr = today();
 
   const [description, setDescription] = useState("");
   const [amount, setAmount] = useState("");
@@ -20,10 +23,11 @@ export default function PurchaseFormPage({ card }: Props) {
   const [purchaseDate, setPurchaseDate] = useState(todayStr);
   const [totalInstallments, setTotalInstallments] = useState("1");
   const [isSubscription, setIsSubscription] = useState(false);
+  const [responsiblePerson, setResponsiblePerson] = useState("");
   const [error, setError] = useState("");
 
   const installmentPreview = useMemo(() => {
-    const amt = parseFloat(amount.replace(",", "."));
+    const amt = parsePtBrAmount(amount);
     const n = parseInt(totalInstallments);
     if (!amt || !n || n < 1) return null;
     const per = (amt / n).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -32,8 +36,9 @@ export default function PurchaseFormPage({ card }: Props) {
 
   function handleSave() {
     if (!description.trim()) return setError("Informe a descrição.");
-    const amt = parseFloat(amount.replace(",", "."));
-    if (!amount || isNaN(amt) || amt <= 0) return setError("Informe um valor válido.");
+    const amt = parsePtBrAmount(amount);
+    if (amt == null || amt <= 0) return setError("Informe um valor válido.");
+    if (responsiblePerson && !responsiblePerson.trim()) return setError("Informe o nome da pessoa.");
     let inst = 1;
     if (!isSubscription) {
       inst = parseInt(totalInstallments);
@@ -50,6 +55,7 @@ export default function PurchaseFormPage({ card }: Props) {
       purchaseDate,
       totalInstallments: inst,
       isSubscription: isSubscription || undefined,
+      responsiblePerson: responsiblePerson.trim() || undefined,
       createdAt: new Date().toISOString(),
     };
 
@@ -187,6 +193,10 @@ export default function PurchaseFormPage({ card }: Props) {
             autoCorrect="off"
           />
         </div>
+
+        {/* Responsável */}
+        <PurchaseResponsibleField person={responsiblePerson} onChange={setResponsiblePerson}
+          suggestions={[...new Set(state.purchases.map(p => p.responsiblePerson?.trim()).filter((name): name is string => Boolean(name)))]} />
 
         {/* Categoria */}
         <div className="form-group">

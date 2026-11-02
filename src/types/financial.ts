@@ -111,6 +111,7 @@ export interface CardPurchase {
   purchaseDate: string;           // YYYY-MM-DD
   totalInstallments: number;      // 1 = à vista
   isSubscription?: boolean;       // true = cobrança mensal recorrente
+  responsiblePerson?: string;      // ausente = minha compra; nome = compra integral de outra pessoa
   createdAt: string;
 }
 

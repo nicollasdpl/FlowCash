@@ -11,6 +11,7 @@ import {
 import {
   getCardInvoices, getInstallmentsByMonth, getInvoiceDates, getDefaultInvoiceMonth,
 } from "@/engine/invoiceEngine";
+import { getInvoiceOwnershipTotals } from "@/engine/invoiceOwnership";
 import { Pencil, Package, Plus, Trash2, Download, Upload } from "lucide-react";
 import CategoryIcon from "@/components/CategoryIcon";
 import { CopilotFab } from "@/components/CopilotFab";
@@ -107,6 +108,15 @@ export default function CartaoDetail() {
     return getInstallmentsByMonth(state.installments, card.id, selectedMonth);
   }, [card, state.installments, selectedMonth]);
 
+  const ownership = useMemo(() =>
+    getInvoiceOwnershipTotals(installmentsThisMonth, state.purchases),
+    [installmentsThisMonth, state.purchases],
+  );
+  const pendingOwnership = useMemo(() =>
+    getInvoiceOwnershipTotals(installmentsThisMonth.filter(i => !i.paid), state.purchases),
+    [installmentsThisMonth, state.purchases],
+  );
+
   const limitSummary = useMemo(() => {
     if (!card) return null;
     return getCardLimitSummary(card, state.installments, state.purchases);
@@ -148,6 +158,7 @@ export default function CartaoDetail() {
       "Parcela",
       "Valor parcela (R$)",
       "Valor total compra (R$)",
+      "Responsável",
       "Status",
       "Pago em",
       "Tipo",
@@ -166,6 +177,7 @@ export default function CartaoDetail() {
         parcela,
         fmt(inst.amount),
         purchase ? fmt(purchase.amount) : "—",
+        purchase?.responsiblePerson?.trim() || "Eu",
         inst.paid ? "Pago" : "Pendente",
         inst.paidAt ? formatDate(inst.paidAt) : "",
         purchase?.isSubscription ? "Assinatura" : inst.totalInstallments > 1 ? "Parcelado" : "À vista",
@@ -217,7 +229,7 @@ export default function CartaoDetail() {
     const pendingInsts = installmentsThisMonth.filter(i => !i.paid);
     if (pendingInsts.length === 0) return;
 
-    const total = pendingInsts.reduce((s, i) => s + i.amount, 0);
+    const total = getInvoiceOwnershipTotals(pendingInsts, state.purchases).mine;
     const { dueDate: noteDueDate } = getInvoiceDates(selectedMonth, card.closingDay, card.dueDay);
     const invoiceLabelText = monthTabLabel(noteDueDate);
 
@@ -245,7 +257,7 @@ export default function CartaoDetail() {
     // Usa a categoria de sistema "Pagamento de Fatura": ela NÃO conta como
     // gasto por categoria (budgetEngine a ignora), evitando a dupla contagem
     // com as parcelas — que já contam pelas categorias das compras.
-    dispatch({
+    if (total > 0) dispatch({
       type: "ADD_TX",
       payload: {
         id: newId(),
@@ -292,7 +304,6 @@ export default function CartaoDetail() {
 
   const pendingInsts = installmentsThisMonth.filter(i => !i.paid);
   const allPaid = pendingInsts.length === 0 && installmentsThisMonth.length > 0;
-  const pendingTotal = pendingInsts.reduce((s, i) => s + i.amount, 0);
   const paymentAccount = state.accounts.find(a => a.id === card.paymentAccountId);
   const payConfirmDueDate = getInvoiceDates(selectedMonth, card.closingDay, card.dueDay).dueDate;
   const payConfirmLabel = monthTabLabel(payConfirmDueDate);
@@ -300,7 +311,7 @@ export default function CartaoDetail() {
     ? getCurrentBalance(paymentAccount, state.transactions)
     : null;
   const payConfirmInsufficient =
-    payConfirmBalance !== null && payConfirmBalance < pendingTotal;
+    payConfirmBalance !== null && payConfirmBalance < pendingOwnership.mine;
 
   return (
     <>
@@ -453,11 +464,27 @@ export default function CartaoDetail() {
                   {{ paid: "Paga", closed: "Fechada", overdue: "Vencida", open: "Em aberto" }[currentInvoice.status]}
                 </span>
               )}
-              <p className="mono" style={{ fontSize: "20px", fontWeight: 700, color: "var(--text-1)", letterSpacing: "-0.02em" }}>
-                R$ {fmt(currentInvoice?.totalAmount ?? 0)}
-              </p>
+              <div style={{ textAlign: "right" }}>
+                <span style={{ display: "block", fontSize: "10px", color: "var(--text-3)" }}>Total do cartão</span>
+                <p className="mono" style={{ fontSize: "20px", fontWeight: 700, color: "var(--text-1)", letterSpacing: "-0.02em" }}>
+                  R$ {fmt(currentInvoice?.totalAmount ?? 0)}
+                </p>
+              </div>
             </div>
           </div>
+
+          {ownership.others > 0 && (
+            <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--border)", fontSize: "12px", color: "var(--text-2)" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", marginBottom: "6px" }}>
+                <span>Minha parte</span><strong className="mono">R$ {fmt(ownership.mine)}</strong>
+              </div>
+              {Object.entries(ownership.byPerson).sort(([a], [b]) => a.localeCompare(b, "pt-BR")).map(([person, amount]) => (
+                <div key={person} style={{ display: "flex", justifyContent: "space-between", gap: "12px", marginTop: "4px" }}>
+                  <span>{person}</span><span className="mono">R$ {fmt(amount)}</span>
+                </div>
+              ))}
+            </div>
+          )}
 
           {/* Ações da fatura */}
           <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--border)" }}>
@@ -485,7 +512,7 @@ export default function CartaoDetail() {
                     cursor: allPaid ? "not-allowed" : "pointer",
                   }}
                 >
-                  {allPaid ? "✓ Fatura já paga" : `Pagar Fatura · R$ ${fmt(pendingTotal)}`}
+                  {allPaid ? "✓ Fatura já paga" : `Quitar fatura · minha parte R$ ${fmt(pendingOwnership.mine)}`}
                 </button>
               )}
               <button
@@ -565,6 +592,17 @@ export default function CartaoDetail() {
                       }}>
                         {purchase?.description ?? "—"}
                       </p>
+                      {purchase?.responsiblePerson && (
+                        <p style={{ fontSize: "10.5px", color: "var(--accent)", marginTop: "2px" }}>
+                          {purchase.responsiblePerson}
+                        </p>
+                      )}
+                      {purchase && !purchase.responsiblePerson && (
+                        <button type="button" onClick={() => router.push(`/cartoes/${card.id}/compras/${purchase.id}/editar`)}
+                          style={{ background: "none", border: "none", padding: "4px 0 0", fontSize: "10.5px", color: "var(--accent)", cursor: "pointer", textAlign: "left" }}>
+                          Vincular outra pessoa
+                        </button>
+                      )}
                       <p style={{ fontSize: "10.5px", color: "var(--text-3)", marginTop: "2px", display: "flex", alignItems: "center", gap: "5px" }}>
                         {cat?.name ?? "—"} ·{" "}
                         {purchase?.isSubscription ? (
@@ -670,7 +708,7 @@ export default function CartaoDetail() {
 
             <div className="modal-body" style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
               <p style={{ fontSize: "13px", color: "var(--text-2)", lineHeight: 1.5 }}>
-                Marcar a fatura como paga e debitar a conta vinculada?
+                Marcar a fatura inteira como quitada? A conta vinculada será debitada apenas pela sua parte.
               </p>
 
               <div style={{
@@ -696,13 +734,17 @@ export default function CartaoDetail() {
                     {paymentAccount?.name ?? "—"}
                   </span>
                 </div>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: "12px" }}>
+                  <span style={{ fontSize: "12px", color: "var(--text-3)" }}>Total da fatura</span>
+                  <span className="mono" style={{ fontSize: "13px", color: "var(--text-1)" }}>R$ {fmt(pendingOwnership.total)}</span>
+                </div>
                 <div style={{
                   display: "flex", justifyContent: "space-between", gap: "12px",
                   paddingTop: "10px", borderTop: "1px solid var(--border)",
                 }}>
-                  <span style={{ fontSize: "12px", color: "var(--text-3)" }}>Valor</span>
+                  <span style={{ fontSize: "12px", color: "var(--text-3)" }}>Minha parte a debitar</span>
                   <span className="mono" style={{ fontSize: "16px", fontWeight: 700, color: "var(--green)" }}>
-                    R$ {fmt(pendingTotal)}
+                    R$ {fmt(pendingOwnership.mine)}
                   </span>
                 </div>
               </div>

@@ -38,6 +38,7 @@ export function getSpentByCategory(
     if (inst.competenceMonth !== month) continue;
     const purchase = purchaseById.get(inst.purchaseId);
     if (!purchase) continue; // órfã: compra deletada / subscription cancelada
+    if (purchase.responsiblePerson?.trim()) continue;
     map[purchase.categoryId] = (map[purchase.categoryId] ?? 0) + inst.amount;
   }
 

@@ -107,6 +107,7 @@ export function buildAnalysisWorkbook(input: AnalysisExportInput): XLSX.WorkBook
     input.transactions,
     6,
     input.installments,
+    input.purchases,
   );
 
   const resumoRows: Record<string, unknown>[] = [
@@ -165,6 +166,7 @@ export function buildAnalysisWorkbook(input: AnalysisExportInput): XLSX.WorkBook
       monthEnd,
       input.cards,
       input.installments,
+      input.purchases,
     ),
   }));
 

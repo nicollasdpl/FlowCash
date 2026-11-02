@@ -82,6 +82,7 @@ export function buildCatSlices(
     .forEach(i => {
       const purchase = purchases.find(p => p.id === i.purchaseId);
       if (!purchase) return;
+      if (purchase.responsiblePerson?.trim()) return;
       const card = cards.find(c => c.id === i.cardId);
       const slice = ensure(purchase.categoryId || "__none__");
       slice.totalAmount += i.amount;

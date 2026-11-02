@@ -91,6 +91,7 @@ export function getConsumptionByCategory(
   const cardPurchaseKeys = new Set<string>();
 
   for (const purchase of purchases) {
+    if (purchase.responsiblePerson?.trim()) continue;
     const purchaseInsts = installmentsByPurchase.get(purchase.id) ?? [];
     const closingDay = closingDayFor(purchase, cards);
     const purchaseAmount = money(purchase.amount);
@@ -162,6 +163,7 @@ export function buildConsumptionCatSlices(
   }
 
   for (const purchase of purchases) {
+    if (purchase.responsiblePerson?.trim()) continue;
     const purchaseInsts = installmentsByPurchase.get(purchase.id) ?? [];
     const closingDay = closingDayFor(purchase, cards);
     const card = cardById.get(purchase.cardId);
