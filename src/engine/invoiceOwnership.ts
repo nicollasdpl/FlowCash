@@ -36,6 +36,21 @@ export function getInvoiceOwnershipTotals(
   return totals;
 }
 
+export function getInvoiceOwnershipForMonth(
+  cardId: string,
+  competenceMonth: string,
+  installments: CardInstallment[],
+  purchases: CardPurchase[],
+  unpaidOnly = false,
+): InvoiceOwnershipTotals {
+  return getInvoiceOwnershipTotals(
+    installments.filter(i =>
+      i.cardId === cardId && i.competenceMonth === competenceMonth && (!unpaidOnly || !i.paid),
+    ),
+    purchases,
+  );
+}
+
 /** null = todas, string vazia = minhas, nome = compras dessa pessoa. */
 export function getInstallmentsForResponsible(
   installments: CardInstallment[],

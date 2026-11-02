@@ -164,7 +164,7 @@ export default function Transacoes() {
         (s, a) => s + getProjectedBalance(a, state.transactions, horizon, state.cards, state.installments, state.purchases),
         0,
       );
-  }, [state.accounts, state.transactions, state.cards, state.installments, selectedMonth]);
+  }, [state.accounts, state.transactions, state.cards, state.installments, state.purchases, selectedMonth]);
 
   const categoryMap = useMemo(() => {
     const map = new Map<string, string>();

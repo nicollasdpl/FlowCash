@@ -230,4 +230,29 @@ describe("buildAnalysisWorkbook", () => {
     const resumo = XLSX.utils.sheet_to_json<Record<string, unknown>>(wb.Sheets.Resumo);
     expect(resumo[0].receita).toBe(2000);
   });
+
+  it("exporta somente a parte própria em fatura pessoal e previstos", () => {
+    const wb = buildAnalysisWorkbook({
+      accounts: [], transactions: [], categories: [], budgets: [], goals: [],
+      cards: [{ id: "card", name: "Cartão", lastDigits: "1234", brand: "Visa", totalLimit: 1000,
+        closingDay: 10, dueDay: 20, paymentAccountId: "account", color: "#000", active: true }],
+      purchases: [
+        { id: "mine", cardId: "card", amount: 100, description: "Minha", categoryId: "cat", purchaseDate: "2026-07-01", totalInstallments: 1, createdAt: "" },
+        { id: "mother", cardId: "card", amount: 200, description: "Mãe", categoryId: "", purchaseDate: "2026-07-01", totalInstallments: 1, responsiblePerson: "Mãe", createdAt: "" },
+      ],
+      installments: [
+        { id: "i1", purchaseId: "mine", cardId: "card", installmentNumber: 1, totalInstallments: 1, amount: 100, competenceMonth: "2026-07", paid: false },
+        { id: "i2", purchaseId: "mother", cardId: "card", installmentNumber: 1, totalInstallments: 1, amount: 200, competenceMonth: "2026-07", paid: false },
+      ],
+    });
+
+    const cards = XLSX.utils.sheet_to_json<Record<string, unknown>>(wb.Sheets.Cartoes);
+    const upcoming = XLSX.utils.sheet_to_json<Record<string, unknown>>(wb.Sheets.Previstos);
+    const installments = XLSX.utils.sheet_to_json<Record<string, unknown>>(wb.Sheets.Parcelas);
+    expect(cards[0]).toMatchObject({ fatura_mes: 100, minha_parte_a_pagar: 100, fatura_total_cartao: 300 });
+    expect(upcoming.filter(row => row.origem === "cartao").map(row => row.descricao)).toEqual(["Minha"]);
+    expect(installments).toEqual(expect.arrayContaining([
+      expect.objectContaining({ descricao: "Mãe", responsavel: "Mãe", compromisso_pessoal: false }),
+    ]));
+  });
 });

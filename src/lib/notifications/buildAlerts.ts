@@ -1,7 +1,8 @@
 import type { AppState } from "@/context/AppContext";
 import { getSpentByCategory } from "@/engine/budgetEngine";
 import { currentMonth, today } from "@/engine/financialEngine";
-import { computeInvoice, getCardInvoices } from "@/engine/invoiceEngine";
+import { getCardInvoices } from "@/engine/invoiceEngine";
+import { getInvoiceOwnershipForMonth } from "@/engine/invoiceOwnership";
 import { SEED_INVOICE_PAYMENT_CATEGORY_ID } from "@/types/financial";
 import type { FinanceAlert, NotificationPrefs } from "./types";
 
@@ -89,7 +90,10 @@ export function buildFinanceAlerts(
     for (const card of state.cards.filter(c => c.active)) {
       const invoices = getCardInvoices(card, state.installments, 2);
       for (const inv of invoices) {
-        if (inv.status === "paid" || inv.totalAmount <= 0) continue;
+        const personalDue = getInvoiceOwnershipForMonth(
+          card.id, inv.competenceMonth, state.installments, state.purchases, true,
+        ).mine;
+        if (inv.status === "paid" || personalDue <= 0) continue;
         const key = `${card.id}:${inv.competenceMonth}`;
         if (seen.has(key)) continue;
         seen.add(key);
@@ -102,7 +106,7 @@ export function buildFinanceAlerts(
         alerts.push({
           id: `card-due:${card.id}:${inv.competenceMonth}`,
           kind: "cardInvoiceDue",
-          line: `Fatura ${card.name} ${when} · R$ ${fmt(inv.totalAmount)}`,
+          line: `Sua parte da fatura ${card.name} ${when} · R$ ${fmt(personalDue)}`,
           priority: days === 0 ? 2 : 3,
         });
       }

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { buildFinanceAlerts, formatAlertDigest } from "../buildAlerts";
 import { DEFAULT_NOTIFICATION_PREFS } from "../types";
 import type { AppState } from "@/context/AppContext";
@@ -81,5 +81,37 @@ describe("buildFinanceAlerts", () => {
     ]);
     expect(digest.title).toBeTruthy();
     expect(digest.body).toContain("Luz");
+  });
+
+  it("avisa somente a parte pessoal da fatura", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-11-02T12:00:00"));
+    try {
+      const card = {
+        id: "card", name: "Cartão", lastDigits: "1234", brand: "Visa",
+        totalLimit: 1000, closingDay: 2, dueDay: 3,
+        paymentAccountId: "account", color: "#000", active: true,
+      };
+      const purchases = [
+        { id: "mine", cardId: "card", amount: 100, description: "Mercado", categoryId: "cat1", purchaseDate: "2026-11-01", totalInstallments: 1, createdAt: "" },
+        { id: "mother", cardId: "card", amount: 200, description: "Gasolina", categoryId: "", purchaseDate: "2026-11-01", totalInstallments: 1, responsiblePerson: "Mãe", createdAt: "" },
+      ];
+      const installments = purchases.map(p => ({
+        id: p.id, purchaseId: p.id, cardId: card.id, installmentNumber: 1,
+        totalInstallments: 1, amount: p.amount, competenceMonth: "2026-11", paid: false,
+      }));
+      const prefs = { ...DEFAULT_NOTIFICATION_PREFS, enabled: true };
+
+      const mixed = buildFinanceAlerts(baseState({ cards: [card], purchases, installments }), prefs);
+      expect(mixed.find(a => a.kind === "cardInvoiceDue")?.line).toContain("R$ 100,00");
+      expect(mixed.find(a => a.kind === "cardInvoiceDue")?.line).not.toContain("300,00");
+
+      const onlyMother = buildFinanceAlerts(baseState({
+        cards: [card], purchases: [purchases[1]], installments: [installments[1]],
+      }), prefs);
+      expect(onlyMother.some(a => a.kind === "cardInvoiceDue")).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

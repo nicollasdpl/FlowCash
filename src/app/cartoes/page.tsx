@@ -2,7 +2,8 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useApp } from "@/context/AppContext";
-import { getCardLimitSummary } from "@/engine/financialEngine";
+import { currentMonth, getCardLimitSummary } from "@/engine/financialEngine";
+import { getInvoiceOwnershipForMonth } from "@/engine/invoiceOwnership";
 import { CreditCard as CreditCardIcon } from "lucide-react";
 
 function fmt(v: number) {
@@ -55,6 +56,9 @@ export default function Cartoes() {
       <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
         {state.cards.map((card) => {
           const summary = getCardLimitSummary(card, state.installments, state.purchases);
+          const personalDue = getInvoiceOwnershipForMonth(
+            card.id, currentMonth(), state.installments, state.purchases, true,
+          ).mine;
           const usedPct = summary.totalLimit > 0
             ? Math.min((summary.usedLimit / summary.totalLimit) * 100, 100)
             : 0;
@@ -86,10 +90,15 @@ export default function Cartoes() {
                   </div>
                 </div>
                 <div style={{ textAlign: "right", flexShrink: 0 }}>
-                  <p className="section-heading" style={{ marginBottom: "3px", fontSize: "12px" }}>Fatura atual</p>
+                  <p className="section-heading" style={{ marginBottom: "3px", fontSize: "12px" }}>Minha parte a pagar</p>
                   <p className="mono" style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-1)" }}>
-                    R$ {fmt(summary.currentInvoiceAmount)}
+                    R$ {fmt(personalDue)}
                   </p>
+                  {summary.currentInvoiceAmount > personalDue && (
+                    <p style={{ fontSize: "10px", color: "var(--text-3)", marginTop: "3px" }}>
+                      Total do cartão R$ {fmt(summary.currentInvoiceAmount)}
+                    </p>
+                  )}
                 </div>
               </div>
 

@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useApp } from "@/context/AppContext";
 import type { Account } from "@/context/AppContext";
 import {
-  getCurrentBalance, getProjectedBalance, getAvailableBalance,
+  currentMonth, endOfMonth, getCurrentBalance, getProjectedBalance, getAvailableBalance,
   fmt, isBalanceNegative, isBalancePositive,
 } from "@/engine/financialEngine";
 import { Landmark, Pencil } from "lucide-react";
@@ -31,11 +31,7 @@ export default function Contas() {
   const router = useRouter();
   const { state } = useApp();
 
-  const eom = useMemo(() => {
-    const d = new Date();
-    const last = new Date(d.getFullYear(), d.getMonth() + 1, 0);
-    return last.toISOString().split("T")[0];
-  }, []);
+  const eom = endOfMonth(currentMonth());
 
   const totalCurrent = useMemo(() =>
     state.accounts.filter(a => a.active).reduce((s, a) => s + getCurrentBalance(a, state.transactions), 0),
@@ -43,7 +39,7 @@ export default function Contas() {
   );
   const totalProjected = useMemo(() =>
     state.accounts.filter(a => a.active).reduce((s, a) => s + getProjectedBalance(a, state.transactions, eom, state.cards, state.installments, state.purchases), 0),
-    [state.accounts, state.transactions, state.cards, state.installments, eom]
+    [state.accounts, state.transactions, state.cards, state.installments, state.purchases, eom]
   );
 
   return (

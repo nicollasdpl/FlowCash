@@ -72,7 +72,7 @@ export function tryLocalAnswer(message: string, ctx: FinancialContext): string |
   if (m.includes("fatura") && (m.includes("cartao") || m.includes("cartão") || ctx.cards.length === 1)) {
     const card = ctx.cards[0];
     if (!card) return null;
-    return `Fatura de **${card.name}** (${card.brand}): **${fmtBRL(card.currentInvoiceAmount)}**, vence em **${card.invoiceDueDate}**. Limite disponível: **${fmtBRL(card.availableLimit)}**.`;
+    return `Sua parte a pagar na fatura de **${card.name}** (${card.brand}): **${fmtBRL(card.personalInvoiceAmount)}**. Total do cartão: **${fmtBRL(card.currentInvoiceAmount)}**. Vence em **${card.invoiceDueDate}**. Limite disponível no cartão: **${fmtBRL(card.availableLimit)}**.`;
   }
 
   return null;

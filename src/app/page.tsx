@@ -10,6 +10,7 @@ import {
   isBalanceNegative, isBalancePositive, projectionHorizon,
 } from "@/engine/financialEngine";
 import { computeInvoice } from "@/engine/invoiceEngine";
+import { getInvoiceOwnershipForMonth } from "@/engine/invoiceOwnership";
 import { getSpentByCategory } from "@/engine/budgetEngine";
 import {
   AlertTriangle, CreditCard, Wallet, TrendingUp, Package, RefreshCw,
@@ -233,26 +234,29 @@ export default function Dashboard() {
           .filter(i => i.cardId === card.id)
           .map(i => i.competenceMonth),
       )].sort(); // crescente (YYYY-MM)
-      const invoices = months.map(m => computeInvoice(card, state.installments, m));
+      const invoices = months.map(m => ({
+        invoice: computeInvoice(card, state.installments, m),
+        personalDue: getInvoiceOwnershipForMonth(card.id, m, state.installments, state.purchases, true).mine,
+      })).filter(({ personalDue }) => personalDue > 0);
 
       // 1. Fatura que vence no mês selecionado (ignora paga).
       const ofMonth = invoices.find(
-        inv => inv.dueDate.substring(0, 7) === selectedMonth && inv.status !== "paid",
+        ({ invoice }) => invoice.dueDate.substring(0, 7) === selectedMonth && invoice.status !== "paid",
       );
       // 2. Fallback (só se não houve item 1): "open" (ciclo corrente) tem prioridade;
       //    senão a "overdue" de mês anterior mais recente.
-      const open = invoices.find(inv => inv.status === "open");
+      const open = invoices.find(({ invoice }) => invoice.status === "open");
       const overduePast = invoices.filter(
-        inv => inv.status === "overdue" && inv.dueDate.substring(0, 7) < selectedMonth,
+        ({ invoice }) => invoice.status === "overdue" && invoice.dueDate.substring(0, 7) < selectedMonth,
       ).pop();
 
       // Exatamente uma por cartão: item 1 > open > overdue.
       const chosen = ofMonth ?? open ?? overduePast;
       return chosen
-        ? [{ card, invoice: chosen, kind: (chosen.status === "open" ? "open" : "due") as "due" | "open" }]
+        ? [{ card, ...chosen, kind: (chosen.invoice.status === "open" ? "open" : "due") as "due" | "open" }]
         : [];
     });
-  }, [state.cards, state.installments, selectedMonth]);
+  }, [state.cards, state.installments, state.purchases, selectedMonth]);
 
   // Donut: despesas pagas + parcelas do mês selecionado
   const catSlices = useMemo(() =>
@@ -734,7 +738,7 @@ export default function Dashboard() {
                 Ver →
               </Link>
             </div>
-            {cardInvoices.map(({ card, invoice, kind }, i) => {
+            {cardInvoices.map(({ card, invoice, personalDue, kind }, i) => {
               const isDue = kind === "due";
               const isOverdue = isDue && invoice.status === "overdue";
               const labelText = isOverdue ? "Vencida" : isDue ? "A pagar" : "Aberta";
@@ -784,11 +788,12 @@ export default function Dashboard() {
                     display: "flex", flexDirection: "column",
                     alignItems: "flex-end", gap: "4px", flexShrink: 0,
                   }}>
+                    <span style={{ fontSize: "9px", color: "var(--text-3)" }}>Minha parte a pagar</span>
                     <p className="mono" style={{
                       fontSize: "14px", fontWeight: 700,
                       color: isOverdue ? "var(--red)" : "var(--text-1)",
                     }}>
-                      R$ {fmt(invoice.totalAmount)}
+                      R$ {fmt(personalDue)}
                     </p>
                     <span style={{
                       fontSize: "8px", fontWeight: 700, letterSpacing: "0.03em",

@@ -7,6 +7,7 @@ import {
   getProjectedBalance,
 } from "@/engine/financialEngine";
 import { computeInvoice } from "@/engine/invoiceEngine";
+import { getInvoiceOwnershipForMonth } from "@/engine/invoiceOwnership";
 import type { Account, Budget, CardInstallment, CardPurchase, Category, CreditCard, Goal, Transaction } from "@/types/financial";
 import type { BuildFinancialContextInput, FinancialContext } from "./types";
 
@@ -92,7 +93,7 @@ export function buildFinancialContext(input: BuildFinancialContextInput): Financ
       accountId: t.accountId,
     }));
 
-  const recentPurchases = [...purchases]
+  const recentPurchases = purchases.filter(p => !p.responsiblePerson?.trim())
     .sort((a, b) => b.purchaseDate.localeCompare(a.purchaseDate))
     .slice(0, 10)
     .map(p => {
@@ -124,6 +125,9 @@ export function buildFinancialContext(input: BuildFinancialContextInput): Financ
       name: card.name,
       brand: card.brand,
       currentInvoiceAmount: summary.currentInvoiceAmount,
+      personalInvoiceAmount: getInvoiceOwnershipForMonth(
+        card.id, month, installments, purchases, true,
+      ).mine,
       invoiceDueDate: invoice.dueDate,
       usedLimit: summary.usedLimit,
       availableLimit: summary.availableLimit,

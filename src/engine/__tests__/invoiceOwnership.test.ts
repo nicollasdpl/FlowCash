@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { generateInstallments } from "../invoiceEngine";
-import { getInstallmentsForResponsible, getInvoiceOwnershipTotals } from "../invoiceOwnership";
-import { getProjectedBalance } from "../financialEngine";
+import { getInstallmentsForResponsible, getInvoiceOwnershipForMonth, getInvoiceOwnershipTotals } from "../invoiceOwnership";
+import { getNetWorth, getProjectedBalance } from "../financialEngine";
 import { getSpentByCategory } from "../budgetEngine";
 import type { Account, CardPurchase, CreditCard } from "@/types/financial";
 
@@ -81,5 +81,19 @@ describe("responsável pela compra na fatura", () => {
     const installments = generateInstallments(mother, card);
     expect(getInvoiceOwnershipTotals(installments, [mother]).byPerson).toEqual({ Mãe: 200 });
     expect(getSpentByCategory("2026-10", [], installments, [mother])).toEqual({});
+  });
+
+  it("usa somente parcelas próprias pendentes no saldo e no patrimônio", () => {
+    const mine = purchase("mine", 100);
+    const mother = purchase("mother", 200, "Mãe");
+    const purchases = [mine, mother];
+    const installments = purchases.flatMap(p => generateInstallments(p, card));
+    const paidMine = installments.map(i => i.purchaseId === mine.id ? { ...i, paid: true } : i);
+
+    expect(getInvoiceOwnershipForMonth(card.id, "2026-10", installments, purchases).total).toBe(300);
+    expect(getInvoiceOwnershipForMonth(card.id, "2026-10", installments, purchases, true).mine).toBe(100);
+    expect(getInvoiceOwnershipForMonth(card.id, "2026-10", paidMine, purchases, true).mine).toBe(0);
+    expect(getNetWorth([account], [], installments, purchases).totalLiabilities).toBe(100);
+    expect(getNetWorth([account], [], generateInstallments(mother, card), [mother]).totalLiabilities).toBe(0);
   });
 });

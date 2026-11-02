@@ -61,7 +61,7 @@ export function formatFinancialContextBlock(ctx: FinancialContext): string {
       ? cards
           .map(
             c =>
-              `  - ${c.name} (${c.brand}): fatura ${fmtBRL(c.currentInvoiceAmount)} (vence ${c.invoiceDueDate}) | limite usado ${fmtBRL(c.usedLimit)}/${fmtBRL(c.totalLimit)}`,
+              `  - ${c.name} (${c.brand}): minha parte a pagar ${fmtBRL(c.personalInvoiceAmount)}; total do cartão ${fmtBRL(c.currentInvoiceAmount)} (vence ${c.invoiceDueDate}) | limite usado no cartão ${fmtBRL(c.usedLimit)}/${fmtBRL(c.totalLimit)}`,
           )
           .join("\n")
       : "  (sem cartões)";

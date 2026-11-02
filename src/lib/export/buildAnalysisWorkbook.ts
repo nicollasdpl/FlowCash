@@ -18,6 +18,7 @@ import {
   getProjectedBalance,
 } from "@/engine/financialEngine";
 import { computeInvoice } from "@/engine/invoiceEngine";
+import { getInvoiceOwnershipForMonth } from "@/engine/invoiceOwnership";
 import { getSpentByCategory } from "@/engine/budgetEngine";
 
 export interface AnalysisExportInput {
@@ -188,6 +189,9 @@ export function buildAnalysisWorkbook(input: AnalysisExportInput): XLSX.WorkBook
   const cartoesRows = input.cards.map(card => {
     const summary = getCardLimitSummary(card, input.installments, input.purchases);
     const invoice = computeInvoice(card, input.installments, month);
+    const personalDue = getInvoiceOwnershipForMonth(
+      card.id, month, input.installments, input.purchases, true,
+    ).mine;
     return {
       id: card.id,
       nome: card.name,
@@ -196,7 +200,9 @@ export function buildAnalysisWorkbook(input: AnalysisExportInput): XLSX.WorkBook
       limite_total: summary.totalLimit,
       limite_usado: summary.usedLimit,
       limite_disponivel: summary.availableLimit,
-      fatura_mes: summary.currentInvoiceAmount,
+      fatura_mes: personalDue,
+      minha_parte_a_pagar: personalDue,
+      fatura_total_cartao: summary.currentInvoiceAmount,
       vencimento_fatura: invoice.dueDate,
       status_fatura: invoice.status,
     };
@@ -217,6 +223,8 @@ export function buildAnalysisWorkbook(input: AnalysisExportInput): XLSX.WorkBook
         competencia: i.competenceMonth,
         parcela: `${i.installmentNumber}/${i.totalInstallments}`,
         valor: i.amount,
+        responsavel: purchase?.responsiblePerson?.trim() || "Eu",
+        compromisso_pessoal: !purchase?.responsiblePerson?.trim(),
         paga: i.paid,
         categoria: purchase
           ? catName(input.categories, purchase.categoryId)
@@ -239,7 +247,10 @@ export function buildAnalysisWorkbook(input: AnalysisExportInput): XLSX.WorkBook
     }));
 
   const previstosCard = input.installments
-    .filter(i => !i.paid && i.competenceMonth >= month)
+    .filter(i =>
+      !i.paid && i.competenceMonth >= month &&
+      !purchaseById.get(i.purchaseId)?.responsiblePerson?.trim(),
+    )
     .map(i => {
       const purchase = purchaseById.get(i.purchaseId);
       return {

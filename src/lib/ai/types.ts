@@ -93,6 +93,7 @@ export type FinancialContextCard = {
   name: string;
   brand: string;
   currentInvoiceAmount: number;
+  personalInvoiceAmount: number;
   invoiceDueDate: string;
   usedLimit: number;
   availableLimit: number;
@@ -166,6 +167,6 @@ export type BuildFinancialContextInput = {
   budgets: { categoryId: string; month: string; limitAmount: number }[];
   cards?: { id: string; name: string; brand: string; totalLimit: number; closingDay: number; dueDay: number; paymentAccountId: string; active: boolean }[];
   installments?: { id: string; purchaseId: string; cardId: string; amount: number; competenceMonth: string; paid: boolean }[];
-  purchases?: { id: string; cardId: string; amount: number; description: string; categoryId: string; purchaseDate: string }[];
+  purchases?: { id: string; cardId: string; amount: number; description: string; categoryId: string; purchaseDate: string; responsiblePerson?: string }[];
   goals?: { id: string; name: string; targetAmount: number; currentAmount: number; deadline: string; completed: boolean }[];
 };

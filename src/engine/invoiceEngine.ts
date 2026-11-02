@@ -247,6 +247,7 @@ export function getCardExpensesByCategory(
     .forEach(i => {
       const purchase = purchases.find(p => p.id === i.purchaseId);
       if (!purchase?.categoryId) return;
+      if (purchase.responsiblePerson?.trim()) return;
       result[purchase.categoryId] = (result[purchase.categoryId] ?? 0) + i.amount;
     });
   return result;

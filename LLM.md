@@ -58,6 +58,13 @@ Rotas de UI: `/` dashboard, `/transacoes`, `/contas`, `/cartoes`, `/orcamentos`,
 - Só o **pagamento da fatura** (transação `expense`, `origin: "invoice"`, categoria `system_invoice_payment`) reduz a conta `paymentAccountId`.
 - Essa categoria **não** conta como gasto por categoria (as parcelas já contam pelas categorias das compras).
 
+### Compras de outras pessoas no cartão
+
+- `CardPurchase.responsiblePerson` ausente = compra minha; nome preenchido = compra inteira de outra pessoa, inclusive todas as parcelas futuras.
+- O **total do cartão** e o limite usado incluem todas as compras, para bater com o banco. A **minha parte a pagar** soma apenas parcelas próprias ainda não pagas.
+- Compras de outras pessoas não entram em saldo projetado pessoal, patrimônio, gastos por categoria, orçamentos, compromissos futuros nem alertas pessoais. Relatórios brutos de parcelas devem identificar o responsável.
+- Ao quitar uma fatura mista no app, a transação na conta é somente a parte própria pendente; o total bruto da fatura permanece visível para conferência.
+
 ### Saldo real — `getCurrentBalance`
 
 `initialBalance` + transações `paid` com `paymentDate <= hoje` na conta (e transferências de entrada). Sem pendentes. Sem fatura aberta.

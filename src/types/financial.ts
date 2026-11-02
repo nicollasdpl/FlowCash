@@ -142,7 +142,7 @@ export interface Invoice {
   competenceMonth: string;        // YYYY-MM
   closingDate: string;            // YYYY-MM-DD
   dueDate: string;                // YYYY-MM-DD
-  totalAmount: number;            // calculado
+  totalAmount: number;            // total bruto do cartão, incluindo compras de outras pessoas
   status: InvoiceStatus;
   paidAt?: string;
   paymentTransactionId?: string;  // referência à despesa gerada na conta
@@ -200,7 +200,7 @@ export interface AccountBalance {
 
 export interface NetWorthSnapshot {
   totalAssets: number;            // soma de saldos reais de todas contas
-  totalLiabilities: number;       // soma de faturas em aberto dos cartões
+  totalLiabilities: number;       // soma das parcelas próprias não pagas dos cartões
   netWorth: number;               // assets - liabilities
   projectedNetWorth: number;
 }
@@ -228,5 +228,5 @@ export interface CardLimitSummary {
   totalLimit: number;
   usedLimit: number;              // TODAS parcelas futuras não pagas
   availableLimit: number;
-  currentInvoiceAmount: number;   // somente fatura do mês atual
+  currentInvoiceAmount: number;   // total bruto da fatura do mês atual (limite real do cartão)
 }

@@ -273,13 +273,15 @@ export function getNetWorth(
   accounts: Account[],
   transactions: Transaction[],
   installments: CardInstallment[],
+  purchases: CardPurchase[] = [],
 ): NetWorthSnapshot {
   const totalAssets = accounts
     .filter(a => a.active)
     .reduce((s, a) => s + getCurrentBalance(a, transactions), 0);
 
+  const purchaseById = new Map(purchases.map(p => [p.id, p]));
   const totalLiabilities = installments
-    .filter(i => !i.paid)
+    .filter(i => !i.paid && !purchaseById.get(i.purchaseId)?.responsiblePerson?.trim())
     .reduce((s, i) => s + i.amount, 0);
 
   const eom = endOfCurrentMonth();
