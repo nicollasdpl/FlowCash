@@ -19,6 +19,7 @@ import {
 import CategoryIcon from "@/components/CategoryIcon";
 import { CopilotFab } from "@/components/CopilotFab";
 import { FabStack } from "@/components/FabStack";
+import WeeklyPacingCard from "@/components/WeeklyPacingCard";
 import { CategoryDonutSection, buildCatSlices } from "@/components/CategoryDonutSection";
 import { buildConsumptionCatSlices } from "@/app/relatorios/consumptionByCategory";
 import {
@@ -475,6 +476,8 @@ export default function Dashboard() {
             </div>
           )}
         </div>
+
+        {isCurrentMonth && <WeeklyPacingCard />}
 
         {/* ── 4. Receitas / Despesas / Balanço ── */}
         <div style={{
