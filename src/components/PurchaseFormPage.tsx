@@ -39,6 +39,7 @@ export default function PurchaseFormPage({ card }: Props) {
     const amt = parsePtBrAmount(amount);
     if (amt == null || amt <= 0) return setError("Informe um valor válido.");
     if (responsiblePerson && !responsiblePerson.trim()) return setError("Informe o nome da pessoa.");
+    if (!responsiblePerson && !categoryId) return setError("Selecione uma categoria.");
     let inst = 1;
     if (!isSubscription) {
       inst = parseInt(totalInstallments);
@@ -51,7 +52,7 @@ export default function PurchaseFormPage({ card }: Props) {
       cardId: card.id,
       amount: amt,
       description: description.trim(),
-      categoryId,
+      categoryId: responsiblePerson.trim() ? "" : categoryId,
       purchaseDate,
       totalInstallments: inst,
       isSubscription: isSubscription || undefined,
@@ -198,15 +199,16 @@ export default function PurchaseFormPage({ card }: Props) {
         <PurchaseResponsibleField person={responsiblePerson} onChange={setResponsiblePerson}
           suggestions={[...new Set(state.purchases.map(p => p.responsiblePerson?.trim()).filter((name): name is string => Boolean(name)))]} />
 
-        {/* Categoria */}
-        <div className="form-group">
-          <label className="form-label">Categoria</label>
-          <select className="form-input" value={categoryId} onChange={e => setCategoryId(e.target.value)}>
-            {expenseCategories.map(c => (
-              <option key={c.id} value={c.id}>{iconLabel(c.icon, c.name)}</option>
-            ))}
-          </select>
-        </div>
+        {!responsiblePerson && (
+          <div className="form-group">
+            <label className="form-label">Categoria</label>
+            <select className="form-input" value={categoryId} onChange={e => setCategoryId(e.target.value)}>
+              {expenseCategories.map(c => (
+                <option key={c.id} value={c.id}>{iconLabel(c.icon, c.name)}</option>
+              ))}
+            </select>
+          </div>
+        )}
 
         {/* Data da compra */}
         <div className="form-group" style={{ marginBottom: 0 }}>

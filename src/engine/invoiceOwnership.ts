@@ -35,3 +35,16 @@ export function getInvoiceOwnershipTotals(
   }
   return totals;
 }
+
+/** null = todas, string vazia = minhas, nome = compras dessa pessoa. */
+export function getInstallmentsForResponsible(
+  installments: CardInstallment[],
+  purchases: CardPurchase[],
+  person: string | null,
+): CardInstallment[] {
+  if (person === null) return installments;
+  const purchaseById = new Map(purchases.map(purchase => [purchase.id, purchase]));
+  return installments.filter(installment =>
+    (purchaseById.get(installment.purchaseId)?.responsiblePerson?.trim() ?? "") === person,
+  );
+}

@@ -66,6 +66,8 @@ export default function EditarCompra() {
     const amt = parsePtBrAmount(amount);
     if (amt == null || amt <= 0) return setError("Informe um valor válido.");
     if (responsiblePerson && !responsiblePerson.trim()) return setError("Informe o nome da pessoa.");
+    const ownCategoryId = categoryId || expenseCategories[0]?.id || "";
+    if (!responsiblePerson && !ownCategoryId) return setError("Selecione uma categoria.");
     const inst = parseInt(totalInstallments, 10);
     if (!inst || inst < 1 || inst > 60) return setError("Parcelas inválidas (1–60).");
     if (!selectedCardId) return setError("Selecione um cartão.");
@@ -79,7 +81,7 @@ export default function EditarCompra() {
       cardId: selectedCardId,
       amount: amt,
       description: description.trim(),
-      categoryId,
+      categoryId: responsiblePerson.trim() ? "" : ownCategoryId,
       purchaseDate,
       totalInstallments: inst,
       createdAt: purchase.createdAt,
@@ -203,19 +205,20 @@ export default function EditarCompra() {
         <PurchaseResponsibleField person={responsiblePerson} onChange={setResponsiblePerson}
           suggestions={[...new Set(state.purchases.map(p => p.responsiblePerson?.trim()).filter((name): name is string => Boolean(name)))]} />
 
-        {/* Categoria */}
-        <div className="form-group">
-          <label className="form-label">Categoria</label>
-          <select
-            className="form-input"
-            value={categoryId}
-            onChange={e => setCategoryId(e.target.value)}
-          >
-            {expenseCategories.map(c => (
-              <option key={c.id} value={c.id}>{iconLabel(c.icon, c.name)}</option>
-            ))}
-          </select>
-        </div>
+        {!responsiblePerson && (
+          <div className="form-group">
+            <label className="form-label">Categoria</label>
+            <select
+              className="form-input"
+              value={categoryId || expenseCategories[0]?.id || ""}
+              onChange={e => setCategoryId(e.target.value)}
+            >
+              {expenseCategories.map(c => (
+                <option key={c.id} value={c.id}>{iconLabel(c.icon, c.name)}</option>
+              ))}
+            </select>
+          </div>
+        )}
 
         {/* Data da compra */}
         <div className="form-group">

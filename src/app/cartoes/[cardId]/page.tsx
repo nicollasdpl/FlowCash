@@ -11,7 +11,7 @@ import {
 import {
   getCardInvoices, getInstallmentsByMonth, getInvoiceDates, getDefaultInvoiceMonth,
 } from "@/engine/invoiceEngine";
-import { getInvoiceOwnershipTotals } from "@/engine/invoiceOwnership";
+import { getInstallmentsForResponsible, getInvoiceOwnershipTotals } from "@/engine/invoiceOwnership";
 import { Pencil, Package, Plus, Trash2, Download, Upload } from "lucide-react";
 import CategoryIcon from "@/components/CategoryIcon";
 import { CopilotFab } from "@/components/CopilotFab";
@@ -51,6 +51,7 @@ export default function CartaoDetail() {
   const card = state.cards.find(c => c.id === cardId);
 
   const [selectedMonth, setSelectedMonth] = useState(currentMonth());
+  const [selectedPerson, setSelectedPerson] = useState<string | null>(null);
   const [payError, setPayError] = useState("");
   const [payWarning, setPayWarning] = useState("");
   const [showPayConfirm, setShowPayConfirm] = useState(false);
@@ -67,6 +68,7 @@ export default function CartaoDetail() {
     if (!card) return;
     const next = getDefaultInvoiceMonth(card, state.installments);
     setSelectedMonth(next);
+    setSelectedPerson(null);
   }, [cardId]); // eslint-disable-line react-hooks/exhaustive-deps -- só ao trocar de cartão
 
   const months = useMemo(() => {
@@ -116,6 +118,10 @@ export default function CartaoDetail() {
     getInvoiceOwnershipTotals(installmentsThisMonth.filter(i => !i.paid), state.purchases),
     [installmentsThisMonth, state.purchases],
   );
+  const visibleInstallments = useMemo(() =>
+    getInstallmentsForResponsible(installmentsThisMonth, state.purchases, selectedPerson),
+    [installmentsThisMonth, state.purchases, selectedPerson],
+  );
 
   const limitSummary = useMemo(() => {
     if (!card) return null;
@@ -123,6 +129,7 @@ export default function CartaoDetail() {
   }, [card, state.installments, state.purchases]);
 
   function selectMonth(m: string) {
+    setSelectedPerson(null);
     startTransition(() => setSelectedMonth(m));
   }
 
@@ -166,7 +173,7 @@ export default function CartaoDetail() {
 
     const rows = installmentsThisMonth.map(inst => {
       const purchase = state.purchases.find(p => p.id === inst.purchaseId);
-      const cat = state.categories.find(c => c.id === purchase?.categoryId);
+      const cat = purchase?.responsiblePerson ? undefined : state.categories.find(c => c.id === purchase?.categoryId);
       const parcela = purchase?.isSubscription
         ? "Assinatura"
         : `${inst.installmentNumber}/${inst.totalInstallments}`;
@@ -475,14 +482,27 @@ export default function CartaoDetail() {
 
           {ownership.others > 0 && (
             <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--border)", fontSize: "12px", color: "var(--text-2)" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", marginBottom: "6px" }}>
+              <p style={{ color: "var(--text-3)", fontSize: "11px", marginBottom: "8px" }}>Toque para ver as compras</p>
+              <button type="button" className={`chip-btn${selectedPerson === "" ? " active" : ""}`}
+                onClick={() => setSelectedPerson("")}
+                aria-pressed={selectedPerson === ""}
+                style={{ width: "100%", justifyContent: "space-between", marginBottom: "6px" }}>
                 <span>Minha parte</span><strong className="mono">R$ {fmt(ownership.mine)}</strong>
-              </div>
+              </button>
               {Object.entries(ownership.byPerson).sort(([a], [b]) => a.localeCompare(b, "pt-BR")).map(([person, amount]) => (
-                <div key={person} style={{ display: "flex", justifyContent: "space-between", gap: "12px", marginTop: "4px" }}>
+                <button key={person} type="button" className={`chip-btn${selectedPerson === person ? " active" : ""}`}
+                  onClick={() => setSelectedPerson(person)}
+                  aria-pressed={selectedPerson === person}
+                  style={{ width: "100%", justifyContent: "space-between", marginTop: "4px" }}>
                   <span>{person}</span><span className="mono">R$ {fmt(amount)}</span>
-                </div>
+                </button>
               ))}
+              {selectedPerson !== null && (
+                <button type="button" onClick={() => setSelectedPerson(null)}
+                  style={{ background: "none", border: "none", color: "var(--accent)", padding: "10px 0 0", fontSize: "11px", cursor: "pointer" }}>
+                  Ver todas as compras
+                </button>
+              )}
             </div>
           )}
 
@@ -554,15 +574,15 @@ export default function CartaoDetail() {
           </div>
 
           {/* Lista de parcelas */}
-          {installmentsThisMonth.length === 0 ? (
+          {visibleInstallments.length === 0 ? (
             <div style={{ padding: "32px 16px", textAlign: "center", color: "var(--text-3)", fontSize: "13px" }}>
-              Nenhuma compra nesta fatura.
+              {selectedPerson === null ? "Nenhuma compra nesta fatura." : "Nenhuma compra neste filtro."}
             </div>
           ) : (
             <div>
-              {installmentsThisMonth.map(inst => {
+              {visibleInstallments.map(inst => {
                 const purchase = state.purchases.find(p => p.id === inst.purchaseId);
-                const cat = state.categories.find(c => c.id === purchase?.categoryId);
+                const cat = purchase?.responsiblePerson ? undefined : state.categories.find(c => c.id === purchase?.categoryId);
                 return (
                   <div
                     key={inst.id}
@@ -604,7 +624,7 @@ export default function CartaoDetail() {
                         </button>
                       )}
                       <p style={{ fontSize: "10.5px", color: "var(--text-3)", marginTop: "2px", display: "flex", alignItems: "center", gap: "5px" }}>
-                        {cat?.name ?? "—"} ·{" "}
+                        {cat?.name ? `${cat.name} · ` : ""}
                         {purchase?.isSubscription ? (
                           <span style={{
                             fontSize: "9px", fontWeight: 700, padding: "1px 5px", borderRadius: "4px",

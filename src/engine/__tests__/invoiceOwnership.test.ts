@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { generateInstallments } from "../invoiceEngine";
-import { getInvoiceOwnershipTotals } from "../invoiceOwnership";
+import { getInstallmentsForResponsible, getInvoiceOwnershipTotals } from "../invoiceOwnership";
 import { getProjectedBalance } from "../financialEngine";
 import { getSpentByCategory } from "../budgetEngine";
 import type { Account, CardPurchase, CreditCard } from "@/types/financial";
@@ -60,5 +60,26 @@ describe("responsável pela compra na fatura", () => {
     expect(months.map(m => m.others)).toEqual([66.67, 66.67, 66.66]);
     expect(months.reduce((sum, m) => sum + m.others, 0)).toBe(200);
     expect(months.every(m => m.mine === 0 && m.total === m.others)).toBe(true);
+  });
+
+  it("filtra todas as parcelas pela pessoa sem alterar os totais da fatura", () => {
+    const mine = purchase("mine", 80);
+    const mother = purchase("mother", 200, "Mãe", 2);
+    const john = purchase("john", 30, "João");
+    const purchases = [mine, mother, john];
+    const october = purchases.flatMap(p => generateInstallments(p, card))
+      .filter(i => i.competenceMonth === "2026-10");
+
+    expect(getInstallmentsForResponsible(october, purchases, "Mãe").map(i => i.purchaseId)).toEqual(["mother"]);
+    expect(getInstallmentsForResponsible(october, purchases, "").map(i => i.purchaseId)).toEqual(["mine"]);
+    expect(getInstallmentsForResponsible(october, purchases, null)).toBe(october);
+    expect(getInvoiceOwnershipTotals(october, purchases).total).toBe(210);
+  });
+
+  it("não exige categoria para uma compra integral de outra pessoa", () => {
+    const mother = { ...purchase("mother", 200, "Mãe"), categoryId: "" };
+    const installments = generateInstallments(mother, card);
+    expect(getInvoiceOwnershipTotals(installments, [mother]).byPerson).toEqual({ Mãe: 200 });
+    expect(getSpentByCategory("2026-10", [], installments, [mother])).toEqual({});
   });
 });
