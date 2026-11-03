@@ -162,6 +162,40 @@ export function buildEvolutionSeries(snapshots: readonly WeekSnapshot[]) {
 }
 
 export type WeekBarState = "folga" | "atencao" | "estourou" | "mesNoVermelho";
+/** Exibição viva: o saldo projetado já incorpora os gastos refletidos; não subtrair gastoSemana novamente. */
+export function buildLiveWeekBarModel(
+  room: { free: number; perDay: number; daysLeft: number; endDate: string },
+  bounds: WeekBounds,
+  todayStr: string,
+  spend: WeekSpend,
+) {
+  const daysRemainingWeek = Math.max(0, utcDay(bounds.semanaFim) - utcDay(todayStr) + 1);
+  const plannedRestOfWeek = Math.max(0, room.perDay * daysRemainingWeek);
+  const barTotal = spend.gastoSemana + plannedRestOfWeek;
+  const monthShort = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+  const startDay = Number(bounds.semanaInicio.slice(8, 10));
+  const endDay = Number(bounds.semanaFim.slice(8, 10));
+  const startMonth = monthShort[Number(bounds.semanaInicio.slice(5, 7)) - 1];
+  const endMonth = monthShort[Number(bounds.semanaFim.slice(5, 7)) - 1];
+  return {
+    saldoProjetado: room.free,
+    porDia: room.perDay,
+    diasRestantes: room.daysLeft,
+    fimDoMes: room.endDate,
+    tituloSemana: startDay === endDay ? `Esta semana · ${startDay} ${startMonth}` :
+      `Esta semana · ${startDay}${startMonth === endMonth ? "" : ` ${startMonth}`} a ${endDay} ${endMonth}`,
+    gastoSemana: spend.gastoSemana,
+    planejadoAteFimDaSemana: plannedRestOfWeek,
+    diasRestantesSemana: daysRemainingWeek,
+    pctGasto: barTotal > 0 ? spend.gastoSemana / barTotal * 100 : 0,
+    pctPlanejado: barTotal > 0 ? plannedRestOfWeek / barTotal * 100 : 0,
+    deficitMes: Math.max(0, -room.free),
+    estado: room.free <= 0 ? "mesNoVermelho" as const : "disponivel" as const,
+    parceladoNaSemana: spend.parceladoNaSemana,
+    gastoCartaoForaDoMes: spend.gastoCartaoForaDoMes,
+  };
+}
+
 export function buildWeekBarModel(snapshot: WeekSnapshot, todayStr: string, spend: WeekSpend) {
   const diasDecorridos = Math.max(1, Math.min(snapshot.diasNaSemana, utcDay(todayStr) - utcDay(snapshot.semanaInicio) + 1));
   const cotaSemanal = snapshot.cotaDiaria * snapshot.diasNaSemana;
