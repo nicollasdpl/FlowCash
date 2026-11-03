@@ -11,7 +11,7 @@ export default function CotaSemanalSettingsPage() {
       <h1 className="page-title" style={{ fontSize: 20 }}>Saldo livre projetado</h1>
       <p style={{ color: "var(--text-2)", fontSize: 13, lineHeight: 1.5, marginTop: 10 }}>O valor da tela inicial é o mesmo saldo projetado livre dos Relatórios: o que resta até o fim do mês depois dos compromissos que entram na projeção.</p>
       <p style={{ color: "var(--text-2)", fontSize: 13, lineHeight: 1.5, marginTop: 10 }}>O valor por dia divide esse saldo pelos dias restantes, contando hoje. Ele é atualizado com os lançamentos: sem novos gastos, o valor pode subir quando restam menos dias; com novos gastos ou mudanças na projeção, pode diminuir.</p>
-      <p style={{ color: "var(--text-3)", fontSize: 12, lineHeight: 1.5, marginTop: 12 }}>A barra mostra o gasto variável já feito nesta semana e o planejamento para os dias que faltam até domingo. Gastos já refletidos no saldo projetado não são descontados de novo. Compras no cartão que vencem no mês seguinte são avisadas à parte.</p>
+      <p style={{ color: "var(--text-3)", fontSize: 12, lineHeight: 1.5, marginTop: 12 }}>Na barra, cada dia soma ao acumulado a parcela calculada para ele. O que não foi gasto fica disponível nos dias seguintes. Os próximos dias são uma previsão sem novos gastos; compras no cartão que vencem no mês seguinte são avisadas à parte.</p>
     </div>
   </div>;
 }

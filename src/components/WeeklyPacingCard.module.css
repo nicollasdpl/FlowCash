@@ -9,21 +9,31 @@
 .daily { color: var(--text-2); font-size: 11px; margin-top: 4px; }
 .daily strong { color: var(--text-1); font-weight: 700; }
 .weekTitle { color: var(--text-2); font-size: 12px; font-weight: 700; margin-top: 18px; }
+.weekAvailable { display: flex; flex-wrap: wrap; align-items: baseline; gap: 5px; color: var(--text-2); font-size: 12px; margin-top: 7px; }
+.weekAvailable strong { color: var(--accent); font-size: 17px; font-weight: 700; }
+.weekAvailable strong.red { color: var(--red); }
 .message { color: var(--text-2); font-size: 13px; line-height: 1.5; padding: 8px 0; }
 .message a { color: var(--accent); text-decoration: underline; }
 .skeleton { height: 132px; border-radius: var(--r-sm); background: linear-gradient(90deg, var(--bg-elevated), var(--bg-input), var(--bg-elevated)); background-size: 200% 100%; animation: shimmer 1.4s ease infinite; }
 @keyframes shimmer { to { background-position: -200% 0; } }
-.bar { height: 20px; width: 100%; margin-top: 22px; position: relative; overflow: hidden; border-radius: 10px; background: var(--bg-elevated); border: 1px solid var(--border); }
-.spent, .available { position: absolute; top: 0; bottom: 0; transition: width 260ms ease, left 260ms ease; }
-.spent { left: 0; background: var(--text-2); }
-.available { background: var(--accent); }
+.dayBar { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px; height: 20px; width: 100%; margin-top: 18px; overflow: hidden; border-radius: 10px; }
+.daySegment { position: relative; min-width: 0; background: var(--bg-input); }
+.currentSegment { box-shadow: inset 0 0 0 2px var(--text-1); z-index: 1; }
+.inactiveSegment { background: var(--bg-elevated); }
+.dayFill { height: 100%; background: var(--accent); transition: width 260ms ease; }
+.negativeFill { background: var(--red); }
+.futureFill { opacity: .4; }
+.dayValues { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px; margin-top: 6px; }
+.dayValues div { min-width: 0; text-align: center; color: var(--text-2); }
+.dayValues span { display: block; font: 700 10px var(--font-dm-mono); }
+.dayValues strong { display: block; overflow: hidden; font: 600 clamp(8px, 2vw, 10px) var(--font-dm-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.dayValues .todayDay { color: var(--accent); }
+.dayValues .futureDay { opacity: .6; }
+.dayValues .inactiveDay { color: var(--text-4); }
+.weekSpent { color: var(--text-2); font-size: 11px; margin-top: 14px; }
+.weekSpent strong { color: var(--text-1); }
 .explanation { color: var(--text-2); font-size: 12px; line-height: 1.45; margin-top: 14px; text-wrap: pretty; }
-.legend { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); }
-.liveLegend { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-.legend div { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
-.legend span { color: var(--text-3); font-size: 10px; }
-.legend strong { color: var(--text-1); font-size: 11px; font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .note { margin-top: 12px; display: flex; align-items: flex-start; gap: 6px; color: var(--text-2); font-size: 11px; line-height: 1.45; }
 .note svg { flex-shrink: 0; color: var(--amber); margin-top: 1px; }
 .note a { color: var(--accent); text-decoration: underline; }
-@media (prefers-reduced-motion: reduce) { .spent, .available { transition: none; } .skeleton { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .dayFill { transition: none; } .skeleton { animation: none; } }

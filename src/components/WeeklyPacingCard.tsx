@@ -5,12 +5,11 @@ import Link from "next/link";
 import { AlertTriangle, Info } from "lucide-react";
 import { useApp } from "@/context/AppContext";
 import { getSpendingRoom } from "@/engine/reportInsightsEngine";
-import {
-  buildLiveWeekBarModel, collectWeekVariableSpend, getWeekBounds,
-} from "@/lib/budgetPacing";
+import { buildLiveWeekBarModel, getWeekBounds } from "@/lib/budgetPacing";
 import styles from "./WeeklyPacingCard.module.css";
 
 const brl = (value: number) => `R$ ${Math.abs(value).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const amount = (value: number) => Math.abs(value).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 function saoPauloToday(): string {
   const parts = new Intl.DateTimeFormat("en-US", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date());
   const part = (type: string) => parts.find(item => item.type === type)?.value ?? "";
@@ -27,16 +26,14 @@ export default function WeeklyPacingCard() {
   }, []);
 
   const bounds = useMemo(() => getWeekBounds(todayStr), [todayStr]);
-  const spend = useMemo(() => collectWeekVariableSpend({
-    bounds, throughDate: todayStr,
-    accounts: state.accounts, transactions: state.transactions,
-    purchases: state.purchases, installments: state.installments, cards: state.cards,
-  }), [bounds, state.accounts, state.transactions, state.purchases, state.installments, state.cards, todayStr]);
   const room = useMemo(() => getSpendingRoom(
     state.accounts, state.transactions, state.cards,
     state.installments, todayStr, state.purchases,
   ), [state.accounts, state.transactions, state.cards, state.installments, state.purchases, todayStr]);
-  const model = buildLiveWeekBarModel(room, bounds, todayStr, spend);
+  const model = useMemo(() => buildLiveWeekBarModel(room, bounds, todayStr, {
+    accounts: state.accounts, transactions: state.transactions,
+    purchases: state.purchases, installments: state.installments, cards: state.cards,
+  }), [room, bounds, todayStr, state.accounts, state.transactions, state.purchases, state.installments, state.cards]);
   const hasAccount = state.accounts.some(account => account.active && account.type !== "investment");
 
   if (!user && !authLoading) return null;
@@ -64,15 +61,22 @@ export default function WeeklyPacingCard() {
           ) : (
             <>
               <h3 className={styles.weekTitle}>{model.tituloSemana}</h3>
-              <p className={styles.explanation}>O gasto da semana já está considerado no saldo projetado quando afeta este mês. O valor por dia é redistribuído a cada dia.</p>
-              <div className={styles.bar} role="img" aria-label={`Gasto na semana ${brl(model.gastoSemana)}; planejado para os dias restantes até domingo ${brl(model.planejadoAteFimDaSemana)}`}>
-                <div className={styles.spent} style={{ width: `${model.pctGasto}%` }} />
-                <div className={styles.available} style={{ left: `${model.pctGasto}%`, width: `${model.pctPlanejado}%` }} />
+              <p className={styles.weekAvailable}>
+                Acumulado até hoje: <strong className={`mono ${model.disponivelHoje < 0 ? styles.red : ""}`}>{model.disponivelHoje < 0 ? "−" : ""}{brl(model.disponivelHoje)}</strong>
+              </p>
+              <p className={styles.explanation}>Cada dia soma sua parcela ao que sobrou. Gastos são descontados uma vez. Valores abaixo em R$; dias futuros são previsão sem novos gastos.</p>
+              <div className={styles.dayBar} role="img" aria-label="Evolução do valor acumulado de segunda a domingo">
+                {model.days.map((day, index) => <div key={index} className={`${styles.daySegment} ${day.today ? styles.currentSegment : ""} ${!day.active ? styles.inactiveSegment : ""}`}>
+                  {day.active && <div className={`${styles.dayFill} ${day.available < 0 ? styles.negativeFill : ""} ${day.future ? styles.futureFill : ""}`} style={{ width: `${day.pct}%` }} />}
+                </div>)}
               </div>
-              <div className={`${styles.legend} ${styles.liveLegend}`}>
-                <div><span>Gasto nesta semana</span><strong className="mono">{brl(model.gastoSemana)}</strong></div>
-                <div><span>Planejado até domingo · {model.diasRestantesSemana} dias</span><strong className="mono">{brl(model.planejadoAteFimDaSemana)}</strong></div>
+              <div className={styles.dayValues} aria-label="Acumulado por dia em reais">
+                {model.days.map((day, index) => <div key={index} className={`${day.today ? styles.todayDay : ""} ${day.future ? styles.futureDay : ""} ${!day.active ? styles.inactiveDay : ""}`}>
+                  <span>{day.label}</span>
+                  <strong className="mono">{day.active ? `${day.available < 0 ? "−" : ""}${amount(day.available)}` : ""}</strong>
+                </div>)}
               </div>
+              <p className={styles.weekSpent}>Gasto variável nesta semana: <strong className="mono">{brl(model.gastoSemana)}</strong></p>
             </>
           )}
           {model.parceladoNaSemana > 0 && <p className={styles.note}>Parcelado na semana: <span className="mono">{brl(model.parceladoNaSemana)}</span> (fora do gasto mostrado na barra)</p>}

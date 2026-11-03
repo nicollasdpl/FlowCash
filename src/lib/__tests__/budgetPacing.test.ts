@@ -152,41 +152,68 @@ describe("snapshot e barra", () => {
 
 describe("saldo projetado vivo", () => {
   const bounds = getWeekBounds("2026-11-03");
-  it("usa exatamente o saldo e o valor por dia dos Relatórios, sem subtrair gasto já refletido", () => {
-    const weekSpend = spend("2026-11-03", { transactions: [tx("compra", "2026-11-03", 140.41)] });
+  const source = (data: { transactions?: Transaction[]; purchases?: CardPurchase[]; installments?: CardInstallment[]; cards?: CreditCard[] } = {}) => ({
+    accounts: [account], transactions: data.transactions ?? [], purchases: data.purchases ?? [],
+    installments: data.installments ?? [], cards: data.cards ?? [card],
+  });
+  it("mostra a sequência de segunda a domingo e acumula segunda sem gasto na terça", () => {
+    const monday = buildLiveWeekBarModel({ free: 181.83, perDay: 181.83 / 29, daysLeft: 29, endDate: "2026-11-30" }, bounds, "2026-11-02", source());
+    const tuesday = buildLiveWeekBarModel({ free: 181.83, perDay: 181.83 / 28, daysLeft: 28, endDate: "2026-11-30" }, bounds, "2026-11-03", source());
+    expect(monday.days.map(day => day.label)).toEqual(["S", "T", "Q", "Q", "S", "S", "D"]);
+    expect(monday.disponivelHoje).toBeCloseTo(6.27);
+    expect(tuesday.days[0].available).toBeCloseTo(6.27);
+    expect(tuesday.disponivelHoje).toBeCloseTo(6.27 + 181.83 / 28);
+    expect(tuesday.disponivelHoje).toBeGreaterThan(monday.disponivelHoje);
+    expect(tuesday.days[2].future).toBe(true);
+    expect(tuesday.days[2].available).toBeGreaterThan(tuesday.disponivelHoje);
+  });
+  it("desconta gasto uma vez e atualiza a parcela diária com o saldo projetado", () => {
+    const model = buildLiveWeekBarModel(
+      { free: 176.83, perDay: 176.83 / 28, daysLeft: 28, endDate: "2026-11-30" },
+      bounds, "2026-11-03", source({ transactions: [tx("segunda", "2026-11-02", 5)] }),
+    );
+    expect(model.saldoProjetado).toBe(176.83);
+    expect(model.porDia).toBeCloseTo(176.83 / 28);
+    expect(model.days[0].release).toBeCloseTo(181.83 / 29);
+    expect(model.days[0].available).toBeCloseTo(181.83 / 29 - 5);
+    expect(model.disponivelHoje).toBeCloseTo(181.83 / 29 - 5 + 176.83 / 28);
+  });
+  it("mantém compra do cartão do mês seguinte fora da projeção, mas no gasto do dia", () => {
+    const nextMonthCard = { ...card, closingDay: 1 };
     const model = buildLiveWeekBarModel(
       { free: 175.66, perDay: 175.66 / 28, daysLeft: 28, endDate: "2026-11-30" },
-      bounds, "2026-11-03", weekSpend,
+      bounds, "2026-11-03", source({ cards: [nextMonthCard], purchases: [purchase("futura", "2026-11-03", 4.65)], installments: [installment("futura", "2026-12", { amount: 4.65 })] }),
     );
+    expect(model.gastoCartaoForaDoMes).toBe(4.65);
+    expect(model.gastoSemana).toBe(4.65);
     expect(model.saldoProjetado).toBe(175.66);
-    expect(model.porDia).toBeCloseTo(6.27, 2);
-    expect(model.gastoSemana).toBe(140.41);
-    expect(model.planejadoAteFimDaSemana).toBeCloseTo(175.66 / 28 * 6);
+    expect(model.disponivelHoje).toBeCloseTo(175.66 / 29 + 175.66 / 28 - 4.65);
   });
-  it("aumenta por dia sem gasto e diminui quando a projeção cai por gasto", () => {
-    const blank = spend("2026-11-03");
-    const today = buildLiveWeekBarModel({ free: 175.66, perDay: 175.66 / 28, daysLeft: 28, endDate: "2026-11-30" }, bounds, "2026-11-03", blank);
-    const withoutSpend = buildLiveWeekBarModel({ free: 175.66, perDay: 175.66 / 27, daysLeft: 27, endDate: "2026-11-30" }, bounds, "2026-11-04", blank);
-    const withSpend = buildLiveWeekBarModel({ free: 155.66, perDay: 155.66 / 27, daysLeft: 27, endDate: "2026-11-30" }, bounds, "2026-11-04", spend("2026-11-04", { transactions: [tx("compra", "2026-11-04", 20)] }));
-    expect(withoutSpend.porDia).toBeGreaterThan(today.porDia);
-    expect(withSpend.porDia).toBeLessThan(withoutSpend.porDia);
-    expect(withSpend.saldoProjetado).toBe(155.66);
+  it("recompõe só a compra de cartão que reduziu a projeção deste mês", () => {
+    const model = buildLiveWeekBarModel(
+      { free: 95, perDay: 95 / 28, daysLeft: 28, endDate: "2026-11-30" },
+      bounds, "2026-11-03", source({ purchases: [purchase("cartao", "2026-11-02", 5)], installments: [installment("cartao", "2026-11", { amount: 5 })] }),
+    );
+    expect(model.days[0].release).toBeCloseTo(100 / 29);
+    expect(model.days[0].available).toBeCloseTo(100 / 29 - 5);
+    expect(model.days[1].release).toBeCloseTo(95 / 28);
+    expect(model.gastoCartaoForaDoMes).toBe(0);
   });
   it("mostra déficit sem esconder o saldo projetado negativo", () => {
-    const model = buildLiveWeekBarModel({ free: -12, perDay: 0, daysLeft: 28, endDate: "2026-11-30" }, bounds, "2026-11-03", spend("2026-11-03"));
+    const model = buildLiveWeekBarModel({ free: -12, perDay: 0, daysLeft: 28, endDate: "2026-11-30" }, bounds, "2026-11-03", source());
     expect(model.estado).toBe("mesNoVermelho");
     expect(model.deficitMes).toBe(12);
     expect(model.porDia).toBe(0);
   });
-  it("planeja só os dias restantes de semanas cortadas pelo mês", () => {
+  it("mostra só os dias ativos nas semanas cortadas pelo mês", () => {
     for (const day of ["2026-11-01", "2026-11-30"]) {
       const daysLeft = day.endsWith("01") ? 30 : 1;
       const model = buildLiveWeekBarModel(
         { free: 14 * daysLeft, perDay: 14, daysLeft, endDate: "2026-11-30" },
-        getWeekBounds(day), day, spend(day),
+        getWeekBounds(day), day, source(),
       );
-      expect(model.diasRestantesSemana).toBe(1);
-      expect(model.planejadoAteFimDaSemana).toBe(14);
+      expect(model.days.filter(item => item.active)).toHaveLength(1);
+      expect(model.disponivelHoje).toBe(14);
     }
   });
 });

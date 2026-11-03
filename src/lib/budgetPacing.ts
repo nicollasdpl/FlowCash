@@ -162,16 +162,48 @@ export function buildEvolutionSeries(snapshots: readonly WeekSnapshot[]) {
 }
 
 export type WeekBarState = "folga" | "atencao" | "estourou" | "mesNoVermelho";
-/** Exibição viva: o saldo projetado já incorpora os gastos refletidos; não subtrair gastoSemana novamente. */
+/** Evolução viva: reconstrói a parcela de cada dia sem congelar uma cota semanal. */
 export function buildLiveWeekBarModel(
   room: { free: number; perDay: number; daysLeft: number; endDate: string },
   bounds: WeekBounds,
   todayStr: string,
-  spend: WeekSpend,
+  source: Omit<Parameters<typeof collectWeekVariableSpend>[0], "bounds" | "throughDate">,
 ) {
-  const daysRemainingWeek = Math.max(0, utcDay(bounds.semanaFim) - utcDay(todayStr) + 1);
-  const plannedRestOfWeek = Math.max(0, room.perDay * daysRemainingWeek);
-  const barTotal = spend.gastoSemana + plannedRestOfWeek;
+  const spend = collectWeekVariableSpend({ ...source, bounds, throughDate: todayStr });
+  const reflectedToday = spend.gastoContaRefletido + spend.gastoCartaoRefletido;
+  const weekOffset = (new Date(utcDay(bounds.semanaInicio) * 86_400_000).getUTCDay() + 6) % 7;
+  const dayLabels = ["S", "T", "Q", "Q", "S", "S", "D"];
+  const days: { label: string; date: string | null; available: number; release: number; spent: number; future: boolean; today: boolean; active: boolean; pct: number }[] = [];
+  let previousSpend = 0;
+  let previousReflected = 0;
+  let available = 0;
+  let availableToday = 0;
+  for (let index = 0; index < 7; index++) {
+    const dayNumber = utcDay(bounds.semanaInicio) + index - weekOffset;
+    const active = index >= weekOffset && index < weekOffset + bounds.diasNaSemana;
+    if (!active) {
+      days.push({ label: dayLabels[index], date: null, available: 0, release: 0, spent: 0, future: false, today: false, active: false, pct: 0 });
+      continue;
+    }
+    const date = dayString(dayNumber);
+    const future = date > todayStr;
+    const cumulative = future ? null : collectWeekVariableSpend({ ...source, bounds, throughDate: date });
+    const reflectedBeforeDay = future ? 0 : reflectedToday - previousReflected;
+    const daysLeftOnDay = utcDay(monthEnd(date.slice(0, 7))) - dayNumber + 1;
+    // Gasto já refletido é somado de volta apenas para recuperar a projeção antes da compra.
+    // Depois ele é subtraído uma única vez do acumulado semanal.
+    const release = computeDailyQuota(room.free + reflectedBeforeDay, daysLeftOnDay);
+    const spent = cumulative ? cumulative.gastoSemana - previousSpend : 0;
+    available += release - spent;
+    if (cumulative) {
+      previousSpend = cumulative.gastoSemana;
+      previousReflected = cumulative.gastoContaRefletido + cumulative.gastoCartaoRefletido;
+      availableToday = available;
+    }
+    days.push({ label: dayLabels[index], date, available, release, spent, future, today: date === todayStr, active, pct: 0 });
+  }
+  const scale = Math.max(1, ...days.filter(day => day.active).map(day => Math.abs(day.available)));
+  for (const day of days) day.pct = Math.abs(day.available) / scale * 100;
   const monthShort = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
   const startDay = Number(bounds.semanaInicio.slice(8, 10));
   const endDay = Number(bounds.semanaFim.slice(8, 10));
@@ -185,10 +217,8 @@ export function buildLiveWeekBarModel(
     tituloSemana: startDay === endDay ? `Esta semana · ${startDay} ${startMonth}` :
       `Esta semana · ${startDay}${startMonth === endMonth ? "" : ` ${startMonth}`} a ${endDay} ${endMonth}`,
     gastoSemana: spend.gastoSemana,
-    planejadoAteFimDaSemana: plannedRestOfWeek,
-    diasRestantesSemana: daysRemainingWeek,
-    pctGasto: barTotal > 0 ? spend.gastoSemana / barTotal * 100 : 0,
-    pctPlanejado: barTotal > 0 ? plannedRestOfWeek / barTotal * 100 : 0,
+    disponivelHoje: availableToday,
+    days,
     deficitMes: Math.max(0, -room.free),
     estado: room.free <= 0 ? "mesNoVermelho" as const : "disponivel" as const,
     parceladoNaSemana: spend.parceladoNaSemana,
