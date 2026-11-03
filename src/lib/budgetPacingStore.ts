@@ -1,6 +1,6 @@
 import {
   collection, deleteDoc, doc, getDocFromServer, getDocs, limit, orderBy, query, runTransaction,
-  serverTimestamp, setDoc,
+  serverTimestamp,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import type { AppState } from "@/context/AppContext";
@@ -8,7 +8,6 @@ import type { WeekBounds, WeekSnapshot } from "@/lib/budgetPacing";
 import { closeWeek, collectWeekVariableSpend, previousWeekBounds, resolveWeekSnapshot, snapshotReadiness } from "@/lib/budgetPacing";
 
 const stateRef = (uid: string) => doc(db, "users", uid, "app", "state");
-const configRef = (uid: string) => doc(db, "users", uid, "budgetPacing", "config");
 const weekRef = (uid: string, weekStart: string) => doc(db, "users", uid, "budgetPacingWeeks", weekStart);
 
 /** A leitura obrigatória do servidor faz a guarda de hidratação sem depender do cache local. */
@@ -18,19 +17,8 @@ export async function readConfirmedAppState(uid: string): Promise<ConfirmedAppSt
   return snapshot.exists() ? { hydrated: true, state: snapshot.data() as AppState } : null;
 }
 
-export async function readVariableCategoryConfig(uid: string): Promise<string[] | null> {
-  const snapshot = await getDocFromServer(configRef(uid));
-  if (!snapshot.exists()) return null;
-  const ids = snapshot.data().variableCategoryIds;
-  return Array.isArray(ids) ? ids.filter((id): id is string => typeof id === "string") : null;
-}
-
-export async function saveVariableCategoryConfig(uid: string, ids: readonly string[] | null): Promise<void> {
-  await setDoc(configRef(uid), { variableCategoryIds: ids === null ? null : [...new Set(ids)], updatedAt: serverTimestamp() }, { merge: true });
-}
-
 export async function createWeekSnapshotOnce(uid: string, candidate: WeekSnapshot, confirmed: ConfirmedAppState): Promise<WeekSnapshot> {
-  if (snapshotReadiness(confirmed.hydrated, confirmed.state, candidate.variableCategoryIds) !== "ready") {
+  if (snapshotReadiness(confirmed.hydrated, confirmed.state) !== "ready") {
     throw new Error("Snapshot bloqueado: hidratação remota ou dados financeiros incompletos.");
   }
   return runTransaction(db, async transaction => {
@@ -61,7 +49,7 @@ export async function closePreviousWeekIfNeeded(uid: string, current: WeekBounds
     if (snapshot.saldoSemana !== undefined) return;
     const spend = collectWeekVariableSpend({
       bounds: snapshot, throughDate: snapshot.semanaFim,
-      variableCategoryIds: snapshot.variableCategoryIds, accounts: state.accounts,
+      accounts: state.accounts,
       transactions: state.transactions, purchases: state.purchases,
       installments: state.installments, cards: state.cards,
     });

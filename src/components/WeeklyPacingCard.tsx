@@ -2,21 +2,20 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, SlidersHorizontal } from "lucide-react";
+import { AlertTriangle, Info } from "lucide-react";
 import { doc, onSnapshot } from "firebase/firestore";
 import { useApp, type AppState } from "@/context/AppContext";
 import { getSpendingRoom } from "@/engine/reportInsightsEngine";
 import { db } from "@/lib/firebase";
 import {
   buildEvolutionSeries, buildWeekAnchor, buildWeekBarModel, collectWeekVariableSpend,
-  deriveVariableCategoryIds, getWeekBounds, snapshotReadiness, type WeekSnapshot,
+  getWeekBounds, snapshotReadiness, type WeekSnapshot,
 } from "@/lib/budgetPacing";
 import {
   closePreviousWeekIfNeeded, createWeekSnapshotOnce, readConfirmedAppState,
-  readRecentWeekSnapshots, readVariableCategoryConfig, readWeekSnapshot,
+  readRecentWeekSnapshots, readWeekSnapshot,
 } from "@/lib/budgetPacingStore";
 import styles from "./WeeklyPacingCard.module.css";
-import WeeklyPacingNoCategories from "./WeeklyPacingNoCategories";
 
 const brl = (value: number) => `R$ ${Math.abs(value).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 function saoPauloToday(): string {
@@ -31,7 +30,7 @@ export default function WeeklyPacingCard() {
   const [sourceState, setSourceState] = useState<AppState | null>(null);
   const [snapshot, setSnapshot] = useState<WeekSnapshot | null>(null);
   const [history, setHistory] = useState<WeekSnapshot[]>([]);
-  const [status, setStatus] = useState<"loading" | "ready" | "no-categories" | "no-account" | "error">("loading");
+  const [status, setStatus] = useState<"loading" | "ready" | "no-account" | "error">("loading");
 
   useEffect(() => {
     const timer = window.setInterval(() => setTodayStr(saoPauloToday()), 60_000);
@@ -51,26 +50,23 @@ export default function WeeklyPacingCard() {
         const remote = confirmed.state;
         setSourceState(remote);
         const bounds = getWeekBounds(todayStr);
-        const [configured, existing] = await Promise.all([
-          readVariableCategoryConfig(uid), readWeekSnapshot(uid, bounds.semanaInicio),
-        ]);
+        const existing = await readWeekSnapshot(uid, bounds.semanaInicio);
         if (cancelled) return;
-        const dataReadiness = snapshotReadiness(confirmed.hydrated, remote, [], false);
+        const dataReadiness = snapshotReadiness(confirmed.hydrated, remote);
         if (dataReadiness !== "ready") { setStatus(dataReadiness); return; }
         await closePreviousWeekIfNeeded(uid, bounds, remote);
         if (cancelled) return;
-        const ids = existing?.variableCategoryIds ?? deriveVariableCategoryIds(remote.budgets, todayStr.slice(0, 7), configured);
-        const readiness = snapshotReadiness(confirmed.hydrated, remote, ids);
+        const readiness = snapshotReadiness(confirmed.hydrated, remote);
         if (readiness !== "ready") { setStatus(readiness); return; }
         let current = existing;
         if (!current) {
           const spend = collectWeekVariableSpend({
-            bounds, throughDate: todayStr, variableCategoryIds: ids, accounts: remote.accounts,
+            bounds, throughDate: todayStr, accounts: remote.accounts,
             transactions: remote.transactions, purchases: remote.purchases,
             installments: remote.installments, cards: remote.cards,
           });
           const room = getSpendingRoom(remote.accounts, remote.transactions, remote.cards, remote.installments, todayStr, remote.purchases);
-          current = await createWeekSnapshotOnce(uid, buildWeekAnchor(room.free, bounds, spend, ids), confirmed);
+          current = await createWeekSnapshotOnce(uid, buildWeekAnchor(room.free, bounds, spend), confirmed);
         }
         if (cancelled) return;
         setSnapshot(current);
@@ -90,11 +86,12 @@ export default function WeeklyPacingCard() {
   }, [user, todayStr]);
 
   const spend = useMemo(() => snapshot && sourceState ? collectWeekVariableSpend({
-    bounds: snapshot, throughDate: todayStr, variableCategoryIds: snapshot.variableCategoryIds,
+    bounds: snapshot, throughDate: todayStr,
     accounts: sourceState.accounts, transactions: sourceState.transactions,
     purchases: sourceState.purchases, installments: sourceState.installments, cards: sourceState.cards,
   }) : null, [snapshot, sourceState, todayStr]);
   const model = snapshot && spend ? buildWeekBarModel(snapshot, todayStr, spend) : null;
+  const legacyCategorySnapshot = !!snapshot && Array.isArray((snapshot as WeekSnapshot & { variableCategoryIds?: string[] }).variableCategoryIds);
   const evolution = buildEvolutionSeries(history);
   const displayStatus = status === "ready" && snapshot?.semanaInicio !== getWeekBounds(todayStr).semanaInicio ? "loading" : status;
 
@@ -103,14 +100,13 @@ export default function WeeklyPacingCard() {
     <section className={`soft-card ${styles.card}`} aria-label="Cota semanal">
       <div className={styles.header}>
         <h2>{model?.tituloSemana ?? "Esta semana"}</h2>
-        <Link href="/configuracoes/cota-semanal" aria-label="Configurar categorias da cota semanal" className={styles.settings}>
-          <SlidersHorizontal size={17} strokeWidth={1.7} />
+        <Link href="/configuracoes/cota-semanal" aria-label="Como funciona a cota semanal" className={styles.settings}>
+          <Info size={17} strokeWidth={1.7} />
         </Link>
       </div>
       {displayStatus === "loading" && <div className={styles.skeleton} aria-label="Carregando cota semanal" />}
       {displayStatus === "error" && <p className={styles.message}>Não foi possível carregar a cota semanal. Verifique a conexão e abra a tela novamente.</p>}
       {displayStatus === "no-account" && <p className={styles.message}>Cadastre uma conta ativa para calcular a cota semanal.</p>}
-      {displayStatus === "no-categories" && <WeeklyPacingNoCategories className={styles.message} />}
       {displayStatus === "ready" && model && (
         <>
           <p className={`${styles.hero} mono ${model.estado === "estourou" || model.estado === "mesNoVermelho" ? styles.red : ""}`}>
@@ -121,6 +117,7 @@ export default function WeeklyPacingCard() {
                 : `Pode gastar hoje: ${brl(model.disponivelHoje)}`}
           </p>
           <p className={styles.daily}>Cota diária <span className="mono">{brl(model.cotaDiaria)}</span> · semana <span className="mono">{brl(model.cotaSemanal)}</span></p>
+          {legacyCategorySnapshot && <p className={styles.note}>Esta semana foi criada com o filtro antigo de categorias. <Link href="/configuracoes/cota-semanal/recalcular">Recalcular com todos os gastos</Link></p>}
           {model.estado === "mesNoVermelho" ? (
             <p className={styles.message}>{model.fraseExplicativa}</p>
           ) : (

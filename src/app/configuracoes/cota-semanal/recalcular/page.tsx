@@ -5,8 +5,8 @@ import { useRouter } from "next/navigation";
 import { AlertTriangle, ArrowLeft, RotateCcw } from "lucide-react";
 import { useApp } from "@/context/AppContext";
 import { getSpendingRoom } from "@/engine/reportInsightsEngine";
-import { buildWeekAnchor, collectWeekVariableSpend, deriveVariableCategoryIds, getWeekBounds, replaceWeekSnapshot, snapshotReadiness } from "@/lib/budgetPacing";
-import { createWeekSnapshotOnce, deleteCurrentWeekSnapshot, readConfirmedAppState, readVariableCategoryConfig } from "@/lib/budgetPacingStore";
+import { buildWeekAnchor, collectWeekVariableSpend, getWeekBounds, replaceWeekSnapshot, snapshotReadiness } from "@/lib/budgetPacing";
+import { createWeekSnapshotOnce, deleteCurrentWeekSnapshot, readConfirmedAppState } from "@/lib/budgetPacingStore";
 
 function saoPauloToday(): string {
   const parts = new Intl.DateTimeFormat("en-US", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date());
@@ -29,15 +29,13 @@ export default function RecalcularCotaPage() {
       const confirmed = await readConfirmedAppState(user.uid);
       if (!confirmed) throw new Error("Dados do servidor indisponíveis.");
       const remote = confirmed.state;
-      const configured = await readVariableCategoryConfig(user.uid);
-      const ids = deriveVariableCategoryIds(remote.budgets, todayStr.slice(0, 7), configured);
-      const readiness = snapshotReadiness(confirmed.hydrated, remote, ids);
-      if (readiness !== "ready") throw new Error(readiness === "no-categories" ? "Escolha categorias variáveis antes de recalcular." : "Contas ou dados ainda não carregados.");
+      const readiness = snapshotReadiness(confirmed.hydrated, remote);
+      if (readiness !== "ready") throw new Error("Contas ou dados ainda não carregados.");
       const bounds = getWeekBounds(todayStr);
-      const spend = collectWeekVariableSpend({ bounds, throughDate: todayStr, variableCategoryIds: ids, accounts: remote.accounts,
+      const spend = collectWeekVariableSpend({ bounds, throughDate: todayStr, accounts: remote.accounts,
         transactions: remote.transactions, purchases: remote.purchases, installments: remote.installments, cards: remote.cards });
       const room = getSpendingRoom(remote.accounts, remote.transactions, remote.cards, remote.installments, todayStr, remote.purchases);
-      const replacement = buildWeekAnchor(room.free, bounds, spend, ids);
+      const replacement = buildWeekAnchor(room.free, bounds, spend);
       await replaceWeekSnapshot(replacement, confirmed.hydrated, remote,
         () => deleteCurrentWeekSnapshot(user.uid, bounds.semanaInicio),
         async snapshot => { await createWeekSnapshotOnce(user.uid, snapshot, confirmed); });
@@ -53,7 +51,7 @@ export default function RecalcularCotaPage() {
     <div className="soft-card" style={{ padding: 20 }}>
       <AlertTriangle size={23} color="var(--amber)" strokeWidth={1.7} />
       <h1 className="page-title" style={{ fontSize: 20, marginTop: 12 }}>Recalcular esta semana?</h1>
-      <p style={{ color: "var(--text-2)", fontSize: 13, lineHeight: 1.5, marginTop: 8 }}>O registro da semana atual será apagado e recriado com as categorias e os lançamentos que estão no servidor agora. A nova cota poderá ser diferente.</p>
+      <p style={{ color: "var(--text-2)", fontSize: 13, lineHeight: 1.5, marginTop: 8 }}>O registro da semana atual será apagado e recriado com os lançamentos que estão no servidor agora. A nova cota poderá ser diferente.</p>
       {error && <p role="alert" style={{ color: "var(--red)", fontSize: 12, marginTop: 14 }}>{error}</p>}
       <button type="button" className="btn-primary" disabled={busy || !user} onClick={() => void confirmRecalculation()} style={{ width: "100%", minHeight: 48, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 20 }}><RotateCcw size={17} />{busy ? "Recalculando…" : "Confirmar recálculo"}</button>
     </div>

@@ -15,7 +15,6 @@ export interface WeekSnapshot extends WeekBounds {
   freeInicio: number;
   diasRestantesInicio: number;
   cotaDiaria: number;
-  variableCategoryIds: string[];
   createdAt?: unknown;
   gastoSemana?: number;
   cotaSemanal?: number;
@@ -54,17 +53,12 @@ export function computeAvailable(quota: number, daysElapsed: number, weekVariabl
   return quota * daysElapsed - weekVariableSpend;
 }
 
-export function deriveVariableCategoryIds(budgets: readonly Pick<Budget, "month" | "categoryId">[], month: string, configured?: readonly string[] | null): string[] {
-  return [...new Set(configured ?? budgets.filter(b => b.month === month).map(b => b.categoryId))];
-}
-
 export function snapshotReadiness(hydrated: boolean, data: Partial<{
   accounts: Account[]; transactions: Transaction[]; cards: CreditCard[];
   installments: CardInstallment[]; purchases: CardPurchase[]; budgets: Budget[];
-}> | null, variableCategoryIds: readonly string[], requireCategories = true): "ready" | "loading" | "no-account" | "no-categories" {
+}> | null): "ready" | "loading" | "no-account" {
   if (!hydrated || !data || ![data.accounts, data.transactions, data.cards, data.installments, data.purchases, data.budgets].every(Array.isArray)) return "loading";
   if (!data.accounts?.some(account => account.active && account.type !== "investment")) return "no-account";
-  if (requireCategories && variableCategoryIds.length === 0) return "no-categories";
   return "ready";
 }
 
@@ -73,7 +67,7 @@ export async function replaceWeekSnapshot(
   data: Parameters<typeof snapshotReadiness>[1],
   remove: () => Promise<void>, create: (snapshot: WeekSnapshot) => Promise<void>,
 ): Promise<void> {
-  if (snapshotReadiness(hydrated, data, candidate.variableCategoryIds) !== "ready") {
+  if (snapshotReadiness(hydrated, data) !== "ready") {
     throw new Error("Snapshot bloqueado: hidratação remota ou dados financeiros incompletos.");
   }
   await remove();
@@ -83,7 +77,6 @@ export async function replaceWeekSnapshot(
 export function collectWeekVariableSpend(input: {
   bounds: WeekBounds;
   throughDate: string;
-  variableCategoryIds: readonly string[];
   accounts: readonly Account[];
   transactions: readonly Transaction[];
   purchases: readonly CardPurchase[];
@@ -91,7 +84,6 @@ export function collectWeekVariableSpend(input: {
   cards: readonly CreditCard[];
 }): WeekSpend {
   const { bounds, throughDate, transactions, purchases, installments, cards } = input;
-  const categories = new Set(input.variableCategoryIds);
   const spendableAccountIds = new Set(input.accounts.filter(a => a.active && a.type !== "investment").map(a => a.id));
   const end = throughDate < bounds.semanaFim ? throughDate : bounds.semanaFim;
   const inWeek = (date: string) => date >= bounds.semanaInicio && date <= end;
@@ -105,7 +97,7 @@ export function collectWeekVariableSpend(input: {
     // Transaction não possui purchaseDate; competenceDate é a aproximação da data da compra.
     if (tx.type !== "expense" || tx.status !== "paid" || tx.paymentDate > throughDate ||
         tx.isRecurring || tx.recurringRuleId || tx.origin === "recurring" || tx.origin === "invoice" ||
-        tx.categoryId === SEED_INVOICE_PAYMENT_CATEGORY_ID || !categories.has(tx.categoryId) ||
+        tx.categoryId === SEED_INVOICE_PAYMENT_CATEGORY_ID ||
         !spendableAccountIds.has(tx.accountId) || !inWeek(tx.competenceDate)) continue;
     gastoContaRefletido += tx.amount;
   }
@@ -123,7 +115,7 @@ export function collectWeekVariableSpend(input: {
       parceladoNaSemana += purchase.amount;
       continue;
     }
-    if (purchase.isSubscription || !categories.has(purchase.categoryId)) continue;
+    if (purchase.isSubscription) continue;
     const card = cardById.get(purchase.cardId);
     if (!card) continue;
     const competence = getCompetenceMonth(purchase.purchaseDate, card.closingDay);
@@ -146,10 +138,10 @@ export function collectWeekVariableSpend(input: {
   };
 }
 
-export function buildWeekAnchor(freeAtual: number, bounds: WeekBounds, spend: WeekSpend, variableCategoryIds: readonly string[]): WeekSnapshot {
+export function buildWeekAnchor(freeAtual: number, bounds: WeekBounds, spend: WeekSpend): WeekSnapshot {
   const freeInicio = money(freeAtual + spend.gastoContaRefletido + spend.gastoCartaoRefletido);
   const diasRestantesInicio = utcDay(monthEnd(bounds.semanaInicio.slice(0, 7))) - utcDay(bounds.semanaInicio) + 1;
-  return { ...bounds, freeInicio, diasRestantesInicio, cotaDiaria: computeDailyQuota(freeInicio, diasRestantesInicio), variableCategoryIds: [...variableCategoryIds] };
+  return { ...bounds, freeInicio, diasRestantesInicio, cotaDiaria: computeDailyQuota(freeInicio, diasRestantesInicio) };
 }
 
 export function resolveWeekSnapshot(existing: WeekSnapshot | null, candidate: WeekSnapshot): WeekSnapshot {
